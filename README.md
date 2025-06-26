@@ -86,13 +86,7 @@ thickptypy/
 
 Tests are located in the `tests/` directory and cover a wide range of solver configurations.
 
-Run all tests:
-
-```bash
-poetry run pytest
-```
-
-To check specific modules (e.g., 2D Neumann BCs):
+To run convergence tests (e.g., 2D Neumann BCs):
 
 ```bash
 poetry run pytest tests/test_solver_neumann_2d.py
