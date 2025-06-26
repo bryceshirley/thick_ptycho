@@ -8,6 +8,39 @@ minimization of simplified thick-sample ptychography model.
 
 ---
 
+## Jupyter Notebooks
+
+* `1_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
+* `2_ptychography_simple_example.ipynb` — This tutorial uses EPie reconstructions assuming the simulated data is of a thin sample.
+* `3_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
+
+* `4_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a least_squares problem to reconstuct a thick sample.
+
+---
+
+## Installation
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/bryceshirley/thickptypy.git
+   cd thickptypy
+   ```
+
+2. **Install dependencies (requires poetry to be installed)**:
+
+   ```bash
+   poetry install
+   ```
+
+3. **Activate the virtual environment**:
+
+   ```bash
+   poetry shell
+   ```
+
+---
+
 ## Project Structure
 
 ```
@@ -43,37 +76,6 @@ thickptypy/
 ```
 
 ---
-
-## Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/bryceshirley/thickptypy.git
-   cd thickptypy
-   ```
-
-2. **Install dependencies (requires poetry to be installed)**:
-
-   ```bash
-   poetry install
-   ```
-
-3. **Activate the virtual environment**:
-
-   ```bash
-   poetry shell
-   ```
-
----
-
-## Jupyter Notebooks
-
-* `1_forward_model_3d.ipynb` — 3D paraxial simulation
-* `2_ptychography_simple_example.ipynb` — basic thick ptychography example
-* `3_forward_model_2d.ipynb` — 2D forward model demonstration
-* `4_least_squares_1d.ipynb` — 1D least squares reconstruction
-
 
 ## Testing
 
