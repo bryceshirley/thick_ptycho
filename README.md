@@ -42,7 +42,7 @@ minimization of simplified thick-sample ptychography model.
 4. **Activate Kernel for Jupyter Notebooks:**
 
    ```bash
-   poetry run ipython kernel install --name "myproject" --user
+   poetry run ipython kernel install --name "thickptypy" --user
    ```
 ---
 
