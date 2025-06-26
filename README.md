@@ -33,10 +33,11 @@ minimization of simplified thick-sample ptychography model.
    poetry install
    ```
 
-3. **Activate the virtual environment**:
+3. **Activate the virtual environment. The following command prints the activate command to run**:
 
    ```bash
-   poetry shell
+   poetry env activate
+   poetry run ipython kernel install --name "myproject" --user
    ```
 
 ---
