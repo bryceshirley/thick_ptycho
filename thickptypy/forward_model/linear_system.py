@@ -1,0 +1,126 @@
+import numpy as np
+import scipy.sparse as sp
+
+from .boundary_conditions import BoundaryConditions
+
+from typing import Optional
+
+
+class LinearSystemSetup:
+    """
+    Base class for linear system setup, providing methods to create
+    forward models and handle boundary conditions.
+    """
+
+    def __init__(self, sample_space, initial_condition, thin_sample,
+                 full_system):
+        self.sample_space = sample_space
+        self.initial_condition = initial_condition
+        self.full_system = full_system
+        self.thin_sample = thin_sample
+
+        # For thin samples, use sub-sampling
+        if thin_sample:
+            self.nx = self.sample_space.sub_nx
+            if self.sample_space.dimension == 2:
+                self.ny = self.sample_space.sub_ny
+        else:
+            self.nx = self.sample_space.nx
+            if self.sample_space.dimension == 2:
+                self.ny = self.sample_space.ny
+
+        if self.sample_space.dimension == 1:
+            self.block_size = self.nx
+        else:
+            self.block_size = self.nx * self.ny
+
+        self._probe_angle = 0.0
+
+    @property
+    def probe_angle(self):
+        """Get the probe angle in radians."""
+        return self._probe_angle
+
+    @probe_angle.setter
+    def probe_angle(self, value):
+        """Set the probe angle in radians."""
+        self._probe_angle = value
+
+    def setup_homogenius_forward_model_lhs(self, scan_index: Optional[int] = 0):
+        """Create Free-Space Forward Model Left-Hand Side (LHS) Matrix."""
+        A_slice, B_slice, _ = self.create_system_slice(scan_index=scan_index)
+
+        # Homogenius forward model
+        A_homogenius = (
+            sp.kron(sp.eye(self.sample_space.nz - 1), A_slice)
+            - sp.kron(
+                sp.diags([1], [-1], shape=(self.sample_space.nz - 1,
+                                           self.sample_space.nz - 1)),
+                B_slice
+            )
+        )
+        return A_homogenius
+
+    def setup_homogenius_forward_model_rhs(self, scan_index: Optional[int] = 0):
+        """Create Free-Space Forward Model Right-Hand Side (RHS) Vector."""
+        _, _, b_slice = self.create_system_slice(scan_index=scan_index)
+        # Homogenius forward model
+        b_homogenius = np.tile(b_slice, self.sample_space.nz - 1)
+        return b_homogenius
+
+    # Foward Model Contribution from Inhomogenius Field
+    def setup_inhomogenius_forward_model(
+            self, n=None, grad=False, scan_index: Optional[int] = 0):
+        """
+        Compute the inhomogeneous matrix.
+
+        Parameters:
+        n (ndarray, optional): Refractive index distribution.
+        Defaults to None. grad (bool, optional): If True, compute the gradient
+        of the object. Defaults to False.
+        """
+        # Create the inhomogeneous forward matrix contribution
+        # For thin samples, use sub-sampling
+        object_slices = self.sample_space.create_sample_slices(
+            self.thin_sample, n=n, grad=grad, scan_index=scan_index)
+
+        # Create the diagonal matrix for the inhomogeneous term
+        return sp.diags(object_slices.T.flatten(
+        )) + sp.diags([object_slices[..., 1:].T.flatten()], [-self.block_size])
+
+    def probe_contribution(self, scan_index: Optional[int] = 0):
+        """Compute the probe contribution to the forward model."""
+        _, B_slice, b_slice = self.create_system_slice(scan_index=scan_index)
+
+        probe = self.initial_condition.apply_initial_condition(
+            scan_index, self.thin_sample)
+
+        n = np.arange(len(probe))
+        linear_phase = np.exp(1j * self._probe_angle * n)
+        probe *= linear_phase
+
+        b0 = B_slice.dot(probe.flatten()) + b_slice
+        probe_contribution = np.concatenate(
+            (b0, np.zeros(self.block_size * (self.sample_space.nz - 2))))
+
+        return probe_contribution, probe
+
+    def create_system_slice(self, scan_index: Optional[int] = 0):
+        """Create the linear system based on boundary conditions."""
+        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
+                                 thin_sample=self.thin_sample,
+                                 scan_index=scan_index)
+        # 2D system
+        A_slice, B_slice = bcs.get_matrix_system()
+        b_slice = bcs.get_initial_boundary_conditions_system()
+
+        return A_slice, B_slice, b_slice
+
+    def test_exact_impedance_rhs_slice(self, z: float,
+                                       scan_index: Optional[int] = 0):
+        """Test if the exact impedance boundary conditions are satisfied."""
+        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
+                                 thin_sample=self.thin_sample,
+                                 scan_index=scan_index)
+        # 2D system
+        return bcs.get_exact_boundary_conditions_system(z)

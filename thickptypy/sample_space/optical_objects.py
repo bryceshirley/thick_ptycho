@@ -1,0 +1,321 @@
+import math
+
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.sparse as sp
+from PIL import Image, ImageDraw, ImageFilter
+
+
+class OpticalObject:
+    """
+    Interface class to create either 1D or 2D initial conditions.
+    """
+    def __new__(cls, centre, *args, **kwargs):
+        dimension = len(centre) - 1
+        if dimension == 1:
+            return OpticalObject1D(centre, *args, **kwargs)
+        elif dimension == 2:
+            return OpticalObject2D(centre, *args, **kwargs)
+        else:
+            raise ValueError("Unsupported dimension: {}".format(dimension))
+
+
+class OpticalObject1D:
+    """Represents an optical object in the simulation in 1D."""
+
+    def __init__(self, centre, shape, refractive_index, side_length, depth,
+                 nx, nz, x, z, guassian_blur):
+        self.shape = shape
+        self.refractive_index = refractive_index
+        self.nx = nx
+        self.nz = nz
+
+        # Convert the centre of the object to the discrete grid
+        discrete_centre = (
+            int(np.ceil(((centre[0] - x[0]) / (x[-1] - x[0])) * nx)),
+            int(np.ceil(((centre[1] - z[0]) / (z[-1] - z[0])) * nz))
+        )
+        self.cx, self.cz = discrete_centre
+        self.centre = centre
+
+        assert centre[1] - depth/2 >= z[0], "Object out of bounds"
+        assert centre[1] + depth/2 <= z[-1], "Object out of bounds"
+
+        # TODO: Change to descrete side scale incase nx != ny
+        # Convert the side_lengthof object face to discrete side
+        self.discrete_side_length = int(
+            np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
+        self.side_length = side_length
+
+        # Convert the depth of object face to discrete depth
+        self.discrete_depth = int(
+            np.ceil(((depth - z[0]) / (z[-1] - z[0])) * nz / 2) * 2)
+        self.depth = depth
+
+        self.guassian_blur = guassian_blur
+
+    def get_refractive_index_field(self):
+        """Return the field of the object."""
+        if self.shape == 'rectangle':
+            polygon_points = self._square_points()
+        elif self.shape == 'triangle':
+            polygon_points = self._triangle_points()
+        elif self.shape == 'random':
+            polygon_points = self._random_shape_points(num_points=20)
+        else:
+            raise ValueError("Unsupported shape: {}".format(self.shape))
+
+        return self._get_field(polygon_points)
+
+    def _get_field(self, polygon_points):
+        """Return the field of a object."""
+        # Create a black image
+        image_size = (self.nx, self.nz)
+        image = Image.new(
+            'RGB', image_size, color=(
+                0, 0, 0))  # Black background
+        draw = ImageDraw.Draw(image)
+
+        # Draw a white polygon using the calculated corners
+        draw.polygon(
+            polygon_points,
+            outline='white',
+            fill='white')  # White polygon
+
+        # Apply Gaussian blur to soften edges
+        if self.guassian_blur is not None:
+            image = image.filter(
+                ImageFilter.GaussianBlur(
+                    radius=self.guassian_blur))
+
+        # Convert the image to a numpy array
+        image_array = np.array(image)
+
+        # Convert to a binary matrix: 1 where the image is white, 0 where it is
+        # black
+        binary_matrix = np.all(
+            image_array == [
+                255,
+                255,
+                255],
+            axis=-
+            1).astype(int).T
+
+        # Create Refractive index field
+        n = np.zeros((self.nx, self.nz), dtype=complex)
+        n[np.where(binary_matrix == 1)] = self.refractive_index
+
+        return n
+
+    def _square_points(self):
+        half_side_length = self.discrete_side_length / 2
+        half_depth = self.discrete_depth / 2
+
+        # Define the corners of the square
+        square_points = [
+            (self.cx - half_side_length, self.cz - half_depth),  # Top-left
+            (self.cx + half_side_length, self.cz - half_depth),  # Top-right
+            (self.cx + half_side_length, self.cz + half_depth),  # Bottom-right
+            (self.cx - half_side_length, self.cz + half_depth)   # Bottom-left
+        ]
+
+        # # Rotate the points by 45 degrees around the center
+        # angle_rad = math.radians(45)
+        # cos_angle = math.cos(angle_rad)
+        # sin_angle = math.sin(angle_rad)
+
+        # rotated_points = []
+        # for x, z in square_points:
+        #     x_rot = self.cx + (x - self.cx) * cos_angle - (z - self.cz) * sin_angle
+        #     z_rot = self.cz + (x - self.cx) * sin_angle + (z - self.cz) * cos_angle
+        #     rotated_points.append((x_rot, z_rot))
+
+        # square_points = rotated_points
+        return square_points
+
+    def _triangle_points(self):
+        half_side_length = self.discrete_side_length / 2
+        half_depth = self.discrete_depth / 2
+
+        angles_rad = np.radians([0, 120, 240])  # [90, 210, 330])
+
+        # Calculate the three vertices based on the center and
+        # side_lengthlength
+        x1 = self.cx + half_side_length * math.cos(angles_rad[0])
+        z1 = self.cz + half_depth * math.sin(angles_rad[0])
+
+        x2 = self.cx + half_side_length * math.cos(angles_rad[1])
+        z2 = self.cz + half_depth * math.sin(angles_rad[1])
+
+        x3 = self.cx + half_side_length * math.cos(angles_rad[2])
+        z3 = self.cz + half_depth * math.sin(angles_rad[2])
+
+        # Define the triangle points
+        triangle_points = [(x1, z1), (x2, z2), (x3, z3)]
+
+        return triangle_points
+
+    def _random_shape_points(
+            self,
+            num_points=12,
+            irregularity=0.9,
+            spikeyness=0.9):
+        """
+        Generate a list of points for a smooth random polygon centered at (self.cx, self.cz).
+        num_points: Number of vertices.
+        irregularity: [0,1] variance in angular spacing.
+        spikeyness: [0,1] variance in radius.
+        """
+        center_x, center_z = self.cx, self.cz
+        avg_radius = self.discrete_side_length / 2
+        angle_steps = []
+        lower = (2 * np.pi / num_points) * (1 - irregularity)
+        upper = (2 * np.pi / num_points) * (1 + irregularity)
+        sum_angles = 0
+        for _ in range(num_points):
+            tmp = np.random.uniform(lower, upper)
+            angle_steps.append(tmp)
+            sum_angles += tmp
+        k = sum_angles / (2 * np.pi)
+        angle_steps = [step / k for step in angle_steps]
+
+        points = []
+        angle = np.random.uniform(0, 2 * np.pi)
+        for i in range(num_points):
+            r = avg_radius * (1 + np.random.uniform(-spikeyness, spikeyness))
+            x = center_x + r * np.cos(angle)
+            z = center_z + r * np.sin(angle)
+            points.append((x, z))
+            angle += angle_steps[i]
+        return points
+
+
+class OpticalObject2D:
+    """Represents an optical object in the simulation in 2D."""
+
+    def __init__(self, centre, shape, refractive_index, side_length, depth,
+                 nx, ny, nz, x, y, z, guassian_blur):
+        self.shape = shape
+        self.refractive_index = refractive_index
+        self.nx = nx
+        self.ny = ny
+        self.nz = nz
+
+        # Convert the centre of the object to the discrete grid
+        discrete_centre = (
+            int(np.ceil(((centre[0] - x[0]) / (x[-1] - x[0])) * nx)),
+            int(np.ceil(((centre[1] - y[0]) / (y[-1] - y[0])) * ny)),
+            int(np.ceil(((centre[2] - z[0]) / (z[-1] - z[0])) * nz))
+        )
+        self.cx, self.cy, self.cz = discrete_centre
+        self.centre = centre
+
+        assert centre[2] - depth/2 >= z[0], "Object out of bounds"
+        assert centre[2] + depth/2 <= z[-1], "Object out of bounds"
+
+        # TODO: Change to descrete side scale incase nx != ny
+        # Convert the side_lengthof object face to discrete side
+        self.discrete_side_length = int(
+            np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
+        self.side_length = side_length
+
+        # Convert the depth of object face to discrete depth
+        self.discrete_depth = int(
+            np.ceil(((depth - z[0]) / (z[-1] - z[0])) * nz / 2) * 2)
+        self.depth = depth
+
+        self.guassian_blur = guassian_blur
+
+    def get_refractive_index_field(self):
+        """Return the field of the object."""
+        if self.shape == 'cuboid':
+            polygon_points = self._square_points()
+        elif self.shape == 'prism':
+            polygon_points = self._triangle_points()
+        else:
+            raise ValueError("Unsupported shape: {}".format(self.shape))
+
+        return self._get_field(polygon_points)
+
+    def _get_field(self, polygon_points):
+        """Return the field of a object."""
+        half_depth = int(self.discrete_depth / 2)
+
+        # Create a black image
+        image_size = (self.nx, self.ny)
+        image = Image.new(
+            'RGB', image_size, color=(
+                0, 0, 0))  # Black background
+        draw = ImageDraw.Draw(image)
+
+        # Draw a white polygon using the calculated corners
+        draw.polygon(
+            polygon_points,
+            outline='white',
+            fill='white')  # White polygon
+
+        # # Apply Gaussian blur to soften edges
+        if self.guassian_blur is not None:
+            image = image.filter(
+                ImageFilter.GaussianBlur(
+                    radius=self.guassian_blur))
+
+        # Convert the image to a numpy array
+        image_array = np.array(image)
+
+        # Convert to a binary matrix: 1 where the image is white, 0 where it is
+        # black
+        binary_matrix = np.all(
+            image_array == [
+                255,
+                255,
+                255],
+            axis=-
+            1).astype(int)
+
+        # Reshape into a 1D array
+        binary_matrix = binary_matrix.reshape(self.nx * self.ny)
+
+        # Repeat the shape through slices to create a mask for the 3D object
+        mask = np.zeros((self.nx * self.ny, self.nz), dtype=bool)
+        obj = np.tile(binary_matrix[:, np.newaxis], (1, self.discrete_depth))
+        obj = obj.reshape(self.nx * self.ny, self.discrete_depth)
+        mask[:, self.cz - half_depth:self.cz + half_depth] = obj
+        mask = mask.reshape((self.nx, self.ny, self.nz))
+
+        # Create Refractive index field
+        n = np.zeros((self.nx, self.ny, self.nz), dtype=complex)
+        n[np.where(mask == 1)] = self.refractive_index
+        return n
+
+    def _square_points(self):
+        half_side_length = self.discrete_side_length / 2
+        square_points = [
+            (self.cx - half_side_length, self.cy - half_side_length),  # Top-left
+            (self.cx + half_side_length, self.cy - half_side_length),  # Top-right
+            (self.cx + half_side_length, self.cy +
+             half_side_length),  # Bottom-right
+            (self.cx - half_side_length, self.cy + half_side_length)   # Bottom-left
+        ]
+        return square_points
+
+    def _triangle_points(self):
+        half_side_length = self.discrete_side_length / 2
+
+        angles_rad = np.radians([90, 210, 330])
+
+        # Calculate the three vertices based on the center and
+        # side_lengthlength
+        x1 = self.cx + half_side_length * math.cos(angles_rad[0])
+        y1 = self.cy + half_side_length * math.sin(angles_rad[0])
+
+        x2 = self.cx + half_side_length * math.cos(angles_rad[1])
+        y2 = self.cy + half_side_length * math.sin(angles_rad[1])
+
+        x3 = self.cx + half_side_length * math.cos(angles_rad[2])
+        y3 = self.cy + half_side_length * math.sin(angles_rad[2])
+
+        # Define the triangle points
+        triangle_points = [(x1, y1), (x2, y2), (x3, y3)]
+
+        return triangle_points

@@ -1,0 +1,64 @@
+##########################################################
+## Use this list to detail files you wish git to ignore ##
+##########################################################
+
+
+## Backup files
+*~
+
+
+## Mac and Windows hidden store files
+**/.DS_Store
+**/Thumb.db
+
+
+## LaTeX auto-created files
+*.log
+*.aux
+*.dvi
+*.bbl
+*.toc
+*.out
+*.blg
+*.nav
+*.snm
+*.thm
+*.gz
+
+
+## Large files that probably shouldn't be put on git
+*.mov
+*.mp4
+*.xmf
+*.h5
+*.pvd
+*.vtu
+&.pvtu
+*.bin
+*.zip
+*.gif
+*.npy
+*.tif
+*.json
+*.lock
+*.venv
+*.pyc
+
+
+## Some common local save or copy matches
+*_save*
+*-save*
+*_copy*
+*-copy*
+
+## Pytest cache
+**/.pytest_cache
+
+## Numpy files
+*.npy
+
+## Python cache
+**/__pycache__
+
+## Jupyter notebook .tiff outputs
+*.tiff
