@@ -37,9 +37,13 @@ minimization of simplified thick-sample ptychography model.
 
    ```bash
    poetry env activate
-   poetry run ipython kernel install --name "myproject" --user
    ```
 
+4. **Activate Kernel for Jupyter Notebooks:**
+
+   ```bash
+   poetry run ipython kernel install --name "myproject" --user
+   ```
 ---
 
 ## Project Structure
