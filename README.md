@@ -1,7 +1,7 @@
 # ThickPtyPy: Thick Sample Ptychography Simulations
 
 **ThickPtyPy** is a Python project for simulating and reconstructing thick-sample 
-ptychography using paraxial approximations. It includes solvers for the forward 
+ptychography. It includes solvers for the forward 
 model in 2D, and 3D using a finite difference scheme to solve the paraxial wave
 equation, as well as reconstruction algorithms such as least squares
 minimization of simplified thick-sample ptychography model.
