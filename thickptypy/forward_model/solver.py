@@ -195,7 +195,7 @@ class ForwardModel():
         Ck = self.linear_system.setup_inhomogeneous_forward_model(
             n=n, scan_index=scan_index)
 
-        return A_homogeneous - Ck
+        return (A_homogeneous - Ck).tocsc()  # Convert to Compressed Sparse Column format for efficiency
 
     def _create_solution(self) -> np.ndarray:
         """Create the solution grid based on the sample space and boundary 

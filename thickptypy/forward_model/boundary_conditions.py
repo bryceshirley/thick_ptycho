@@ -85,7 +85,7 @@ class BoundaryConditions:
         Ax = Ix - Kx
         Bx = Ix + Kx
 
-        return Ax, Bx
+        return Ax.tocsr(), Bx.tocsr()
 
     def get_initial_boundary_conditions_system(self):
         

@@ -132,10 +132,11 @@ class LeastSquaresSolver:
 
         for i in range(self.num_probes):
             # Compute the perturbation for each probe
+            perturbation = grad_A @ u[i, :]
             if self.lu is not None:
-                delta_u = self.lu.solve(grad_A @ u[i, :])
+                delta_u = self.lu.solve(perturbation)
             else:
-                delta_u = spla.spsolve(self.Ak, grad_A @ u[i, :])
+                delta_u = spla.spsolve(self.Ak, perturbation)
 
             # Only use last block_size elements (final slice)
             delta_p_i = - delta_u[-self.block_size:] @ d[-self.block_size:]

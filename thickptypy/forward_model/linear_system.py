@@ -39,6 +39,23 @@ class LinearSystemSetup:
         if not self.thin_sample and self.full_system:
              self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
 
+        # Preallocate probes for speed
+        if self.sample_space.dimension == 1:
+            self.probe = np.empty((self.sample_space.num_probes, self.block_size), dtype=np.complex128)
+            self.b0 = np.empty_like(self.probe)
+
+            # Fill probe: each apply_initial_condition returns a 1D array of length block_size
+            self.probe[:] = np.vstack([
+                self.initial_condition.apply_initial_condition(scan_index, self.thin_sample).flatten()
+                for scan_index in range(self.sample_space.num_probes)
+            ])
+
+            if not self.thin_sample and self.full_system:
+                # Batch multiply B_slice @ probe.T -> (block_size, num_probes)
+                b0_mat = self.B_slice @ self.probe.T
+                # Transpose and add b_slice (broadcasted)
+                self.b0[:] = b0_mat.T + self.b_slice
+
     @property
     def probe_angle(self):
         """Get the probe angle in radians."""
@@ -95,17 +112,25 @@ class LinearSystemSetup:
 
     def probe_contribution(self, scan_index: Optional[int] = 0):
         """Compute the probe contribution to the forward model."""
-        if self.thin_sample or not self.full_system:
+        if self.thin_sample:
             _, self.B_slice, self.b_slice = self.create_system_slice(scan_index=scan_index)
 
-        probe = self.initial_condition.apply_initial_condition(
-            scan_index, self.thin_sample)
+        if self.sample_space.dimension > 1:
+            probe = self.initial_condition.apply_initial_condition(
+                scan_index, self.thin_sample)
+        else:
+            probe = self.probe[scan_index, :]
 
-        n = np.arange(len(probe))
-        linear_phase = np.exp(1j * self._probe_angle * n)
-        probe *= linear_phase
+        if self._probe_angle != 0.0:
+            n = np.arange(len(probe))
+            linear_phase = np.exp(1j * self._probe_angle * n)
+            probe *= linear_phase
 
-        b0 = self.B_slice.dot(probe.flatten()) + self.b_slice
+        if self.sample_space.dimension == 1 and not self.thin_sample and self.full_system:
+            b0 = self.b0[scan_index, :]
+        else:
+            b0 = self.B_slice @ probe.flatten() + self.b_slice
+
         probe_contribution = np.concatenate(
             (b0, np.zeros(self.block_size * (self.sample_space.nz - 2))))
 
