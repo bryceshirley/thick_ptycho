@@ -10,11 +10,11 @@ minimization of simplified thick-sample ptychography model.
 
 ## Jupyter Notebooks
 
-* `1_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
-* `2_ptychography_simple_example.ipynb` — This tutorial uses EPie reconstructions assuming the simulated data is of a thin sample.
-* `3_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
-
-* `4_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a least_squares problem to reconstuct a thick sample.
+* `1_sample_space_3d.ipynb` - This tutorial demonstrates how to use `thickptypy` to set up or load in a sample space.
+* `2_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
+* `3_ptychography_simple_example.ipynb` — This tutorial uses EPie reconstructions assuming the simulated data is of a thin sample.
+* `4_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
+* `5_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a least_squares problem to reconstuct a thick sample.
 
 ---
 
@@ -53,10 +53,11 @@ thickptypy/
 ├── README.md                     # Project documentation
 ├── conftest.py                   # Test configuration
 ├── notebooks/                    # Jupyter notebooks for demonstrations
-│   ├── 1_forward_model_3d.ipynb
-│   ├── 2_ptychography_simple_example.ipynb
-│   ├── 3_forward_model_2d.ipynb
-│   ├── 4_least_squares_1d.ipynb
+│   ├── 1_sample_space_3d.ipynb
+│   ├── 2_forward_model_3d.ipynb
+│   ├── 3_ptychography_simple_example.ipynb
+│   ├── 4_forward_model_2d.ipynb
+│   ├── 5_least_squares_1d.ipynb
 │   ├── results/                  # Output folder for notebook results
 │   └── utils.py                  # Helper Functions for 2_ptychography_simple_example
 ├── pyproject.toml                # Build system and dependency configuration
