@@ -5,6 +5,7 @@ import numpy as np
 import scipy.sparse as sp
 from PIL import Image, ImageDraw, ImageFilter
 
+from scipy.ndimage import gaussian_filter
 
 class OpticalObject:
     """
@@ -52,6 +53,9 @@ class OpticalObject1D:
             np.ceil(((depth - z[0]) / (z[-1] - z[0])) * nz / 2) * 2)
         self.depth = depth
 
+        self.dz = z[1] - z[0]
+        self.dx = x[1] - x[0]
+
         self.guassian_blur = guassian_blur
 
     def get_refractive_index_field(self):
@@ -62,12 +66,14 @@ class OpticalObject1D:
             polygon_points = self._triangle_points()
         elif self.shape == 'random':
             polygon_points = self._random_shape_points(num_points=20)
+        elif self.shape == 'circle':
+            polygon_points = None
         else:
             raise ValueError("Unsupported shape: {}".format(self.shape))
 
         return self._get_field(polygon_points)
 
-    def _get_field(self, polygon_points):
+    def _get_field(self, polygon_points=None):
         """Return the field of a object."""
         # Create a black image
         image_size = (self.nx, self.nz)
@@ -76,17 +82,23 @@ class OpticalObject1D:
                 0, 0, 0))  # Black background
         draw = ImageDraw.Draw(image)
 
-        # Draw a white polygon using the calculated corners
-        draw.polygon(
+        # Draw the shape based on the polygon_points or as a circle
+        if polygon_points is None:
+            # polygon_points should be center and radius
+            center = (self.cx, self.cz)
+            radius1 = self.discrete_side_length / 2
+            radius2 = self.discrete_depth / 2
+            bbox = [
+                center[0] - radius1, center[1] - radius2,
+                center[0] + radius1, center[1] + radius2
+            ]
+            draw.ellipse(bbox, outline='white', fill='white')
+        else:
+            # Draw a white polygon using the calculated corners
+            draw.polygon(
             polygon_points,
             outline='white',
             fill='white')  # White polygon
-
-        # Apply Gaussian blur to soften edges
-        if self.guassian_blur is not None:
-            image = image.filter(
-                ImageFilter.GaussianBlur(
-                    radius=self.guassian_blur))
 
         # Convert the image to a numpy array
         image_array = np.array(image)
@@ -101,10 +113,16 @@ class OpticalObject1D:
             axis=-
             1).astype(int).T
 
-        # Create Refractive index field
+        # Create Refractive index field with optional Gaussian blur
+
+        # No blur: sharp boundaries
         n = np.zeros((self.nx, self.nz), dtype=complex)
         n[np.where(binary_matrix == 1)] = self.refractive_index
 
+        # Create Refractive index field with optional Gaussian blur
+        if self.guassian_blur is not None:
+            # Apply Gaussian blur to the refractive index field
+            n = gaussian_filter(n, sigma=self.guassian_blur)
         return n
 
     def _square_points(self):
@@ -232,6 +250,8 @@ class OpticalObject2D:
             polygon_points = self._square_points()
         elif self.shape == 'prism':
             polygon_points = self._triangle_points()
+        elif self.shape == 'cylinder':
+            polygon_points = None
         else:
             raise ValueError("Unsupported shape: {}".format(self.shape))
 
@@ -249,16 +269,22 @@ class OpticalObject2D:
         draw = ImageDraw.Draw(image)
 
         # Draw a white polygon using the calculated corners
-        draw.polygon(
+        # Draw the shape based on the polygon_points or as a circle
+        if polygon_points is None:
+            # polygon_points should be center and radius
+            center = (self.cx, self.cy)
+            radius = self.discrete_side_length / 2
+            bbox = [
+                center[0] - radius, center[1] - radius,
+                center[0] + radius, center[1] + radius
+            ]
+            draw.ellipse(bbox, outline='white', fill='white')
+        else:
+            # Draw a white polygon using the calculated corners
+            draw.polygon(
             polygon_points,
             outline='white',
             fill='white')  # White polygon
-
-        # # Apply Gaussian blur to soften edges
-        if self.guassian_blur is not None:
-            image = image.filter(
-                ImageFilter.GaussianBlur(
-                    radius=self.guassian_blur))
 
         # Convert the image to a numpy array
         image_array = np.array(image)
@@ -286,6 +312,12 @@ class OpticalObject2D:
         # Create Refractive index field
         n = np.zeros((self.nx, self.ny, self.nz), dtype=complex)
         n[np.where(mask == 1)] = self.refractive_index
+
+        # Create Refractive index field with optional Gaussian blur
+        if self.guassian_blur is not None:
+            # Apply Gaussian blur to the refractive index field
+            n = gaussian_filter(n, sigma=self.guassian_blur)
+
         return n
 
     def _square_points(self):

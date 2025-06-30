@@ -37,13 +37,12 @@
 *.bin
 *.zip
 *.gif
-*.npy
 *.tif
 *.json
 *.lock
 *.venv
 *.pyc
-
+*.npy:*
 
 ## Some common local save or copy matches
 *_save*
@@ -55,7 +54,7 @@
 **/.pytest_cache
 
 ## Numpy files
-*.npy
+*/results/
 
 ## Python cache
 **/__pycache__

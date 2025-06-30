@@ -423,8 +423,21 @@ class SampleSpace2D:
         plt.legend()
         plt.grid()
         plt.show()
+    
+    def load_sample_space(self, file_path: str):
+        """
+        Load the sample space with a precomputed refractive index field.
 
-        
+        Parameters:
+        n_true (np.ndarray): Precomputed refractive index field.
+        """
+        n_true = np.load(file_path)
+        print(f"Loaded sample space shape: {n_true.shape}")
+        assert n_true.shape == (self.nx, self.ny, self.nz), "Loaded n_true must have the same shape as the sample space."
+
+        # Normalize the refractive index field and rescale it
+        n_true = (n_true - np.mean(n_true)) / np.std(n_true) + 1
+        self.n_true = 1 + (1e-4 * n_true) + (1e-6 * 1j * n_true)
 
     @property
     def detector_frame_info(self) -> List[Dict[str, Any]]:

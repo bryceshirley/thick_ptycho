@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
-from scipy.sparse.linalg import spsolve
+import scipy.sparse.linalg as spla
 
 from thickptypy.forward_model.solver import ForwardModel
 from thickptypy.sample_space.sample_space import SampleSpace
@@ -24,12 +24,14 @@ class LeastSquaresSolver:
         self.num_probes = sample_space.num_probes
 
         # Currently, only thick sample mode is supported
-        thin_sample = False
+        self.thin_sample = False
+        
+        self.full_system = full_system_solver
 
         # Set up forward model, linear system and visualisation objects
         self.forward_model = ForwardModel(sample_space,
-                                          full_system_solver=full_system_solver,
-                                          thin_sample=thin_sample)
+                                          full_system_solver=self.full_system,
+                                          thin_sample=self.thin_sample)
         self.linear_system = self.forward_model.linear_system
         self.visualisation = Visualisation(sample_space)
 
@@ -38,6 +40,10 @@ class LeastSquaresSolver:
 
         # Probe angle for steering the probe
         self._probe_angle = 0.0
+
+        # Initialize LU decomposition for the full system solver
+        self.lu = None
+        self.Ak = None
 
         # Define True Forward Solution
         print("Solving the true forward problem once to generate the dataset...")
@@ -50,14 +56,21 @@ class LeastSquaresSolver:
 
     def compute_forward_model(self, nk):
         """Compute the forward model for the current object and gradient."""
-        grad_Ak = - self.linear_system.setup_inhomogenius_forward_model(
+        self.Ak = self.forward_model.return_forward_model_matrix(n=nk)
+        
+        if not self.thin_sample and self.full_system:
+            self.lu = spla.splu(self.Ak)
+
+        grad_Ak = - self.linear_system.setup_inhomogeneous_forward_model(
             n=nk, grad=True)
-        uk = self.convert_to_block_form(self.forward_model.solve(n=nk))
-        Ak = self.forward_model.return_forward_model_matrix(n=nk)
+        if self.lu is not None:
+            uk = self.convert_to_block_form(self.forward_model.solve(n=nk, lu=self.lu))
+        else:
+            uk = self.convert_to_block_form(self.forward_model.solve(n=nk))
 
-        return uk, Ak, grad_Ak
+        return uk, grad_Ak
 
-    def compute_grad_least_squares(self, Ak, uk, grad_A):
+    def compute_grad_least_squares(self, uk, grad_A):
         """Compute the gradient of least squares problem."""
         # Compute the gradient efficiently
         grad_real = np.zeros(self.nx * (self.nz - 1), dtype=complex)
@@ -68,7 +81,10 @@ class LeastSquaresSolver:
 
         for i in range(self.num_probes):
             # Compute the error backpropagation
-            error_backpropagation = spsolve(Ak.conj().T, exit_wave_error[i, :])
+            if self.lu is not None:
+                error_backpropagation = self.lu.solve(exit_wave_error[i, :], trans='H')
+            else:
+                error_backpropagation = spla.spsolve(self.Ak.conj().T, exit_wave_error[i, :])
 
             # Compute the gradient for each probe
             grad_real -= np.multiply((grad_A @
@@ -99,7 +115,7 @@ class LeastSquaresSolver:
 
         return exit_wave_error
 
-    def compute_alphak(self, u, A, grad_A, grad_E, d):
+    def compute_alphak(self, u, grad_A, grad_E, d):
         """
         Compute alpha_k calculation.
 
@@ -116,7 +132,10 @@ class LeastSquaresSolver:
 
         for i in range(self.num_probes):
             # Compute the perturbation for each probe
-            delta_u = spsolve(A, grad_A @ u[i, :])
+            if self.lu is not None:
+                delta_u = self.lu.solve(grad_A @ u[i, :])
+            else:
+                delta_u = spla.spsolve(self.Ak, grad_A @ u[i, :])
 
             # Only use last block_size elements (final slice)
             delta_p_i = - delta_u[-self.block_size:] @ d[-self.block_size:]
@@ -186,8 +205,11 @@ class LeastSquaresSolver:
             plot_object=False,
             plot_forward=False,
             fixed_step_size=None,
-            verbose=True):
-        """Solve the least squares problem using conjugate gradient method."""
+            verbose=True,
+            sparsity_lambda=0.0,
+            l2_lambda=0.0,
+            tv_lambda=0.0):
+        """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
 
         # Initialize the fixed step size
         if fixed_step_size is not None:
@@ -226,16 +248,16 @@ class LeastSquaresSolver:
                 break
 
             # Compute the Forward Model and Gradient of Least Squares
-            uk, Ak, grad_Ak = self.compute_forward_model(nk)
+            uk, grad_Ak = self.compute_forward_model(nk)
             grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(Ak, uk, grad_Ak)
+                self.compute_grad_least_squares(uk, grad_Ak)
             )
 
             # Output the current iteration information
             if verbose:
                 print(f"Iteration {i + 1}/{max_iters}")
                 print(f"    RMSE: {residual[i]}")
-            if (i + 1) % 10 == 0 or i == 0:
+            if (i + 1) % 5 == 0 or i == 0:
                 if plot_object:
                     print("    Reconstructed Object")
                     self.visualisation.plot(
@@ -249,6 +271,24 @@ class LeastSquaresSolver:
                     self.visualisation.plot(self.convert_from_block_form(uk))
                     self.visualisation.plot(self.convert_from_block_form(uk),
                                             probe_index=0)
+                    
+            # Add sparsity regularization (L1) to the gradient
+            if sparsity_lambda > 0.0:
+                # Only regularize the unknown region (exclude first column)
+                grad_least_squares_real += sparsity_lambda * np.sign(nk[:, 1:].real).T.reshape((-1,))
+                grad_least_squares_imag += sparsity_lambda * np.sign(nk[:, 1:].imag).T.reshape((-1,))
+
+            # Add L2 regularization to the gradient
+            if l2_lambda > 0.0:
+                grad_least_squares_real += (2 * l2_lambda * nk[:, 1:].real).T.reshape((-1,))
+                grad_least_squares_imag += (2 * l2_lambda * nk[:, 1:].imag).T.reshape((-1,))
+
+            # Add TV regularization to the gradient
+            if tv_lambda > 0.0:
+                tv_grad_real = self.tv_grad(nk[:, 1:].real).T.reshape((-1,))
+                tv_grad_imag = self.tv_grad(nk[:, 1:].imag).T.reshape((-1,))
+                grad_least_squares_real += tv_lambda * tv_grad_real
+                grad_least_squares_imag += tv_lambda * tv_grad_imag
 
             # Set direction for first iteration Conjugate Gradient
             if i == 0:
@@ -263,9 +303,9 @@ class LeastSquaresSolver:
                 alphak_im = -alpha0 / (i + 1)
             else:
                 alphak_re = self.compute_alphak(
-                    uk, Ak, grad_Ak, grad_least_squares_real, dk_re)
+                    uk, grad_Ak, grad_least_squares_real, dk_re)
                 alphak_im = self.compute_alphak(
-                    uk, Ak, 1j * grad_Ak, grad_least_squares_imag, dk_im)
+                    uk, 1j * grad_Ak, grad_least_squares_imag, dk_im)
 
             # Compute Product of step size and direction
             alphakdk_re = (alphak_re * dk_re).reshape((self.nz - 1, self.nx)).T
@@ -290,3 +330,20 @@ class LeastSquaresSolver:
                 print(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
         return nk, self.convert_from_block_form(uk), residual
+    
+    def tv_grad(self, x):
+            """Compute isotropic TV gradient for 2D array x."""
+            grad = np.zeros_like(x)
+            # Pad for boundary conditions
+            x_pad = np.pad(x, ((0, 1), (0, 1)), mode='edge')
+            dx = x_pad[:-1, 1:] - x_pad[:-1, :-1]
+            dy = x_pad[1:, :-1] - x_pad[:-1, :-1]
+            norm = np.sqrt(dx**2 + dy**2 + 1e-12)
+            # Compute divergence
+            dx_div = dx / norm
+            dy_div = dy / norm
+            grad[:-1, :] += dx_div[:-1, :]
+            grad[:, :-1] += dy_div[:, :-1]
+            grad[:-1, :] -= dx_div[1:, :]
+            grad[:, :-1] -= dy_div[:, 1:]
+            return grad

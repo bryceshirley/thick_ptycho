@@ -36,6 +36,9 @@ class LinearSystemSetup:
 
         self._probe_angle = 0.0
 
+        if not self.thin_sample and self.full_system:
+             self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
+
     @property
     def probe_angle(self):
         """Get the probe angle in radians."""
@@ -46,30 +49,32 @@ class LinearSystemSetup:
         """Set the probe angle in radians."""
         self._probe_angle = value
 
-    def setup_homogenius_forward_model_lhs(self, scan_index: Optional[int] = 0):
+    def setup_homogeneous_forward_model_lhs(self, scan_index: Optional[int] = 0):
         """Create Free-Space Forward Model Left-Hand Side (LHS) Matrix."""
-        A_slice, B_slice, _ = self.create_system_slice(scan_index=scan_index)
+        if self.thin_sample or not self.full_system:
+            self.A_slice, self.B_slice, _ = self.create_system_slice(scan_index=scan_index)
 
-        # Homogenius forward model
-        A_homogenius = (
-            sp.kron(sp.eye(self.sample_space.nz - 1), A_slice)
+        # Homogeneous forward model
+        A_homogeneous = (
+            sp.kron(sp.eye(self.sample_space.nz - 1), self.A_slice)
             - sp.kron(
                 sp.diags([1], [-1], shape=(self.sample_space.nz - 1,
                                            self.sample_space.nz - 1)),
-                B_slice
+                self.B_slice
             )
         )
-        return A_homogenius
+        return A_homogeneous
 
-    def setup_homogenius_forward_model_rhs(self, scan_index: Optional[int] = 0):
+    def setup_homogeneous_forward_model_rhs(self, scan_index: Optional[int] = 0):
         """Create Free-Space Forward Model Right-Hand Side (RHS) Vector."""
-        _, _, b_slice = self.create_system_slice(scan_index=scan_index)
-        # Homogenius forward model
-        b_homogenius = np.tile(b_slice, self.sample_space.nz - 1)
-        return b_homogenius
+        if self.thin_sample or not self.full_system:
+            _, _, self.b_slice = self.create_system_slice(scan_index=scan_index)
+        # Homogeneous forward model
+        b_homogeneous = np.tile(self.b_slice, self.sample_space.nz - 1)
+        return b_homogeneous
 
-    # Foward Model Contribution from Inhomogenius Field
-    def setup_inhomogenius_forward_model(
+    # Foward Model Contribution from Inhomogeneous Field
+    def setup_inhomogeneous_forward_model(
             self, n=None, grad=False, scan_index: Optional[int] = 0):
         """
         Compute the inhomogeneous matrix.
@@ -90,7 +95,8 @@ class LinearSystemSetup:
 
     def probe_contribution(self, scan_index: Optional[int] = 0):
         """Compute the probe contribution to the forward model."""
-        _, B_slice, b_slice = self.create_system_slice(scan_index=scan_index)
+        if self.thin_sample or not self.full_system:
+            _, self.B_slice, self.b_slice = self.create_system_slice(scan_index=scan_index)
 
         probe = self.initial_condition.apply_initial_condition(
             scan_index, self.thin_sample)
@@ -99,7 +105,7 @@ class LinearSystemSetup:
         linear_phase = np.exp(1j * self._probe_angle * n)
         probe *= linear_phase
 
-        b0 = B_slice.dot(probe.flatten()) + b_slice
+        b0 = self.B_slice.dot(probe.flatten()) + self.b_slice
         probe_contribution = np.concatenate(
             (b0, np.zeros(self.block_size * (self.sample_space.nz - 2))))
 

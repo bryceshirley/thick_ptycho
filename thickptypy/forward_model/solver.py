@@ -3,7 +3,7 @@ from typing import Optional, Tuple, Any
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.sparse.linalg import gmres, spsolve
+import scipy.sparse.linalg as spla
 
 from .initial_conditions import initial_condition_setup
 from .linear_system import LinearSystemSetup
@@ -46,15 +46,25 @@ class ForwardModel():
                                                self.initial_condition,
                                                self.thin_sample,
                                                self.full_system)
+        
+        self.lu = None  # Preconditioner matrix, initialized to None
 
     def solve(self, reverse=False,
               initial_condition: Optional[np.ndarray] = None,
               test_impedance=False,
               verbose: Optional[bool] = False,
-              n: Optional[np.ndarray] = None):
+              n: Optional[np.ndarray] = None,
+              lu: Optional[spla.SuperLU] = None) -> np.ndarray:
         """Solve the paraxial wave equation."""
         # Initialize solution grid with initial condition
         u = self._create_solution()
+
+        if not self.thin_sample and self.full_system:
+            if lu is None:
+                lu = spla.splu(self.return_forward_model_matrix(n=n))
+            b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs()
+        else:
+            b_homogeneous = None
 
         # Solve for each probe
         for scan_index in range(self.sample_space.num_probes):
@@ -64,7 +74,9 @@ class ForwardModel():
                 solution = self._solve_single_probe_full_system(
                     scan_index, n, reverse=reverse,
                     initial_condition=initial_condition,
-                    test_impedance=test_impedance)
+                    test_impedance=test_impedance,
+                    lu=lu,
+                    b_homogeneous=b_homogeneous)
             else:
                 solution = self._solve_single_probe_iteratively(
                     scan_index, n, reverse=reverse,
@@ -84,40 +96,38 @@ class ForwardModel():
         
         return u
     
-    def return_forward_model_matrix(self, scan_index: int = 0,
-                                    n: np.ndarray = None) -> np.ndarray:
-        """Return the forward model matrix for a given scan index."""
-        # Create the inhomogeneous forward model matrix
-        A_homogenius = (
-            self.linear_system.setup_homogenius_forward_model_lhs(
-                scan_index=scan_index)
-        )
-
-        Ck = self.linear_system.setup_inhomogenius_forward_model(
-            n=n, scan_index=scan_index)
-
-        return A_homogenius - Ck
-    
     def _solve_single_probe_full_system(self, scan_index: int, n: np.ndarray,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
-                                        test_impedance: bool = False) -> np.ndarray:
+                                        test_impedance: bool = False,
+                                        lu: Optional[spla.SuperLU] = None,
+                                        b_homogeneous: Optional[np.ndarray] = None) -> np.ndarray:
         """Solve the paraxial wave equation for a single probe using the full system."""
-        # Forward Model lhs matrix
-        forward_model_matrix = self.return_forward_model_matrix(
-            scan_index=scan_index, n=n)
-        
+        if reverse:
+            raise ValueError(
+                "Reverse propagation is not supported in the full system solver. "
+                "Please use the iterative solver for reverse propagation.")
         # Forward model rhs vector
-        b_homogenius = self.linear_system.setup_homogenius_forward_model_rhs(scan_index=scan_index)
+        if b_homogeneous is None:
+            b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs(scan_index=scan_index)
 
         # Edit this for impedance condition test
         probe_contribution, probe = self.linear_system.probe_contribution(scan_index=scan_index)
 
         # Define Right Hand Side
-        b = b_homogenius + probe_contribution
+        b = b_homogeneous + probe_contribution
 
-        # Solve Forward Model and Restrict to Detector
-        solution = spsolve(forward_model_matrix, b).reshape(self.nz - 1, self.linear_system.block_size).transpose()
+        # Solve Forward Model and Restrict to Detector 
+        if lu is not None:
+            solution = lu.solve(b)
+        else:
+            # Forward Model lhs matrix
+            forward_model_matrix = self.return_forward_model_matrix(
+                scan_index=scan_index, n=n)
+            solution = spla.spsolve(forward_model_matrix, b)
+
+        # Reshape solution
+        solution = solution.reshape(self.nz - 1, self.linear_system.block_size).transpose()
 
         # Concatenate initial condition (nx, 1) with solution (nx, nz-1)
         initial_condition = probe.reshape(self.linear_system.block_size, 1)
@@ -169,9 +179,23 @@ class ForwardModel():
             A_with_object = A - C  # LHS Matrix
             B_with_object = B + C  # RHS Matrix
             rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
-            solution[:, j] = spsolve(A_with_object, rhs_matrix)
+            solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
 
         return solution
+
+    def return_forward_model_matrix(self, scan_index: int = 0,
+                                    n: np.ndarray = None) -> np.ndarray:
+        """Return the forward model matrix for a given scan index."""
+        # Create the inhomogeneous forward model matrix
+        A_homogeneous = (
+            self.linear_system.setup_homogeneous_forward_model_lhs(
+                scan_index=scan_index)
+        )
+
+        Ck = self.linear_system.setup_inhomogeneous_forward_model(
+            n=n, scan_index=scan_index)
+
+        return A_homogeneous - Ck
 
     def _create_solution(self) -> np.ndarray:
         """Create the solution grid based on the sample space and boundary 
