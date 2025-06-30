@@ -8,6 +8,7 @@ import scipy.sparse.linalg as spla
 from .initial_conditions import initial_condition_setup
 from .linear_system import LinearSystemSetup
 from thickptypy.sample_space.sample_space import SampleSpace
+from scipy.sparse.linalg import LinearOperator, spilu
 
 class ForwardModel():
     """
@@ -245,3 +246,26 @@ class ForwardModel():
             elif self.sample_space.dimension == 1:
                 solution = solution[1:-1]
         return solution
+    
+    def build_gmres_preconditioner(self, n: Optional[np.ndarray] = None, drop_tol: float = 1e-4, fill_factor: float = 10.0):
+        """
+        Build an ILU preconditioner for GMRES using scipy.sparse.linalg.spilu.
+
+        Parameters:
+            n: Optional refractive index array.
+            scan_index: Index of the probe scan.
+            drop_tol: Drop tolerance for spilu.
+            fill_factor: Fill factor for spilu.
+
+        Returns:
+            A linear operator suitable for use as a GMRES preconditioner.
+        """
+
+        A = self.return_forward_model_matrix(n=n)
+        ilu = spilu(A, drop_tol=drop_tol, fill_factor=fill_factor)
+
+        def preconditioner(x):
+            return ilu.solve(x)
+
+        M = LinearOperator(A.shape, matvec=preconditioner, dtype=A.dtype)
+        return M

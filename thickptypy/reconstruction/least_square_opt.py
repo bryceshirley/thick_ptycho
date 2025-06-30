@@ -53,6 +53,7 @@ class LeastSquaresSolver:
         print(
             f"True Forward Solution computed in {end_time - start_time:.2f} seconds.")
         self.true_exit_waves = self.u_true[:, -self.block_size:]
+        
 
     def compute_forward_model(self, nk):
         """Compute the forward model for the current object and gradient."""
