@@ -147,6 +147,9 @@ class Visualisation:
         axs[1].set_xlabel(dim1_label)
         axs[1].set_ylabel(dim2_label)
 
+        axs[0].set_aspect('auto')
+        axs[1].set_aspect('auto')
+
         plt.tight_layout()
         plt.show()
 

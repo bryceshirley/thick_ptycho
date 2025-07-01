@@ -105,8 +105,8 @@ class InitialConditions1D:
         elif self.ic_type == "dirichlet_test":
             def incidence(x, c_x):
                 return (u0_nm_dirichlet(1, 1)(x, 0.5) +
-                        0.5 * u0_nm_dirichlet(2, 2)(x, 0.5) +
-                        0.2 * u0_nm_dirichlet(5, 5)(x, 0.5))
+                        0.5 * u0_nm_dirichlet(5, 5)(x, 0.5) +
+                        0.2 * u0_nm_dirichlet(9, 9)(x, 0.5))
         elif self.ic_type == "neumann_test":
             def incidence(x, c_x):
                 return (u0_nm_neumann(1, 1)(x, 0) +
@@ -124,7 +124,7 @@ class InitialConditions1D:
                 r = np.abs(x - c_x)
                 return np.where(r <= self.probe_diameter / 2, 1, 0)
         else:
-            raise ValueError("ic should be 1, 2, 3, 4, 5,6,7 or 8")
+            raise ValueError("not a valid initial condition type")
         return incidence
 
 
@@ -215,8 +215,8 @@ class InitialConditions2D:
         elif self.ic_type == "dirichlet_test":
             def incidence(x, y, c_x, c_y):
                 return (u0_nm_dirichlet(1, 1)(x, y) +
-                        0.5 * u0_nm_dirichlet(2, 2)(x, y) +
-                        0.2 * u0_nm_dirichlet(5, 5)(x, y))
+                        0.5 * u0_nm_dirichlet(5, 5)(x, y) +
+                        0.2 * u0_nm_dirichlet(9, 9)(x, y))
         elif self.ic_type == "neumann_test":
             def incidence(x, y, c_x, c_y):
                 return (u0_nm_neumann(1, 1)(x, y) +

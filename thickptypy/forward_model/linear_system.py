@@ -147,11 +147,9 @@ class LinearSystemSetup:
 
         return A_slice, B_slice, b_slice
 
-    def test_exact_impedance_rhs_slice(self, z: float,
-                                       scan_index: Optional[int] = 0):
+    def test_exact_impedance_rhs_slice(self, z: float):
         """Test if the exact impedance boundary conditions are satisfied."""
         bcs = BoundaryConditions(self.sample_space, self.initial_condition,
-                                 thin_sample=self.thin_sample,
-                                 scan_index=scan_index)
+                                 thin_sample=self.thin_sample)
         # 2D system
         return bcs.get_exact_boundary_conditions_system(z)

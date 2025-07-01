@@ -168,8 +168,7 @@ class ForwardModel():
         for j in range(1, self.nz):
             if test_impedance:
                 b = self.linear_system.test_exact_impedance_rhs_slice(
-                    self.sample_space.z[j - 1],
-                    scan_index=scan_index)
+                    self.sample_space.z[j])
             
             if reverse:
                 C = - sp.diags(object_slices.reshape(-1, self.nz - 1)[:, -j])
