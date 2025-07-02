@@ -70,7 +70,7 @@ def compute_error(nx, nz, thin_sample, full_system):
 def test_error(thin_sample, full_system, request):
     """Test that the error norm decreases as the grid resolution increases."""
 
-    nx_values = [4, 8, 16, 32]
+    nx_values = [8, 16, 32, 64, 128]
     nz_values = []
     rmse_errors = []
     rel_l2_norms = []
@@ -118,10 +118,10 @@ def test_error(thin_sample, full_system, request):
         plt.title(f'Convergence Study: RMSE vs Grid Resolution ({bc_type} BC)')
         plt.grid(True, alpha=0.3)
 
-        # Add theoretical convergence lines for reference
-        dz_values = [1.0 / (nz - 1) for nz in nz_values]  # nz = nx for this test
-        plt.loglog(nx_values, (np.array(dz_values)) * rmse_errors[0] / dz_values[0], 
-                'r--', alpha=0.7, label='O(dx² + dz) = O(dz) reference')
+        # Add theoretical convergence lines fo reference
+        dx_values = [1.0 / (nx - 1) for nx in nx_values]  # nz = nx for this test
+        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2, 
+                'r--', alpha=0.7, label='O(dx² + dz²) reference')
         plt.legend()
 
         plt.subplot(1, 2, 2)
@@ -131,8 +131,8 @@ def test_error(thin_sample, full_system, request):
         plt.ylabel('L2 Norm Error')
         plt.title(f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
         plt.grid(True, alpha=0.3)
-        plt.loglog(nx_values, (np.array(dz_values)) * rmse_errors[0] / dz_values[0],
-                'r--', alpha=0.7, label='O(dx² + dz) = O(dz) reference')
+        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2, 
+                'r--', alpha=0.7, label='O(dx² + dz²) reference')
         plt.legend()
 
         plt.tight_layout()

@@ -167,8 +167,11 @@ class ForwardModel():
         # Iterate over the z dimension
         for j in range(1, self.nz):
             if test_impedance:
-                b = self.linear_system.test_exact_impedance_rhs_slice(
+                b_old = self.linear_system.test_exact_impedance_rhs_slice(
+                    self.sample_space.z[j-1])
+                b_new = self.linear_system.test_exact_impedance_rhs_slice(
                     self.sample_space.z[j])
+                b = (b_old + b_new) / 2
             
             if reverse:
                 C = - sp.diags(object_slices.reshape(-1, self.nz - 1)[:, -j])

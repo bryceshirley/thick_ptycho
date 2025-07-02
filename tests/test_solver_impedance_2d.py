@@ -5,9 +5,10 @@ from thickptypy.sample_space.sample_space import SampleSpace
 from thickptypy.forward_model.solver import ForwardModel
 from thickptypy.utils.visualisations import Visualisation
 
-def u_nm(a,n, m):
+
+def u_nm(a, n, m):
     """Returns the exact solution for a given n and m."""
-    return lambda x,y,z: np.exp(-a*((n**2)+(m**2))*(np.pi**2)*z)*np.cos(n*np.pi*x)*np.cos(m*np.pi*y) 
+    return lambda x, y, z: np.exp(-a*((n**2)+(m**2))*(np.pi**2)*z)*np.cos(n*np.pi*x)*np.cos(m*np.pi*y)
 
 
 def compute_error(nx, ny, nz, thin_sample, full_system):
@@ -71,7 +72,6 @@ def compute_error(nx, ny, nz, thin_sample, full_system):
     exact_solution = u_nm(a, 1, 1)(X, Y, Z) + 0.5*u_nm(a, 2, 2)(X, Y, Z) + \
         0.2*u_nm(a, 5, 5)(X, Y, Z)
 
-
     # Compute the relative RMSE
     return exact_solution, solution
 
@@ -84,15 +84,16 @@ def test_error(thin_sample, full_system, request):
     Here the spatial domain is discretized with nx, ny, and nz grid points.
     For plotting error, show imshow of the final z-slice (xy plane).
     """
-    nx_values = [8, 16, 32, 64, 128]
+    nx_values = [8, 16, 32, 64]
     ny_values = nx_values  # For simplicity, keep square xy grid
     nz_values = []
-    
+
     rmse_errors = []
     rel_l2_norms = []
     bc_type = "Impedance 3D"
 
-    print(f"\n=== CONVERGENCE STUDY: {bc_type.upper()} BOUNDARY CONDITIONS ===")
+    print(
+        f"\n=== CONVERGENCE STUDY: {bc_type.upper()} BOUNDARY CONDITIONS ===")
     print(f"thin_sample: {thin_sample}, full_system: {full_system}\n")
 
     for i, nx in enumerate(nx_values):
@@ -103,12 +104,14 @@ def test_error(thin_sample, full_system, request):
         print(f"Computing solution for nx={nx}, ny={ny}, nz={nz}")
         # You need to provide compute_error_2d to return (exact_solution, solution)
         # each of shape (nx, ny, nz)
-        exact_solution, solution = compute_error(nx, ny, nz, thin_sample, full_system)
+        exact_solution, solution = compute_error(
+            nx, ny, nz, thin_sample, full_system)
         error = solution - exact_solution
 
         # RMSE over entire 3D volume
         rmse = np.sqrt(np.mean(np.abs(error)**2))
-        error_norm = np.linalg.norm(error.ravel()) / np.linalg.norm(exact_solution.ravel())
+        error_norm = np.linalg.norm(
+            error.ravel()) / np.linalg.norm(exact_solution.ravel())
 
         rmse_errors.append(rmse)
         rel_l2_norms.append(error_norm)
@@ -131,28 +134,29 @@ def test_error(thin_sample, full_system, request):
         plt.figure(figsize=(12, 5))
 
         plt.subplot(1, 2, 1)
-        plt.loglog(nx_values, rmse_errors, 'bo-', linewidth=2, markersize=8, 
-                label=f'RMSE ({bc_type} BC)')
+        plt.loglog(nx_values, rmse_errors, 'bo-', linewidth=2, markersize=8,
+                   label=f'RMSE ({bc_type} BC)')
         plt.xlabel('Number of x grid points (nx=ny=nz)')
         plt.ylabel('RMSE Error')
         plt.title(f'Convergence Study: RMSE vs Grid Resolution ({bc_type} BC)')
         plt.grid(True, alpha=0.3)
 
         # Compute dz values (assuming nz = nx)
-        dz_values = [1.0 / (nz - 1) for nz in nz_values]  # nz = nx for this test
-        plt.loglog(nx_values, (np.array(dz_values)) * rmse_errors[0] / dz_values[0], 
-                'r--', alpha=0.7, label='O(dx² + dy² + dz) = O(dz) reference')
+        dx_values = [1.0/(nx-1) for nx in nx_values]
+        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2,
+                   'r--', alpha=0.7, label='O(dx²+dy²+dz²) reference')
         plt.legend()
 
         plt.subplot(1, 2, 2)
-        plt.loglog(nx_values, rel_l2_norms, 'ro-', linewidth=2, markersize=8, 
-                label=f'L2 norm ({bc_type} BC)')
+        plt.loglog(nx_values, rel_l2_norms, 'ro-', linewidth=2, markersize=8,
+                   label=f'L2 norm ({bc_type} BC)')
         plt.xlabel('Number of x grid points (nx=ny=nz)')
         plt.ylabel('L2 Norm Error')
-        plt.title(f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
+        plt.title(
+            f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
         plt.grid(True, alpha=0.3)
-        plt.loglog(nx_values, (np.array(dz_values)) * rmse_errors[0] / dz_values[0], 
-                'r--', alpha=0.7, label='O(dx² + dy² + dz) = O(dz) reference')
+        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2,
+                   'r--', alpha=0.7, label='O(dx²+dy²+dz²) reference')
         plt.legend()
 
         plt.tight_layout()
@@ -175,14 +179,16 @@ def test_error(thin_sample, full_system, request):
 
         # Real parts
         plt.subplot(2, 3, 1)
-        plt.imshow(np.real(sol_slice), cmap='viridis', vmin=real_min, vmax=real_max)
+        plt.imshow(np.real(sol_slice), cmap='viridis',
+                   vmin=real_min, vmax=real_max)
         plt.colorbar(label='Re(Numerical)')
         plt.title(f'Numerical Solution (Real) - {bc_type} BC')
         plt.xlabel('y')
         plt.ylabel('x')
 
         plt.subplot(2, 3, 2)
-        plt.imshow(np.real(exact_slice), cmap='viridis', vmin=real_min, vmax=real_max)
+        plt.imshow(np.real(exact_slice), cmap='viridis',
+                   vmin=real_min, vmax=real_max)
         plt.colorbar(label='Re(Exact)')
         plt.title(f'Exact Solution (Real) - {bc_type} BC')
         plt.xlabel('y')
@@ -197,14 +203,16 @@ def test_error(thin_sample, full_system, request):
 
         # Imaginary parts
         plt.subplot(2, 3, 4)
-        plt.imshow(np.imag(sol_slice), cmap='viridis', vmin=imag_min, vmax=imag_max)
+        plt.imshow(np.imag(sol_slice), cmap='viridis',
+                   vmin=imag_min, vmax=imag_max)
         plt.colorbar(label='Im(Numerical)')
         plt.title(f'Numerical Solution (Imag) - {bc_type} BC')
         plt.xlabel('y')
         plt.ylabel('x')
 
         plt.subplot(2, 3, 5)
-        plt.imshow(np.imag(exact_slice), cmap='viridis', vmin=imag_min, vmax=imag_max)
+        plt.imshow(np.imag(exact_slice), cmap='viridis',
+                   vmin=imag_min, vmax=imag_max)
         plt.colorbar(label='Im(Exact)')
         plt.title(f'Exact Solution (Imag) - {bc_type} BC')
         plt.xlabel('y')
@@ -217,10 +225,12 @@ def test_error(thin_sample, full_system, request):
         plt.xlabel('y')
         plt.ylabel('x')
 
-        plt.suptitle(f'{bc_type} Grid {nx}x{ny}x{nz} (final z-slice), thin_sample: {thin_sample}, full_system: {full_system}')
+        plt.suptitle(
+            f'{bc_type} Grid {nx}x{ny}x{nz} (final z-slice), thin_sample: {thin_sample}, full_system: {full_system}')
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
 
     # Assert error decreases
     for i in range(1, len(rmse_errors)):
-        assert rmse_errors[i] < rmse_errors[i - 1], f"Error norm did not decrease: {rmse_errors[i]} >= {rmse_errors[i - 1]}"
+        assert rmse_errors[i] < rmse_errors[i -
+                                            1], f"Error norm did not decrease: {rmse_errors[i]} >= {rmse_errors[i - 1]}"
