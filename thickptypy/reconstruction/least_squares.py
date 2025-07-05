@@ -207,9 +207,7 @@ class LeastSquaresSolver:
             plot_forward=False,
             fixed_step_size=None,
             verbose=True,
-            sparsity_lambda=0.0,
-            l2_lambda=0.0,
-            tv_lambda=0.0):
+            sparsity_lambda=0.0):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
 
         # Initialize the fixed step size
@@ -218,9 +216,9 @@ class LeastSquaresSolver:
 
         # Initialize the refractive index
         if n_initial is not None:
-            nk = n_initial
+            n0 = n_initial
         else:
-            nk = np.ones((self.nx, self.nz), dtype=complex)
+            n0 = np.ones((self.nx, self.nz), dtype=complex)
 
         # Output True Object and Forward Solution if requested
         if plot_object:
@@ -237,12 +235,15 @@ class LeastSquaresSolver:
 
         # Initialize residual
         residual = []
-
+        nk = n0
+        rel_rmse_denominator = np.sqrt(np.mean(np.abs(n0) ** 2))
         for i in range(max_iters):
             time_start = time.time()
             # Compute RMSE of the current refractive index estimate
-            residual.append(np.sqrt(np.mean(np.abs(
-                nk - self.sample_space.n_true) ** 2)))
+            error = nk - self.sample_space.n_true
+            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2))/rel_rmse_denominator
+
+            residual.append(rel_rmse)
             # Check for convergence
             if residual[i] < tol:
                 print(f"Converged in {i + 1} iterations.")
@@ -258,7 +259,7 @@ class LeastSquaresSolver:
             if verbose:
                 print(f"Iteration {i + 1}/{max_iters}")
                 print(f"    RMSE: {residual[i]}")
-            if (i + 1) % 5 == 0 or i == 0:
+            if i == 0 or (i + 1) % 5 == 0:
                 if plot_object:
                     print("    Reconstructed Object")
                     self.visualisation.plot(
@@ -272,24 +273,6 @@ class LeastSquaresSolver:
                     self.visualisation.plot(self.convert_from_block_form(uk))
                     self.visualisation.plot(self.convert_from_block_form(uk),
                                             probe_index=0)
-                    
-            # Add sparsity regularization (L1) to the gradient
-            if sparsity_lambda > 0.0:
-                # Only regularize the unknown region (exclude first column)
-                grad_least_squares_real += sparsity_lambda * np.sign(nk[:, 1:].real).T.reshape((-1,))
-                grad_least_squares_imag += sparsity_lambda * np.sign(nk[:, 1:].imag).T.reshape((-1,))
-
-            # Add L2 regularization to the gradient
-            if l2_lambda > 0.0:
-                grad_least_squares_real += (2 * l2_lambda * nk[:, 1:].real).T.reshape((-1,))
-                grad_least_squares_imag += (2 * l2_lambda * nk[:, 1:].imag).T.reshape((-1,))
-
-            # Add TV regularization to the gradient
-            if tv_lambda > 0.0:
-                tv_grad_real = self.tv_grad(nk[:, 1:].real).T.reshape((-1,))
-                tv_grad_imag = self.tv_grad(nk[:, 1:].imag).T.reshape((-1,))
-                grad_least_squares_real += tv_lambda * tv_grad_real
-                grad_least_squares_imag += tv_lambda * tv_grad_imag
 
             # Set direction for first iteration Conjugate Gradient
             if i == 0:
@@ -330,21 +313,23 @@ class LeastSquaresSolver:
             if verbose:
                 print(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
+                
+            # Add sparsity regularization (L1) to the gradient
+            if sparsity_lambda > 0.0:
+
+                # Apply soft thresholding to real and imaginary parts separately
+                nk_real = nk[:, 1:].real - 1
+                nk_imag = nk[:, 1:].imag
+                nk[:, 1:] = 1 + self.soft_threshold(nk_real,
+                                                    sparsity_lambda,
+                                                    alphak_re) \
+                    + 1j * self.soft_threshold(nk_imag,
+                                               sparsity_lambda*1e-1,
+                                               alphak_im)
+
         return nk, self.convert_from_block_form(uk), residual
     
-    def tv_grad(self, x):
-            """Compute isotropic TV gradient for 2D array x."""
-            grad = np.zeros_like(x)
-            # Pad for boundary conditions
-            x_pad = np.pad(x, ((0, 1), (0, 1)), mode='edge')
-            dx = x_pad[:-1, 1:] - x_pad[:-1, :-1]
-            dy = x_pad[1:, :-1] - x_pad[:-1, :-1]
-            norm = np.sqrt(dx**2 + dy**2 + 1e-12)
-            # Compute divergence
-            dx_div = dx / norm
-            dy_div = dy / norm
-            grad[:-1, :] += dx_div[:-1, :]
-            grad[:, :-1] += dy_div[:, :-1]
-            grad[:-1, :] -= dx_div[1:, :]
-            grad[:, :-1] -= dy_div[:, 1:]
-            return grad
+    def soft_threshold(self, x, lam, step):
+        """Soft thresholding operator for ISTA."""
+        return np.sign(x) * np.maximum(np.abs(x) - lam * step, 0.0)
+

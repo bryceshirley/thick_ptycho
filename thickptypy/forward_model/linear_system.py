@@ -89,6 +89,39 @@ class LinearSystemSetup:
         # Homogeneous forward model
         b_homogeneous = np.tile(self.b_slice, self.sample_space.nz - 1)
         return b_homogeneous
+    
+    def test_exact_impedance_forward_model_rhs(self):
+        """Test Impedance Boundary Conditions in Free-Space Forward Model
+        Right-Hand Side (RHS) Vector."""
+        bcs = BoundaryConditions(
+            self.sample_space, self.initial_condition,
+            thin_sample=self.thin_sample
+        )
+        z = self.sample_space.z
+        nz = self.sample_space.nz
+
+        # Compute the average boundary condition between adjacent z slices
+        for j in range(1, nz):
+            b0 = bcs.get_exact_boundary_conditions_system(z[j - 1])
+            b1 = bcs.get_exact_boundary_conditions_system(z[j])
+            b_avg = 0.5 * (b0 + b1)
+            if j == 1:
+                exact_b_homogeneous = b_avg
+            else:
+                exact_b_homogeneous = np.concatenate((exact_b_homogeneous,
+                                                      b_avg))
+
+        return exact_b_homogeneous
+
+    def test_exact_impedance_rhs_slice(self, j: int):
+        """Test if the exact impedance boundary conditions are satisfied."""
+        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
+                                 thin_sample=self.thin_sample)
+        b_old = bcs.get_exact_boundary_conditions_system(
+                    self.sample_space.z[j-1])
+        b_new = bcs.get_exact_boundary_conditions_system(
+            self.sample_space.z[j])
+        return (b_old + b_new) / 2
 
     # Foward Model Contribution from Inhomogeneous Field
     def setup_inhomogeneous_forward_model(
@@ -146,10 +179,3 @@ class LinearSystemSetup:
         b_slice = bcs.get_initial_boundary_conditions_system()
 
         return A_slice, B_slice, b_slice
-
-    def test_exact_impedance_rhs_slice(self, z: float):
-        """Test if the exact impedance boundary conditions are satisfied."""
-        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
-                                 thin_sample=self.thin_sample)
-        # 2D system
-        return bcs.get_exact_boundary_conditions_system(z)

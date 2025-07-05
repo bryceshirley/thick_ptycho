@@ -54,7 +54,9 @@ class ForwardModel():
               test_impedance=False,
               verbose: Optional[bool] = False,
               n: Optional[np.ndarray] = None,
-              lu: Optional[spla.SuperLU] = None) -> np.ndarray:
+              lu: Optional[spla.SuperLU] = None,
+              iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None
+              ) -> np.ndarray:
         """Solve the paraxial wave equation."""
         # Initialize solution grid with initial condition
         u = self._create_solution()
@@ -65,37 +67,81 @@ class ForwardModel():
             b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs()
         else:
             b_homogeneous = None
+        
+        if not self.thin_sample and not self.full_system:
+            if iterative_lu is None:
+                iterative_lu = self.create_lu_and_b_mod(
+                    n=n, reverse=reverse)
 
-        # Solve for each probe
-        for scan_index in range(self.sample_space.num_probes):
-            # Solve the forward model
+
+        # Define wrapper for parallel execution
+        def solve_single_probe(scan_index: int) -> np.ndarray:
+            """Solve the paraxial wave equation for a single probe."""
+
             start_time = time.time()
             if self.full_system:
-                solution = self._solve_single_probe_full_system(
+                sol = self._solve_single_probe_full_system(
                     scan_index, n, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
                     lu=lu,
                     b_homogeneous=b_homogeneous)
             else:
-                solution = self._solve_single_probe_iteratively(
+                sol = self._solve_single_probe_iteratively(
                     scan_index, n, reverse=reverse,
                     initial_condition=initial_condition,
-                    test_impedance=test_impedance)
-            end_time = time.time()
+                    test_impedance=test_impedance,
+                    iterative_lu=iterative_lu)
+            # Handle Dirichlet BCs
+            sol = self._handle_dirichlet_bcs(sol)
 
             # Print time taken for each scan if verbose is True
             if verbose:
                 print(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
-
-            # Handle Dirichlet BCs
-            solution = self._handle_dirichlet_bcs(solution)
             
-            # Store the solution for this scan index
-            u[scan_index, ...] = solution
+            return sol
+        
+        # This could be made parallel
+        for scan_index in range(self.sample_space.num_probes):
+            u[scan_index, ...] = solve_single_probe(scan_index)
         
         return u
     
+    def create_lu_and_b_mod(self, n: Optional[np.ndarray] = None,
+                            reverse: bool = False) -> Tuple[Optional[spla.SuperLU], Optional[np.ndarray]]:
+        """Solve the paraxial wave equation iteratively for a single probe."""
+        # Precompute C, A_mod, B_mod, LU factorizations
+        A_lu_list = []
+        B_mod_list = []
+
+        object_slices = self.sample_space.create_sample_slices(
+                            self.thin_sample,
+                            n=n).reshape(-1, self.nz - 1)
+
+
+        # Create Linear System and Apply Boundary Conditions
+        A, B, b = self.linear_system.create_system_slice()
+
+        if reverse:
+            A, B = B, A
+            b = - b
+
+        # Iterate over the z dimension
+        for j in range(1, self.nz):
+            if reverse:
+                C = - sp.diags(object_slices[:, -j])
+            else:
+                C = sp.diags(object_slices[:, j - 1])
+
+            A_with_object = A - C  # LHS Matrix
+            B_with_object = B + C  # RHS Matrix
+
+            A_lu = spla.splu(A_with_object.tocsc())
+            A_lu_list.append(A_lu)
+            B_mod_list.append(B_with_object)
+
+        return (A_lu_list, B_mod_list, b)
+
     def _solve_single_probe_full_system(self, scan_index: int, n: np.ndarray,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
@@ -108,11 +154,19 @@ class ForwardModel():
                 "Reverse propagation is not supported in the full system solver. "
                 "Please use the iterative solver for reverse propagation.")
         # Forward model rhs vector
-        if b_homogeneous is None:
-            b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs(scan_index=scan_index)
+        if test_impedance:
+            b_homogeneous = (
+                self.linear_system.test_exact_impedance_forward_model_rhs()
+            )
+        elif b_homogeneous is None:
+            b_homogeneous = (
+                self.linear_system.setup_homogeneous_forward_model_rhs(
+                    scan_index=scan_index)
+            )
 
         # Edit this for impedance condition test
-        probe_contribution, probe = self.linear_system.probe_contribution(scan_index=scan_index)
+        probe_contribution, probe = self.linear_system.probe_contribution(
+            scan_index=scan_index)
 
         # Define Right Hand Side
         b = b_homogeneous + probe_contribution
@@ -127,7 +181,8 @@ class ForwardModel():
             solution = spla.spsolve(forward_model_matrix, b)
 
         # Reshape solution
-        solution = solution.reshape(self.nz - 1, self.linear_system.block_size).transpose()
+        solution = solution.reshape(self.nz - 1, 
+                                    self.linear_system.block_size).transpose()
 
         # Concatenate initial condition (nx, 1) with solution (nx, nz-1)
         initial_condition = probe.reshape(self.linear_system.block_size, 1)
@@ -136,25 +191,16 @@ class ForwardModel():
     def _solve_single_probe_iteratively(self, scan_index: int, n: np.ndarray,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
-                                        test_impedance: bool = False) -> np.ndarray:
+                                        test_impedance: bool = False,
+                                        iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None
+                                        ) -> np.ndarray:
         """Solve the paraxial wave equation iteratively for a single probe."""
-        object_slices = (
-                self.sample_space.create_sample_slices(
-                    self.thin_sample, n=n, scan_index=scan_index
-                )
-            )
-
-        # Initialize solution grid with initial condition
+        # Initialize solution grid
         solution = np.zeros((self.linear_system.block_size, self.nz),
                             dtype=complex)
 
-        # Create Linear System and Apply Boundary Conditions
-        A, B, b = self.linear_system.create_system_slice(
-            scan_index=scan_index)
-
+        # Set initial condition
         if reverse:
-            A, B = B, A
-            b = - b
             if initial_condition is None:
                 raise ValueError(
                     "Initial condition must be provided for reverse propagation.")
@@ -163,25 +209,47 @@ class ForwardModel():
             solution[:, 0] = self.initial_condition.apply_initial_condition(
                 scan_index,
                 self.thin_sample).flatten()
+        
+        # Solve with LU decomposition
+        if iterative_lu is not None:
+            A_lu_list, B_list, b = iterative_lu
+            # Iterate over the z dimension
+            for j in range(1, self.nz):
+                if test_impedance:
+                    b = self.linear_system.test_exact_impedance_rhs_slice(j)
 
-        # Iterate over the z dimension
-        for j in range(1, self.nz):
-            if test_impedance:
-                b_old = self.linear_system.test_exact_impedance_rhs_slice(
-                    self.sample_space.z[j-1])
-                b_new = self.linear_system.test_exact_impedance_rhs_slice(
-                    self.sample_space.z[j])
-                b = (b_old + b_new) / 2
-            
+                rhs_matrix = B_list.dot(solution[:, j - 1]) + b
+                solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)
+        # For thin samples with spsolve
+        else:
+            object_slices = (
+                    self.sample_space.create_sample_slices(
+                        self.thin_sample, n=n, scan_index=scan_index
+                    )
+                ).reshape(-1, self.nz - 1)
+
+            # Create Linear System and Apply Boundary Conditions
+            A, B, b = self.linear_system.create_system_slice(
+                scan_index=scan_index)
+
             if reverse:
-                C = - sp.diags(object_slices.reshape(-1, self.nz - 1)[:, -j])
-            else:
-                C = sp.diags(object_slices.reshape(-1, self.nz - 1)[:, j - 1])
+                A, B = B, A
+                b = - b
 
-            A_with_object = A - C  # LHS Matrix
-            B_with_object = B + C  # RHS Matrix
-            rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
-            solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
+            # Iterate over the z dimension
+            for j in range(1, self.nz):
+                if test_impedance:
+                    b = self.linear_system.test_exact_impedance_rhs_slice(j)
+                
+                if reverse:
+                    C = - sp.diags(object_slices[:, -j])
+                else:
+                    C = sp.diags(object_slices[:, j - 1])
+
+                A_with_object = A - C  # LHS Matrix
+                B_with_object = B + C  # RHS Matrix
+                rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
+                solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
 
         return solution
 

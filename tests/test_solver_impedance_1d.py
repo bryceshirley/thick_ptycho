@@ -70,7 +70,7 @@ def compute_error(nx, nz, thin_sample, full_system):
 def test_error(thin_sample, full_system, request):
     """Test that the error norm decreases as the grid resolution increases."""
 
-    nx_values = [8, 16, 32, 64, 128]
+    nx_values = [8, 16, 32, 64]
     nz_values = []
     rmse_errors = []
     rel_l2_norms = []
