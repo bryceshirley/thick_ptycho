@@ -25,7 +25,7 @@ class LeastSquaresSolver:
 
         # Currently, only thick sample mode is supported
         self.thin_sample = False
-        
+
         self.full_system = full_system_solver
 
         # Set up forward model, linear system and visualisation objects
@@ -41,8 +41,11 @@ class LeastSquaresSolver:
         # Probe angle for steering the probe
         self._probe_angle = 0.0
 
-        # Initialize LU decomposition for the full system solver
+        # Initialize LU decomposition
         self.lu = None
+        self.iterative_lu = None
+
+        # Initialize the Forward Model matrix
         self.Ak = None
 
         # Define True Forward Solution
@@ -57,16 +60,19 @@ class LeastSquaresSolver:
     def compute_forward_model(self, nk):
         """Compute the forward model for the current object and gradient."""
         self.Ak = self.forward_model.return_forward_model_matrix(n=nk)
-        
+
         if not self.thin_sample and self.full_system:
             self.lu = spla.splu(self.Ak)
 
+        if not self.thin_sample and not self.full_system:
+            self.iterative_lu = self.forward_model.construct_iterative_lu(n=nk)
+
         grad_Ak = - self.linear_system.setup_inhomogeneous_forward_model(
             n=nk, grad=True)
-        if self.lu is not None:
-            uk = self.convert_to_block_form(self.forward_model.solve(n=nk, lu=self.lu))
-        else:
-            uk = self.convert_to_block_form(self.forward_model.solve(n=nk))
+
+        uk = self.convert_to_block_form(self.forward_model.solve(
+            n=nk, lu=self.lu,
+            iterative_lu=self.iterative_lu))
 
         return uk, grad_Ak
 
@@ -82,9 +88,11 @@ class LeastSquaresSolver:
         for i in range(self.num_probes):
             # Compute the error backpropagation
             if self.lu is not None:
-                error_backpropagation = self.lu.solve(exit_wave_error[i, :], trans='H')
+                error_backpropagation = self.lu.solve(
+                    exit_wave_error[i, :], trans='H')
             else:
-                error_backpropagation = spla.spsolve(self.Ak.conj().T, exit_wave_error[i, :])
+                error_backpropagation = spla.spsolve(
+                    self.Ak.conj().T, exit_wave_error[i, :])
 
             # Compute the gradient for each probe
             grad_real -= np.multiply((grad_A @
@@ -135,6 +143,12 @@ class LeastSquaresSolver:
             perturbation = grad_A @ u[i, :]
             if self.lu is not None:
                 delta_u = self.lu.solve(perturbation)
+            if self.iterative_lu is not None:
+                delta_u = self.forward_model._solve_single_probe_iteratively(
+                    initial_condition=0,
+                    iterative_lu=self.iterative_lu,
+                    b_block=perturbation)
+                delta_u = delta_u[:, 1:].transpose().flatten()
             else:
                 delta_u = spla.spsolve(self.Ak, perturbation)
 
@@ -187,13 +201,13 @@ class LeastSquaresSolver:
         Reverse the block flattening process.
 
         Parameters:
-        u (ndarray): Flattened array of shape (num_probes, nx * (nz - 1))
+        u (ndarray): Flattened array of shape (num_probes, block_size * (nz - 1))
 
         Returns:
-        ndarray: Unflattened array of shape (num_probes, nx, nz - 1)
+        ndarray: Unflattened array of shape (num_probes, block_size, nz - 1)
         """
-        # Step 1: Reshape to (num_probes, nz - 1, nx)
-        reshaped = u.reshape(self.num_probes, self.nz-1, self.nx)
+        # Step 1: Reshape to (num_probes, nz - 1, block_size)
+        reshaped = u.reshape(self.num_probes, self.nz-1, self.block_size)
 
         # Step 2: Transpose to (num_probes, nx, nz - 1)
         return reshaped.transpose(0, 2, 1)
@@ -241,7 +255,8 @@ class LeastSquaresSolver:
             time_start = time.time()
             # Compute RMSE of the current refractive index estimate
             error = nk - self.sample_space.n_true
-            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2))/rel_rmse_denominator
+            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2)) / \
+                rel_rmse_denominator
 
             residual.append(rel_rmse)
             # Check for convergence
@@ -313,7 +328,7 @@ class LeastSquaresSolver:
             if verbose:
                 print(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
-                
+
             # Add sparsity regularization (L1) to the gradient
             if sparsity_lambda > 0.0:
 
@@ -328,8 +343,7 @@ class LeastSquaresSolver:
                                                alphak_im)
 
         return nk, self.convert_from_block_form(uk), residual
-    
+
     def soft_threshold(self, x, lam, step):
         """Soft thresholding operator for ISTA."""
         return np.sign(x) * np.maximum(np.abs(x) - lam * step, 0.0)
-

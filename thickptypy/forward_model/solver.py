@@ -47,7 +47,7 @@ class ForwardModel():
                                                self.thin_sample,
                                                self.full_system)
         
-        self.lu = None  # Preconditioner matrix, initialized to None
+        self.block_size = self.linear_system.block_size
 
     def solve(self, reverse=False,
               initial_condition: Optional[np.ndarray] = None,
@@ -55,8 +55,8 @@ class ForwardModel():
               verbose: Optional[bool] = False,
               n: Optional[np.ndarray] = None,
               lu: Optional[spla.SuperLU] = None,
-              iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None
-              ) -> np.ndarray:
+              iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None,
+              b_block: Optional[list[np.ndarray]] = None) -> np.ndarray:
         """Solve the paraxial wave equation."""
         # Initialize solution grid with initial condition
         u = self._create_solution()
@@ -70,7 +70,7 @@ class ForwardModel():
         
         if not self.thin_sample and not self.full_system:
             if iterative_lu is None:
-                iterative_lu = self.create_lu_and_b_mod(
+                iterative_lu = self.construct_iterative_lu(
                     n=n, reverse=reverse)
 
 
@@ -81,17 +81,18 @@ class ForwardModel():
             start_time = time.time()
             if self.full_system:
                 sol = self._solve_single_probe_full_system(
-                    scan_index, n, reverse=reverse,
+                    n, scan_index=scan_index, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
                     lu=lu,
                     b_homogeneous=b_homogeneous)
             else:
                 sol = self._solve_single_probe_iteratively(
-                    scan_index, n, reverse=reverse,
+                    n, scan_index=scan_index, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
-                    iterative_lu=iterative_lu)
+                    iterative_lu=iterative_lu,
+                    b_block=b_block)
             # Handle Dirichlet BCs
             sol = self._handle_dirichlet_bcs(sol)
 
@@ -107,7 +108,7 @@ class ForwardModel():
         
         return u
     
-    def create_lu_and_b_mod(self, n: Optional[np.ndarray] = None,
+    def construct_iterative_lu(self, n: Optional[np.ndarray] = None,
                             reverse: bool = False) -> Tuple[Optional[spla.SuperLU], Optional[np.ndarray]]:
         """Solve the paraxial wave equation iteratively for a single probe."""
         # Precompute C, A_mod, B_mod, LU factorizations
@@ -142,7 +143,8 @@ class ForwardModel():
 
         return (A_lu_list, B_mod_list, b)
 
-    def _solve_single_probe_full_system(self, scan_index: int, n: np.ndarray,
+    def _solve_single_probe_full_system(self, n: np.ndarray,
+                                        scan_index: int = 0,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
                                         test_impedance: bool = False,
@@ -181,22 +183,23 @@ class ForwardModel():
             solution = spla.spsolve(forward_model_matrix, b)
 
         # Reshape solution
-        solution = solution.reshape(self.nz - 1, 
-                                    self.linear_system.block_size).transpose()
+        solution = solution.reshape(self.nz - 1,
+                                    self.block_size).transpose()
 
         # Concatenate initial condition (nx, 1) with solution (nx, nz-1)
-        initial_condition = probe.reshape(self.linear_system.block_size, 1)
+        initial_condition = probe.reshape(self.block_size, 1)
         return np.concatenate([initial_condition, solution], axis=1)
 
-    def _solve_single_probe_iteratively(self, scan_index: int, n: np.ndarray,
-                                        reverse: bool = False,
+    def _solve_single_probe_iteratively(self, n: Optional[np.ndarray] = None,
+                                        scan_index: Optional[int] = 0,
+                                        reverse: Optional[bool] = False,
                                         initial_condition: Optional[np.ndarray] = None,
-                                        test_impedance: bool = False,
-                                        iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None
-                                        ) -> np.ndarray:
+                                        test_impedance: Optional[bool] = False,
+                                        iterative_lu: Optional[Tuple[list[spla.SuperLU], list[np.ndarray], list[np.ndarray]]] = None,
+                                        b_block: Optional[list[np.ndarray]] = None) -> np.ndarray:
         """Solve the paraxial wave equation iteratively for a single probe."""
         # Initialize solution grid
-        solution = np.zeros((self.linear_system.block_size, self.nz),
+        solution = np.zeros((self.block_size, self.nz),
                             dtype=complex)
 
         # Set initial condition
@@ -204,7 +207,12 @@ class ForwardModel():
             if initial_condition is None:
                 raise ValueError(
                     "Initial condition must be provided for reverse propagation.")
-            solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
+            elif isinstance(initial_condition, np.ndarray):
+                solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
+            elif initial_condition == 0:
+                pass  # leave as zeros
+            else:
+                raise ValueError("initial_condition must be np.ndarray, 0, or None")
         else:
             solution[:, 0] = self.initial_condition.apply_initial_condition(
                 scan_index,
@@ -213,15 +221,23 @@ class ForwardModel():
         # Solve with LU decomposition
         if iterative_lu is not None:
             A_lu_list, B_list, b = iterative_lu
+
+            if b_block is not None:
+                b_block = b_block.reshape(self.nz-1, self.block_size).transpose()
             # Iterate over the z dimension
             for j in range(1, self.nz):
                 if test_impedance:
                     b = self.linear_system.test_exact_impedance_rhs_slice(j)
+                if b_block is not None:
+                    b = b_block[:, j-1]
 
-                rhs_matrix = B_list.dot(solution[:, j - 1]) + b
+                rhs_matrix = B_list[j - 1].dot(solution[:, j - 1]) + b
                 solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)
         # For thin samples with spsolve
         else:
+            if n is None:
+                raise ValueError(
+                    "n must be provided for iterative solver without LU decomposition.")
             object_slices = (
                     self.sample_space.create_sample_slices(
                         self.thin_sample, n=n, scan_index=scan_index
