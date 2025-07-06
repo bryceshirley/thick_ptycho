@@ -66,6 +66,8 @@ class LeastSquaresSolver:
 
         if not self.thin_sample and not self.full_system:
             self.iterative_lu = self.forward_model.construct_iterative_lu(n=nk)
+            self.adjoint_iterative_lu = self.forward_model.construct_iterative_lu(
+                n=nk, adjoint=True)
 
         grad_Ak = - self.linear_system.setup_inhomogeneous_forward_model(
             n=nk, grad=True)
@@ -90,6 +92,13 @@ class LeastSquaresSolver:
             if self.lu is not None:
                 error_backpropagation = self.lu.solve(
                     exit_wave_error[i, :], trans='H')
+            if self.iterative_lu is not None:
+                error_backpropagation = self.forward_model._solve_single_probe_iteratively(
+                    initial_condition=0,
+                    iterative_lu=self.adjoint_iterative_lu,
+                    adjoint=True,
+                    b_block=exit_wave_error[i, :])
+                error_backpropagation = error_backpropagation[:, :-1].transpose().flatten()
             else:
                 error_backpropagation = spla.spsolve(
                     self.Ak.conj().T, exit_wave_error[i, :])

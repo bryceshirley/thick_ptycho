@@ -116,9 +116,8 @@ class InitialConditions1D:
             def incidence(x, c_x):
                 r = np.abs(x - c_x)
                 kr = self.k * r
-                # Compute the Airy disk
-                return np.where(r != 0, np.divide(
-                    (2 * j1(kr))**2, (kr)**2, where=kr != 0), 1)
+                airy = np.where(r != 0, np.divide((2 * j1(kr))**2, (kr)**2, where=kr != 0), 1)
+                return airy
         elif self.ic_type == "disk":
             def incidence(x, c_x):
                 r = np.abs(x - c_x)

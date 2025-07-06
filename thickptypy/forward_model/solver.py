@@ -95,6 +95,7 @@ class ForwardModel():
                     b_block=b_block)
             # Handle Dirichlet BCs
             sol = self._handle_dirichlet_bcs(sol)
+            end_time = time.time()
 
             # Print time taken for each scan if verbose is True
             if verbose:
@@ -108,7 +109,7 @@ class ForwardModel():
         
         return u
     
-    def construct_iterative_lu(self, n: Optional[np.ndarray] = None,
+    def construct_iterative_lu(self, n: Optional[np.ndarray] = None, adjoint: bool = False,
                             reverse: bool = False) -> Tuple[Optional[spla.SuperLU], Optional[np.ndarray]]:
         """Solve the paraxial wave equation iteratively for a single probe."""
         # Precompute C, A_mod, B_mod, LU factorizations
@@ -131,11 +132,16 @@ class ForwardModel():
         for j in range(1, self.nz):
             if reverse:
                 C = - sp.diags(object_slices[:, -j])
+            elif adjoint:
+                C = sp.diags(object_slices[:, -j])
             else:
                 C = sp.diags(object_slices[:, j - 1])
 
             A_with_object = A - C  # LHS Matrix
             B_with_object = B + C  # RHS Matrix
+
+            if adjoint:
+                A_with_object, B_with_object = A_with_object.conj().T, B_with_object.conj().T
 
             A_lu = spla.splu(A_with_object.tocsc())
             A_lu_list.append(A_lu)
@@ -193,6 +199,7 @@ class ForwardModel():
     def _solve_single_probe_iteratively(self, n: Optional[np.ndarray] = None,
                                         scan_index: Optional[int] = 0,
                                         reverse: Optional[bool] = False,
+                                        adjoint: Optional[bool] = False,
                                         initial_condition: Optional[np.ndarray] = None,
                                         test_impedance: Optional[bool] = False,
                                         iterative_lu: Optional[Tuple[list[spla.SuperLU], list[np.ndarray], list[np.ndarray]]] = None,
@@ -203,20 +210,21 @@ class ForwardModel():
                             dtype=complex)
 
         # Set initial condition
-        if reverse:
-            if initial_condition is None:
-                raise ValueError(
-                    "Initial condition must be provided for reverse propagation.")
-            elif isinstance(initial_condition, np.ndarray):
-                solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
-            elif initial_condition == 0:
-                pass  # leave as zeros
-            else:
-                raise ValueError("initial_condition must be np.ndarray, 0, or None")
+        if isinstance(initial_condition, int):
+            pass
         else:
-            solution[:, 0] = self.initial_condition.apply_initial_condition(
-                scan_index,
-                self.thin_sample).flatten()
+            if reverse:
+                if initial_condition is None:
+                    raise ValueError(
+                        "Initial condition must be provided for reverse propagation.")
+                elif isinstance(initial_condition, np.ndarray):
+                    solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
+                else:
+                    raise ValueError("initial_condition must be np.ndarray, 0, or None")
+            else:
+                solution[:, 0] = self.initial_condition.apply_initial_condition(
+                    scan_index,
+                    self.thin_sample).flatten()
         
         # Solve with LU decomposition
         if iterative_lu is not None:
@@ -229,15 +237,15 @@ class ForwardModel():
                 if test_impedance:
                     b = self.linear_system.test_exact_impedance_rhs_slice(j)
                 if b_block is not None:
-                    b = b_block[:, j-1]
+                    if adjoint:
+                        b = b_block[:, -j]
+                    else:
+                        b = b_block[:, j-1]
 
                 rhs_matrix = B_list[j - 1].dot(solution[:, j - 1]) + b
                 solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)
         # For thin samples with spsolve
         else:
-            if n is None:
-                raise ValueError(
-                    "n must be provided for iterative solver without LU decomposition.")
             object_slices = (
                     self.sample_space.create_sample_slices(
                         self.thin_sample, n=n, scan_index=scan_index
@@ -267,6 +275,9 @@ class ForwardModel():
                 rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
                 solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
 
+        # Flip solution in the z-direction if adjoint is True
+        if adjoint:
+            solution = np.flip(solution, axis=1)
         return solution
 
     def return_forward_model_matrix(self, scan_index: int = 0,
