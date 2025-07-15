@@ -1,11 +1,14 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
+import matplotlib.pyplot as plt
 
 from thickptypy.forward_model.solver import ForwardModel
 from thickptypy.sample_space.sample_space import SampleSpace
 from thickptypy.utils.visualisations import Visualisation
 import time
+
+from typing import Optional
 
 
 class LeastSquaresSolver:
@@ -22,6 +25,7 @@ class LeastSquaresSolver:
         self.sample_space = sample_space
         self.wave_number = sample_space.k
         self.num_probes = sample_space.num_probes
+        self.true_probe_type = sample_space.probe_type  # True Probe Type is contained in sample_space
 
         # Currently, only thick sample mode is supported
         self.thin_sample = False
@@ -44,6 +48,7 @@ class LeastSquaresSolver:
         # Initialize LU decomposition
         self.lu = None
         self.iterative_lu = None
+        self.adjoint_iterative_lu = None
 
         # Initialize the Forward Model matrix
         self.Ak = None
@@ -52,16 +57,96 @@ class LeastSquaresSolver:
         print("Solving the true forward problem once to generate the dataset...")
         start_time = time.time()
         self.u_true = self.convert_to_block_form(self.forward_model.solve())
+        self.probes_true = self.forward_model.linear_system.probes
+        self.n_true = self.sample_space.n_true
         end_time = time.time()
         print(
             f"True Forward Solution computed in {end_time - start_time:.2f} seconds.")
         self.true_exit_waves = self.u_true[:, -self.block_size:]
 
-    def compute_forward_model(self, nk):
+        data = np.zeros((self.num_probes, self.block_size))
+
+
+         # Create homogeneous forward model solution
+        n_homogeneous = np.ones_like(self.n_true, dtype=complex)*self.sample_space.n_medium
+        u_homogeneous = self.convert_to_block_form(self.forward_model.solve(n=n_homogeneous))
+        exit_waves_homogeneous = u_homogeneous[:, -self.block_size:]
+        diff_exit_waves = exit_waves_homogeneous - self.true_exit_waves
+
+        diff_data = np.zeros((self.num_probes, self.block_size))
+
+        for i in range(self.num_probes):
+            # Extract the exit wave for each probe
+            # Compute the squared FFT (intensity) of the exit wave for each probe
+            exit_wave_fft = np.fft.fft(self.true_exit_waves[i, :])
+            data[i,:] = np.abs(exit_wave_fft) ** 2
+
+            diff_exit_wave_fft = np.fft.fft(diff_exit_waves[i, :])
+            diff_data[i,:] = np.abs(diff_exit_wave_fft) ** 2
+
+        plt.figure(figsize=(8, 4))
+        plt.imshow(data, cmap='viridis', origin='lower')
+        plt.colorbar(label='Intensity')
+        plt.title('Exit Wave Squared FFT Intensity')
+        plt.xlabel('x')
+        plt.ylabel('Image #')
+        plt.tight_layout()
+        plt.show()
+
+        plt.figure(figsize=(8, 4))
+        plt.imshow(diff_data, cmap='viridis', origin='lower')
+        plt.colorbar(label='Intensity')
+        plt.title('Difference Exit Wave Squared FFT Intensity')
+        plt.xlabel('x')
+        plt.ylabel('Image #')
+        plt.tight_layout()
+        plt.show()
+
+
+        phase = np.angle(self.true_exit_waves)
+        amplitude = np.abs(self.true_exit_waves)
+        diff_phase = np.angle(diff_exit_waves)
+        diff_amplitude = np.abs(diff_exit_waves)
+
+        fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        im0 = axs[0].imshow(phase, cmap='viridis', origin='lower')
+        plt.colorbar(im0, ax=axs[0], label='Phase')
+        axs[0].set_title('Exit Wave Phase')
+        axs[0].set_ylabel('Image #')
+
+        im1 = axs[1].imshow(amplitude, cmap='viridis', origin='lower')
+        plt.colorbar(im1, ax=axs[1], label='Amplitude')
+        axs[1].set_title('Exit Wave Amplitude')
+        axs[1].set_xlabel('x')
+        axs[1].set_ylabel('Image #')
+
+        plt.tight_layout()
+        plt.show()
+
+        fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        im0 = axs[0].imshow(diff_phase, cmap='viridis', origin='lower')
+        plt.colorbar(im0, ax=axs[0], label='Phase')
+        axs[0].set_title('Diff Exit Wave Phase')
+        axs[0].set_ylabel('Image #')
+
+        im1 = axs[1].imshow(diff_amplitude, cmap='viridis', origin='lower')
+        plt.colorbar(im1, ax=axs[1], label='Amplitude')
+        axs[1].set_title('Diff Exit Wave Amplitude')
+        axs[1].set_xlabel('x')
+        axs[1].set_ylabel('Image #')
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+    def compute_forward_model(self, nk, probes: Optional[np.ndarray] = None):
         """Compute the forward model for the current object and gradient."""
-        self.Ak = self.forward_model.return_forward_model_matrix(n=nk)
+        # TODO: Initial condition (probe) should update this
 
         if not self.thin_sample and self.full_system:
+            self.Ak = self.forward_model.return_forward_model_matrix(n=nk)
             self.lu = spla.splu(self.Ak)
 
         if not self.thin_sample and not self.full_system:
@@ -70,11 +155,12 @@ class LeastSquaresSolver:
                 n=nk, adjoint=True)
 
         grad_Ak = - self.linear_system.setup_inhomogeneous_forward_model(
-            n=nk, grad=True)
+             n=nk, grad=True)
 
         uk = self.convert_to_block_form(self.forward_model.solve(
             n=nk, lu=self.lu,
-            iterative_lu=self.iterative_lu))
+            iterative_lu=self.iterative_lu,
+            initial_condition=probes))
 
         return uk, grad_Ak
 
@@ -184,7 +270,7 @@ class LeastSquaresSolver:
         return betak
 
     def convert_to_block_form(self, u):
-        """
+        """`
         Convert the input array to block form.
 
         Parameters:
@@ -194,13 +280,13 @@ class LeastSquaresSolver:
         ndarray: Block-formatted array.
         """
         # 2. Remove initial condition
-        u = u[:, :, 1:]                       # shape: (num_probes, nx, nz - 1)
+        u = u[:, :, 1:]  # shape: (num_probes, block_size, nz - 1)
 
         # 3. Transpose axes
-        u = u.transpose(0, 2, 1)              # shape: (num_probes, nz - 1, nx)
+        u = u.transpose(0, 2, 1) # shape: (num_probes, nz - 1, block_size)
 
         # 4. Flatten last two dims
-        # shape: (num_probes, nx * (nz - 1))
+        # shape: (num_probes, block_size * (nz - 1))
         u = u.reshape(self.num_probes, -1)
 
         return u
@@ -228,8 +314,10 @@ class LeastSquaresSolver:
             tol=1e-8,
             plot_object=False,
             plot_forward=False,
+            plot_reverse=False,
             fixed_step_size=None,
             verbose=True,
+            solve_probe=False,
             sparsity_lambda=0.0):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
 
@@ -241,12 +329,12 @@ class LeastSquaresSolver:
         if n_initial is not None:
             n0 = n_initial
         else:
-            n0 = np.ones((self.nx, self.nz), dtype=complex)
+            n0 = np.ones((self.block_size, self.nz), dtype=complex)*self.sample_space.n_medium
 
         # Output True Object and Forward Solution if requested
         if plot_object:
             print("True Object")
-            self.visualisation.plot(self.sample_space.n_true,
+            self.visualisation.plot(self.n_true,
                                     title='True Object')
         if plot_forward:
             print("True Forward Solution")
@@ -260,10 +348,28 @@ class LeastSquaresSolver:
         residual = []
         nk = n0
         rel_rmse_denominator = np.sqrt(np.mean(np.abs(n0) ** 2))
+
+        # Define probe
+        if solve_probe:
+            probesk = self.forward_model.initial_condition.return_probes(
+                 probe_type="gaussian")
+            # probesk = self.solve_for_probes(nk, plot_reverse)
+            probesk_old = probesk.copy()
+            
+        else:
+            probesk = None#self.probes_true
+
         for i in range(max_iters):
             time_start = time.time()
+            # Compute the Forward Model
+            uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
+
+            # Compute the gradient of the least squares problem
+            grad_least_squares_real, grad_least_squares_imag = (
+                self.compute_grad_least_squares(uk, grad_Ak)
+            )
             # Compute RMSE of the current refractive index estimate
-            error = nk - self.sample_space.n_true
+            error = nk - self.n_true
             rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2)) / \
                 rel_rmse_denominator
 
@@ -272,12 +378,6 @@ class LeastSquaresSolver:
             if residual[i] < tol:
                 print(f"Converged in {i + 1} iterations.")
                 break
-
-            # Compute the Forward Model and Gradient of Least Squares
-            uk, grad_Ak = self.compute_forward_model(nk)
-            grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(uk, grad_Ak)
-            )
 
             # Output the current iteration information
             if verbose:
@@ -333,25 +433,82 @@ class LeastSquaresSolver:
             grad_least_squares_real_old = grad_least_squares_real
             dk_im = -grad_least_squares_imag + betak_im * dk_im
             grad_least_squares_imag_old = grad_least_squares_imag
-            time_end = time.time()
-            if verbose:
-                print(
-                    f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
+
+            
+            # Nesterov accelerated gradient descent update
+            # if i == 0:
+            #     v_prev = np.zeros_like(nk[:, 1:], dtype=complex)
+            #     yk = nk[:, 1:]
+            #     momentum = 0.9
+            # else:
+            #     momentum = 0.9
+            #     yk = nk[:, 1:] + momentum * (nk[:, 1:] - nk_prev[:, 1:])
+
+            # gradient = (grad_least_squares_real + 1j * grad_least_squares_imag).reshape((self.nz - 1, self.nx)).T
+            # step_size = -alpha0 / (i + 1) #if fixed_step_size is not None else -1e-2  # fallback step size
+
+            # v = momentum * v_prev + step_size * gradient
+            # nk_prev = nk.copy()
+            # nk[:, 1:] = yk + v
+            # v_prev = v
+
 
             # Add sparsity regularization (L1) to the gradient
             if sparsity_lambda > 0.0:
-
                 # Apply soft thresholding to real and imaginary parts separately
-                nk_real = nk[:, 1:].real - 1
+                nk_real = nk[:, 1:].real - self.sample_space.n_medium
                 nk_imag = nk[:, 1:].imag
-                nk[:, 1:] = 1 + self.soft_threshold(nk_real,
+                nk[:, 1:] = self.sample_space.n_medium + self.soft_threshold(nk_real,
                                                     sparsity_lambda,
                                                     alphak_re) \
                     + 1j * self.soft_threshold(nk_imag,
                                                sparsity_lambda*1e-1,
                                                alphak_im)
+            
+            # Compute source by solving the reverse problem
+            if solve_probe:
+                gamma = 0.5 
+                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes(nk, plot_reverse)
+                probesk_old = probesk.copy()
+            
+            time_end = time.time()
+            if verbose:
+                print(
+                    f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
 
         return nk, self.convert_from_block_form(uk), residual
+
+    def solve_for_probes(self, n, plot_reverse: Optional[bool] = False):
+        """
+        Solve the forward model for the probes in reversed time.
+        """
+        if not self.thin_sample and not self.full_system:
+            iterative_lu_reverse = self.forward_model.construct_iterative_lu(
+                        n=n, reverse=True)
+            uk_reverse = self.forward_model.solve(
+                n=n, iterative_lu=iterative_lu_reverse,
+                initial_condition=self.true_exit_waves
+                )
+        else:
+            # Solve the forward model in reversed time
+            uk_reverse = self.forward_model.solve(
+                n=n, reverse=True,
+                initial_condition=self.true_exit_waves
+                )
+            
+        if plot_reverse:
+            print("    Reverse Solution for Reconstructed Object")
+            # self.visualisation.plot(uk_reverse,
+            #                         probe_index=-1)
+            self.visualisation.plot(uk_reverse)
+            # self.visualisation.plot(uk_reverse,
+            #                         probe_index=0)
+    
+        # Convert to block form
+        uk_reverse = self.convert_to_block_form(uk_reverse)
+
+        # Select probes
+        return uk_reverse[:, -self.block_size:]
 
     def soft_threshold(self, x, lam, step):
         """Soft thresholding operator for ISTA."""

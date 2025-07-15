@@ -34,7 +34,8 @@ class SampleSpace1D:
             bc_type,
             probe_type,
             wave_number,
-            probe_diameter=None):
+            probe_diameter=None,
+            n_medium=1.0):
         """
         Initialize the 1D sample space.
 
@@ -99,12 +100,13 @@ class SampleSpace1D:
         self.objects = []
 
         # Initialize the refractive index field
-        self.n_true = np.ones((self.nx, self.nz), dtype=complex)
+        self.n_medium = complex(n_medium, 0)  # Ensure n_medium is complex
+        self.n_true = np.ones((self.nx, self.nz), dtype=complex)*self.n_medium
 
         # Total number of probes (scan_points squared)
         self.num_probes = scan_points
 
-        self._detector_frame_info = self._generate_scan_frames()
+        self._detector_frame_info = self._generate_scan_frames()#
 
     
     @property
@@ -160,7 +162,7 @@ class SampleSpace1D:
 
         # Generate x for the scan path
         centre_x = np.floor(np.linspace(
-            edge_margin, self.nx + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.nx - edge_margin, self.scan_points)).astype(int)
 
         # --- Construct detector frames ---
         frames = []
@@ -259,9 +261,9 @@ class SampleSpace1D:
 
         # Compute the coefficient based on whether we want the gradient or not
         if grad:
-            coefficient = (self.k / 1j) * n
+            coefficient = (self.k / 1j) * n # np.ones(n.shape)
         else:
-            coefficient = ((self.k / 2j) * (n**2 - 1))
+            coefficient = ((self.k / 2j) * (n**2 - 1))  # ((self.k / 2j) * (1+2*(n-1)))
 
         # Compute all half time_step slices at once using vectorized operations
         # Shape: (nx, nz-1)
@@ -286,7 +288,8 @@ class SampleSpace2D:
             bc_type,
             probe_type,
             wave_number,
-            probe_diameter=None):
+            probe_diameter=None,
+            n_medium=1.0):
         """
         Initialize the 2D sample space.
 
@@ -354,7 +357,8 @@ class SampleSpace2D:
         self.objects = []
 
         # Initialize the refractive index field
-        self.n_true = np.ones((self.nx, self.ny, self.nz), dtype=complex)
+        self.n_medium = complex(n_medium, 0)  # Ensure n_medium is complex
+        self.n_true = np.ones((self.nx, self.ny, self.nz), dtype=complex)*n_medium
 
         # Total number of probes (scan_points squared)
         self.num_probes = scan_points**2
@@ -409,6 +413,7 @@ class SampleSpace2D:
             y_max = int(self.centre_y[1] + self.probe_dimensions[1] / 2)
             x_min = int(self.centre_x[1] - self.probe_dimensions[0] / 2)
             x_max = int(self.centre_x[1] + self.probe_dimensions[0] / 2)
+            print(f"Second probe area: ({x_min}, {y_min}) to ({x_max}, {y_max}), Total space: {self.nx}, {self.ny}")
             rect2 = plt.Rectangle(
                 (y_min, x_min), y_max - y_min, x_max - x_min,
                 linewidth=0, edgecolor='none', facecolor='green', alpha=0.2, label='Second Probe Area'
@@ -424,7 +429,7 @@ class SampleSpace2D:
         plt.grid()
         plt.show()
     
-    def load_sample_space(self, file_path: str):
+    def load_sample_space(self, file_path: str): # TODO: correct for non free space medium
         """
         Load the sample space with a precomputed refractive index field.
 
@@ -477,9 +482,9 @@ class SampleSpace2D:
 
         # Generate x and y positions for the scan path
         x_positions = np.floor(np.linspace(
-            edge_margin, self.nx + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.nx - edge_margin, self.scan_points)).astype(int)
         y_positions = np.floor(np.linspace(
-            edge_margin, self.ny + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.ny - edge_margin, self.scan_points)).astype(int)
 
         centre_x = []
         centre_y = []

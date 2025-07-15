@@ -40,21 +40,14 @@ class LinearSystemSetup:
              self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
 
         # Preallocate probes for speed
+        self.b0 = None
         if self.sample_space.dimension == 1:
-            self.probe = np.empty((self.sample_space.num_probes, self.block_size), dtype=np.complex128)
-            self.b0 = np.empty_like(self.probe)
-
-            # Fill probe: each apply_initial_condition returns a 1D array of length block_size
-            self.probe[:] = np.vstack([
-                self.initial_condition.apply_initial_condition(scan_index, self.thin_sample).flatten()
-                for scan_index in range(self.sample_space.num_probes)
-            ])
-
+            self.probes = self.initial_condition.return_probes()
             if not self.thin_sample and self.full_system:
                 # Batch multiply B_slice @ probe.T -> (block_size, num_probes)
-                b0_mat = self.B_slice @ self.probe.T
-                # Transpose and add b_slice (broadcasted)
-                self.b0[:] = b0_mat.T + self.b_slice
+                b0_mat = self.B_slice @ self.probes.T
+                # Transpose and add b_slice
+                self.b0 = b0_mat.T + self.b_slice
 
     @property
     def probe_angle(self):
@@ -143,23 +136,29 @@ class LinearSystemSetup:
         return sp.diags(object_slices.T.flatten(
         )) + sp.diags([object_slices[..., 1:].T.flatten()], [-self.block_size])
 
-    def probe_contribution(self, scan_index: Optional[int] = 0):
+    def probe_contribution(self, scan_index: Optional[int] = 0,
+                           probes: Optional[np.ndarray] = None):
         """Compute the probe contribution to the forward model."""
         if self.thin_sample:
             _, self.B_slice, self.b_slice = self.create_system_slice(scan_index=scan_index)
 
-        if self.sample_space.dimension > 1:
+        # Apply initial condition if provided
+        if probes is not None:
+            probe = probes[scan_index, :]
+        elif self.sample_space.dimension > 1:
             probe = self.initial_condition.apply_initial_condition(
-                scan_index, self.thin_sample)
+                scan_index)
         else:
-            probe = self.probe[scan_index, :]
+            probe = self.probes[scan_index, :]
 
+        # Apply probe angle (linear phase shift)
         if self._probe_angle != 0.0:
             n = np.arange(len(probe))
             linear_phase = np.exp(1j * self._probe_angle * n)
             probe *= linear_phase
 
-        if self.sample_space.dimension == 1 and not self.thin_sample and self.full_system:
+
+        if self.sample_space.dimension == 1 and not self.thin_sample and self.full_system and probes is None:
             b0 = self.b0[scan_index, :]
         else:
             b0 = self.B_slice @ probe.flatten() + self.b_slice

@@ -12,6 +12,7 @@ def u_exact_neuman_1d(a):
     return lambda x, z: u_nm(a, 1, 0)(
         x, 0, z) + 0.5 * u_nm(a, 2, 0)(x, 0, z) + 0.2 * u_nm(a, 5, 0)(x, 0, z)
 
+
 def u_exact_neuman_2d(a):
     return lambda x, y, z: u_nm(a, 1, 1)(
         x, y, z) + 0.5 * u_nm(a, 2, 2)(x, y, z) + 0.2 * u_nm(a, 5, 5)(x, y, z)
@@ -27,7 +28,7 @@ class BoundaryConditions:
         self.sample_space = sample_space
         self.initial_condition = initial_condition
         self.bc_type = sample_space.bc_type
-        self.ic_type = initial_condition.ic_type
+        self.probe_type = initial_condition.probe_type
         self.dz = sample_space.dz
         self.k = sample_space.k
         self.a = 1j / (2 * self.k)
@@ -140,14 +141,14 @@ class BoundaryConditions:
 
         # Impedance Boundary Conditions
         elif self.bc_type == "impedance":
-            ubc[0] -= 2 * self.beta_x * \
-                self.initial_condition.get_initial_condition_value(
-                    self.x[0],
-                    self.scan_index)
-            ubc[-1] -= 2 * self.beta_x * \
-                self.initial_condition.get_initial_condition_value(
-                    self.x[-1],
-                    self.scan_index)
+            ubc[0] -= 0# 2 * self.beta_x * \
+                # self.initial_condition.get_initial_condition_value(
+                #     self.x[0],
+                #     self.scan_index)
+            ubc[-1] -= 0 #2 * self.beta_x * \
+                # self.initial_condition.get_initial_condition_value(
+                #     self.x[-1],
+                #     self.scan_index)
             return ubc.flatten()
 
     def get_matrices_2d_system(self):
@@ -219,8 +220,8 @@ class BoundaryConditions:
             raise ValueError(
                 "Invalid boundary condition type. Please choose from 1, 2 or 3.")
 
+    # Create Matrices for 1D boundary conditions
 
-    ## Create Matrices for 1D boundary conditions
     def _create_1D_dirichlet(self):
         """Create 1D Dirichlet boundary condition matrix."""
         e = np.ones(self.nx, dtype=complex)
@@ -243,7 +244,7 @@ class BoundaryConditions:
         K[-1, -1] += self.beta_x
         return K.tocsr()
 
-    ## Create Matrices for 2D boundary conditions
+    # Create Matrices for 2D boundary conditions
     def _create_2D_dirichlet(self, Ax, Bx):
         """Apply Dirichlet boundary conditions in 2D."""
         Ix = sp.eye(self.nx)
@@ -280,10 +281,14 @@ class BoundaryConditions:
         ubc = np.zeros((self.nx, self.ny), dtype=complex)
 
         # Impedance Boundary Conditions
-        ubc[0, :] -= 2 * self.beta_x * u_exact_neuman_2d(self.a)(self.x[0], self.y, z)
-        ubc[-1, :] -= 2 * self.beta_x * u_exact_neuman_2d(self.a)(self.x[-1], self.y, z)
-        ubc[:, 0] -= 2 * self.beta_y * u_exact_neuman_2d(self.a)(self.x, self.y[0], z)
-        ubc[:, -1] -= 2 * self.beta_y * u_exact_neuman_2d(self.a)(self.x, self.y[-1], z)
+        ubc[0, :] -= 2 * self.beta_x * \
+            u_exact_neuman_2d(self.a)(self.x[0], self.y, z)
+        ubc[-1, :] -= 2 * self.beta_x * \
+            u_exact_neuman_2d(self.a)(self.x[-1], self.y, z)
+        ubc[:, 0] -= 2 * self.beta_y * \
+            u_exact_neuman_2d(self.a)(self.x, self.y[0], z)
+        ubc[:, -1] -= 2 * self.beta_y * \
+            u_exact_neuman_2d(self.a)(self.x, self.y[-1], z)
 
         return ubc.flatten()
 

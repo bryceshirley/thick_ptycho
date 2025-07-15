@@ -5,7 +5,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from .initial_conditions import initial_condition_setup
+from .initial_conditions import InitialConditions
 from .linear_system import LinearSystemSetup
 from thickptypy.sample_space.sample_space import SampleSpace
 
@@ -24,7 +24,8 @@ class ForwardModel():
         self.sample_space = sample_space
         self.nz = sample_space.nz
         self.probe_dimensions = sample_space.probe_dimensions
-        self.initial_condition = initial_condition_setup(sample_space)
+        self.initial_condition = InitialConditions(sample_space,
+                                                   thin_sample=thin_sample)
         self.thin_sample = thin_sample
         self.full_system = full_system_solver
 
@@ -174,7 +175,7 @@ class ForwardModel():
 
         # Edit this for impedance condition test
         probe_contribution, probe = self.linear_system.probe_contribution(
-            scan_index=scan_index)
+            scan_index=scan_index, probes=initial_condition)
 
         # Define Right Hand Side
         b = b_homogeneous + probe_contribution
@@ -221,10 +222,11 @@ class ForwardModel():
                     solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
                 else:
                     raise ValueError("initial_condition must be np.ndarray, 0, or None")
-            else:
+            elif initial_condition is None:
                 solution[:, 0] = self.initial_condition.apply_initial_condition(
-                    scan_index,
-                    self.thin_sample).flatten()
+                    scan_index).flatten()
+            else:
+                solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
         
         # Solve with LU decomposition
         if iterative_lu is not None:
