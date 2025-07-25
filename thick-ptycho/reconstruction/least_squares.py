@@ -2,9 +2,9 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from thickptypy.forward_model.solver import ForwardModel
-from thickptypy.sample_space.sample_space import SampleSpace
-from thickptypy.utils.visualisations import Visualisation
+from thick-ptycho.forward_model.solver import ForwardModel
+from thick-ptycho.sample_space.sample_space import SampleSpace
+from thick-ptycho.utils.visualisations import Visualisation
 import time
 
 
@@ -53,7 +53,6 @@ class LeastSquaresSolver:
         print(
             f"True Forward Solution computed in {end_time - start_time:.2f} seconds.")
         self.true_exit_waves = self.u_true[:, -self.block_size:]
-        
 
     def compute_forward_model(self, nk):
         """Compute the forward model for the current object and gradient."""
@@ -61,7 +60,6 @@ class LeastSquaresSolver:
         
         if not self.thin_sample and self.full_system:
             self.lu = spla.splu(self.Ak)
-
 
         grad_Ak = - self.linear_system.setup_inhomogeneous_forward_model(
             n=nk, grad=True)
@@ -73,33 +71,30 @@ class LeastSquaresSolver:
         return uk, grad_Ak
 
     def compute_grad_least_squares(self, uk, grad_A):
-        """Compute the gradient of least squares problem using efficient linear algebra."""
-        # Compute the exit wave error for all probes
-        exit_wave_error = self.compute_error_in_exit_wave(uk)  # shape: (num_probes, nx*(nz-1))
+        """Compute the gradient of least squares problem."""
+        # Compute the gradient efficiently
+        grad_real = np.zeros(self.nx * (self.nz - 1), dtype=complex)
+        grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=complex)
 
-        # Preallocate arrays for error backpropagation
-        if self.lu is not None:
-            # Use LU solve for all probes at once (if possible)
-            # Stack errors as columns for batch solve
-            error_backprop = np.column_stack([
-                self.lu.solve(exit_wave_error[i, :], trans='H')
-                for i in range(self.num_probes)
-            ])
-        else:
-            # Use spsolve for each probe
-            error_backprop = np.column_stack([
-                spla.spsolve(self.Ak.conj().T, exit_wave_error[i, :])
-                for i in range(self.num_probes)
-            ])
-        # error_backprop shape: (nx*(nz-1), num_probes)
+        # Preallocate zero vector
+        exit_wave_error = self.compute_error_in_exit_wave(uk)
 
-        # Compute grad_A @ uk for all probes at once
-        grad_A_uk = grad_A @ uk.T  # shape: (nx*(nz-1), num_probes)
+        for i in range(self.num_probes):
+            # Compute the error backpropagation
+            if self.lu is not None:
+                error_backpropagation = self.lu.solve(exit_wave_error[i, :], trans='H')
+            else:
+                error_backpropagation = spla.spsolve(self.Ak.conj().T, exit_wave_error[i, :])
 
-        # Compute the real and imaginary gradients using vectorized operations
-        # Wirtinger derivative: real part and imaginary part
-        grad_real = -np.real(np.sum(np.conj(grad_A_uk) * error_backprop, axis=1))
-        grad_imag = -np.real(np.sum(np.conj(1j * grad_A_uk) * error_backprop, axis=1))
+            # Compute the gradient for each probe
+            grad_real -= np.multiply((grad_A @
+                                     uk[i, :]).conj().T,
+                                     error_backpropagation).real
+
+            # Wirtinger derivative: ∂L/∂nk
+            grad_imag -= np.multiply((1j * grad_A @
+                                     uk[i, :]).conj().T,
+                                     error_backpropagation).real
 
         return grad_real, grad_imag
 
@@ -137,10 +132,11 @@ class LeastSquaresSolver:
 
         for i in range(self.num_probes):
             # Compute the perturbation for each probe
+            perturbation = grad_A @ u[i, :]
             if self.lu is not None:
-                delta_u = self.lu.solve(grad_A @ u[i, :])
+                delta_u = self.lu.solve(perturbation)
             else:
-                delta_u = spla.spsolve(self.Ak, grad_A @ u[i, :])
+                delta_u = spla.spsolve(self.Ak, perturbation)
 
             # Only use last block_size elements (final slice)
             delta_p_i = - delta_u[-self.block_size:] @ d[-self.block_size:]

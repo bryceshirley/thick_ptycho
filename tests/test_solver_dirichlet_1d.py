@@ -2,8 +2,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thickptypy.sample_space.sample_space import SampleSpace
-from thickptypy.forward_model.solver import ForwardModel
+from thick-ptycho.sample_space.sample_space import SampleSpace
+from thick-ptycho.forward_model.solver import ForwardModel
 
 
 def u_nm(a, n):

@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thickptypy.sample_space.sample_space import SampleSpace
-from thickptypy.forward_model.solver import ForwardModel
-from thickptypy.utils.visualisations import Visualisation
+from thick-ptycho.sample_space.sample_space import SampleSpace
+from thick-ptycho.forward_model.solver import ForwardModel
+from thick-ptycho.utils.visualisations import Visualisation
 
 def u_nm(a,n, m):
     """Returns the exact solution for a given n and m."""

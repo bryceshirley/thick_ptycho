@@ -7,7 +7,7 @@ import scipy.sparse.linalg as spla
 
 from .initial_conditions import initial_condition_setup
 from .linear_system import LinearSystemSetup
-from thickptypy.sample_space.sample_space import SampleSpace
+from thick-ptycho.sample_space.sample_space import SampleSpace
 from scipy.sparse.linalg import LinearOperator, spilu
 
 class ForwardModel():
