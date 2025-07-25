@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "thickptypy"
+name = "thick-ptycho"
 version = "0.1.0-dev"
 description = "A Python package for thick sample ptychographic reconstruction"
 authors = [{ name = "Bryce Shirley", email = "bryce.shirley@stfc.ac.uk" }]
@@ -23,7 +23,7 @@ dependencies = [
 
 
 [tool.setuptools.packages.find]
-where = ["thickptypy"]
+where = ["thick-ptycho"]
 
 [tool.coverage.report]
 show_missing = true
