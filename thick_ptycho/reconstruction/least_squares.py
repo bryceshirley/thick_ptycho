@@ -3,9 +3,9 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import matplotlib.pyplot as plt
 
-from thick-ptycho.forward_model.solver import ForwardModel
-from thick-ptycho.sample_space.sample_space import SampleSpace
-from thick-ptycho.utils.visualisations import Visualisation
+from thick_ptycho.forward_model.solver import ForwardModel
+from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.utils.visualisations import Visualisation
 import time
 
 from typing import Optional

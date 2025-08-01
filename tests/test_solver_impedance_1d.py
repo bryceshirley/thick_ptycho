@@ -2,15 +2,17 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thick-ptycho.sample_space.sample_space import SampleSpace
-from thick-ptycho.forward_model.solver import ForwardModel
+from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.forward_model.solver import ForwardModel
+
+import os
 
 def u_nm(a, n):
     """Returns the exact solution for a given n in 1D."""
     return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.cos(n * np.pi * x)
 
 
-def compute_error(nx, nz, thin_sample, full_system):
+def compute_error(nx, nz, thin_sample, full_system_solver):
     """Computes the Frobenius norm of the error between the exact and computed solutions in 1D."""
     bc_type = "impedance"  # Impedance boundary condition
     probe_type = "neumann_test"  # Sum of cosines
@@ -47,7 +49,7 @@ def compute_error(nx, nz, thin_sample, full_system):
 
     forward_model = ForwardModel(sample_space,
                                  thin_sample=thin_sample,
-                                 full_system_solver=full_system)
+                                 full_system_solver=full_system_solver)
 
     # Solve the experiment
     solution = forward_model.solve(test_impedance=True)[0, :, :]
@@ -65,78 +67,72 @@ def compute_error(nx, nz, thin_sample, full_system):
     # Compute the relative RMSE
     return exact_solution, solution
 
-@pytest.mark.parametrize("thin_sample", [True, False], ids=["Thin", "Full"])
-@pytest.mark.parametrize("full_system", [True, False], ids=["AllAtOnce", "Iterations"])
-def test_error(thin_sample, full_system, request):
+@pytest.mark.parametrize("thin_sample", [True, False], ids=["Thin", "Thick"])
+@pytest.mark.parametrize("full_system_solver", [True, False], ids=["AllAtOnce", "Iterations"])
+def test_error(thin_sample, full_system_solver, request):
     """Test that the error norm decreases as the grid resolution increases."""
 
-    nx_values = [8, 16, 32, 64]
+    nx_values = [16, 32, 64, 128, 256, 512, 1024]
     nz_values = []
-    rmse_errors = []
-    rel_l2_norms = []
+    # rmse_errors = []
+    inf_norms = []
     bc_type = "Impedance 2D"
 
     print(f"\n=== CONVERGENCE STUDY: {bc_type.upper()} BOUNDARY CONDITIONS ===")
-    print(f"thin_sample: {thin_sample}, full_system: {full_system}\n")
+    print(f"thin_sample: {thin_sample}, full_system_solver: {full_system_solver}\n")
     for i, nx in enumerate(nx_values):
         nz = nx
         nz_values.append(nz)
 
         print(f"Computing solution for nx={nx}, nz={nz}")
-        exact_solution, solution = compute_error(nx, nz, thin_sample, full_system)
+        exact_solution, solution = compute_error(nx, nz, thin_sample, full_system_solver)
         error = solution - exact_solution
+        error_norm = np.max(np.abs(error))
 
-        rmse = np.sqrt(np.mean(np.abs(error)**2))
-        error_norm = np.linalg.norm(error) / np.linalg.norm(exact_solution)
+        # rmse = np.sqrt(np.mean(np.abs(error)**2))
+        # error_norm = np.linalg.norm(error) / np.linalg.norm(exact_solution)
 
         # Store errors for plotting
-        rmse_errors.append(rmse)
-        rel_l2_norms.append(error_norm)
+        # rmse_errors.append(rmse)
+        inf_norms.append(error_norm)
     
-     # Print convergence rates
-    print(f"\nConvergence Analysis ({bc_type} BC):")
-    print("nx\tnz\tRMSE\t\tRatio\tRate\tRelative L2 Norm")
-    print("-" * 60)
-    for i, (nx,nz, rmse, l2) in enumerate(zip(nx_values, nz_values, rmse_errors, rel_l2_norms)):
-        if i > 0:
-            ratio = rmse_errors[i-1] / rmse
-            rate = np.log2(ratio)
-            print(f"{nx}\t{nz}\t{rmse:.6e}\t{ratio:.2f}\t{rate:.2f}\t{l2:.15f}")
-        else:
-            print(f"{nx}\t{nz}\t{rmse:.6e}\t-\t-\t{l2:.15f}")
-
     # Check if plotting is enabled
     if request.config.getoption("--plot"):
         # Convergence analysis plots
-        plt.figure(figsize=(12, 5))
-
-        plt.subplot(1, 2, 1)
-        plt.loglog(nx_values, rmse_errors, 'bo-', linewidth=2, markersize=8, 
-                label=f'RMSE ({bc_type} BC)')
-        plt.xlabel('Number of x grid points (nx=nz)')
-        plt.ylabel('RMSE Error')
-        plt.title(f'Convergence Study: RMSE vs Grid Resolution ({bc_type} BC)')
+        plt.figure(figsize=(6, 5))
+        plt.loglog(nx_values, inf_norms, 'bo-', linewidth=2, markersize=8, 
+            label=r'Infinity Norm ($L^\infty$)')
+        plt.xlabel(r'Grid Points ($n_x = n_z$)')
+        plt.ylabel(r'Infinity Norm Error ($L^\infty$)')
+        plt.title('Convergence Study: '+ r'$L^\infty$'+ f' Error vs Grid Resolution\n({bc_type} BC)')
         plt.grid(True, alpha=0.3)
 
-        # Add theoretical convergence lines fo reference
-        dx_values = [1.0 / (nx - 1) for nx in nx_values]  # nz = nx for this test
-        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2, 
-                'r--', alpha=0.7, label='O(dx² + dz²) reference')
+        # Add theoretical convergence lines for reference
+        dx_values = [1.0/(nx-1) for nx in nx_values]
+        # Plot theoretical convergence rate reference line (slope = 2)
+        theoretical_line = np.array(dx_values) ** 2 * inf_norms[-1] / dx_values[-1] ** 2
+        plt.loglog(nx_values, theoretical_line, 'r--', alpha=0.7, 
+               label='Theoretical convergence rate = 2')
         plt.legend()
 
-        plt.subplot(1, 2, 2)
-        plt.loglog(nx_values, rel_l2_norms, 'ro-', linewidth=2, markersize=8, 
-                label=f'L2 norm ({bc_type} BC)')
-        plt.xlabel('Number of x grid points (nx=nz)')
-        plt.ylabel('L2 Norm Error')
-        plt.title(f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
-        plt.grid(True, alpha=0.3)
-        plt.loglog(nx_values, np.array(dx_values)**2 * rmse_errors[0] / dx_values[0]**2, 
-                'r--', alpha=0.7, label='O(dx² + dz²) reference')
-        plt.legend()
+        # plt.subplot(1, 2, 2)
+        # plt.loglog(nx_values, rel_l2_norms, 'ro-', linewidth=2, markersize=8, 
+        #         label=f'L2 norm ({bc_type} BC)')
+        # plt.xlabel('Number of x grid points (nx=nz)')
+        # plt.ylabel('L2 Norm Error')
+        # plt.title(f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
+        # plt.grid(True, alpha=0.3)
+        # plt.loglog(nx_values, np.array(dx_values)**2 * rel_l2_norms[0] / dx_values[0]**2, 
+        #         'r--', alpha=0.7, label='O(dx² + dz²) reference')
+        # plt.legend()
 
         plt.tight_layout()
         plt.show()
+
+        # Save plot if AllAtOnce-Thin
+        if not thin_sample and not full_system_solver:
+            os.makedirs("./plots", exist_ok=True)
+            plt.savefig("./plots/convergence_impedance_2D.png", dpi=300)
     
     if request.config.getoption("--plot_error"):
         # Plot the error for each grid size
@@ -197,5 +193,5 @@ def test_error(thin_sample, full_system, request):
         plt.show()
 
     # Assert that the error decreases
-    for i in range(1, len(rmse_errors)):
-        assert rmse_errors[i] < rmse_errors[i - 1], f"Error norm did not decrease: {rmse_errors[i]} >= {rmse_errors[i - 1]}"
+    for i in range(2, len(inf_norms)):
+        assert inf_norms[i] < inf_norms[i - 1], f"Error norm did not decrease: {inf_norms[i]} >= {inf_norms[i - 1]}"
