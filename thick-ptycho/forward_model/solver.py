@@ -7,7 +7,7 @@ import scipy.sparse.linalg as spla
 
 from .initial_conditions import InitialConditions
 from .linear_system import LinearSystemSetup
-from thickptypy.sample_space.sample_space import SampleSpace
+from thick-ptycho.sample_space.sample_space import SampleSpace
 
 class ForwardModel():
     """
@@ -147,8 +147,9 @@ class ForwardModel():
             A_lu = spla.splu(A_with_object.tocsc())
             A_lu_list.append(A_lu)
             B_mod_list.append(B_with_object)
+        
 
-        return (A_lu_list, B_mod_list, b)
+        return (A_lu_list, B_mod_list, b*0.0)
 
     def _solve_single_probe_full_system(self, n: np.ndarray,
                                         scan_index: int = 0,

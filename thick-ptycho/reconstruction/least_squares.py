@@ -3,12 +3,13 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import matplotlib.pyplot as plt
 
-from thickptypy.forward_model.solver import ForwardModel
-from thickptypy.sample_space.sample_space import SampleSpace
-from thickptypy.utils.visualisations import Visualisation
+from thick-ptycho.forward_model.solver import ForwardModel
+from thick-ptycho.sample_space.sample_space import SampleSpace
+from thick-ptycho.utils.visualisations import Visualisation
 import time
 
 from typing import Optional
+from scipy.ndimage import gaussian_filter1d
 
 
 class LeastSquaresSolver:
@@ -78,10 +79,11 @@ class LeastSquaresSolver:
         for i in range(self.num_probes):
             # Extract the exit wave for each probe
             # Compute the squared FFT (intensity) of the exit wave for each probe
-            exit_wave_fft = np.fft.fft(self.true_exit_waves[i, :])
+            exit_wave_fft = np.fft.fftshift(np.fft.fft(self.true_exit_waves[i, :]))
             data[i,:] = np.abs(exit_wave_fft) ** 2
+            
 
-            diff_exit_wave_fft = np.fft.fft(diff_exit_waves[i, :])
+            diff_exit_wave_fft = np.fft.fftshift(np.fft.fft(diff_exit_waves[i, :]))
             diff_data[i,:] = np.abs(diff_exit_wave_fft) ** 2
 
         plt.figure(figsize=(8, 4))
@@ -96,7 +98,7 @@ class LeastSquaresSolver:
         plt.figure(figsize=(8, 4))
         plt.imshow(diff_data, cmap='viridis', origin='lower')
         plt.colorbar(label='Intensity')
-        plt.title('Difference Exit Wave Squared FFT Intensity')
+        plt.title(f'Differences in Exit Waves:\nFar Field Intensity (squared fourier transform)')
         plt.xlabel('x')
         plt.ylabel('Image #')
         plt.tight_layout()
@@ -126,12 +128,12 @@ class LeastSquaresSolver:
         fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
         im0 = axs[0].imshow(diff_phase, cmap='viridis', origin='lower')
         plt.colorbar(im0, ax=axs[0], label='Phase')
-        axs[0].set_title('Diff Exit Wave Phase')
+        axs[0].set_title(f'Phase Differences in Exit Waves:\nHomogeneous vs. Inhomogeneous Media')
         axs[0].set_ylabel('Image #')
 
         im1 = axs[1].imshow(diff_amplitude, cmap='viridis', origin='lower')
         plt.colorbar(im1, ax=axs[1], label='Amplitude')
-        axs[1].set_title('Diff Exit Wave Amplitude')
+        axs[1].set_title(f'Amplitude Differences in Exit Waves:\nHomogeneous vs. Inhomogeneous Media')
         axs[1].set_xlabel('x')
         axs[1].set_ylabel('Image #')
 
@@ -318,12 +320,21 @@ class LeastSquaresSolver:
             fixed_step_size=None,
             verbose=True,
             solve_probe=False,
-            sparsity_lambda=0.0):
+            sparsity_lambda=0.0,
+            low_pass_filter=0.0):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
 
         # Initialize the fixed step size
         if fixed_step_size is not None:
             alpha0 = fixed_step_size
+
+
+        true_phase = np.angle(self.sample_space.n_true)
+        true_amplitude = np.abs(self.sample_space.n_true)
+        vmin_phase = np.min(true_phase)
+        vmax_phase = np.max(true_phase)
+        vmin_amp = np.min(true_amplitude)
+        vmax_amp = np.max(true_amplitude)
 
         # Initialize the refractive index
         if n_initial is not None:
@@ -386,10 +397,23 @@ class LeastSquaresSolver:
             if i == 0 or (i + 1) % 5 == 0:
                 if plot_object:
                     print("    Reconstructed Object")
-                    self.visualisation.plot(
-                        nk,
-                        title=f"Reconstructed Object (Iteration {i + 1})"
-                    )
+                    fig, axs = plt.subplots(1, 2, figsize=(16, 5))
+
+                    # Get min and max values from the true sample space for color scaling
+                    phase = np.angle(nk)
+                    amplitude = np.abs(nk)
+                    axs[0].set_title("Phase of Reconstructed Sample Space")
+                    im0 = axs[0].imshow(phase, origin='lower', aspect='auto', cmap='viridis', vmin=vmin_phase, vmax=vmax_phase)
+                    axs[0].set_xlabel('z (pixels)')
+                    axs[0].set_ylabel('x (pixels)')
+                    fig.colorbar(im0, ax=axs[0], label='Phase (radians)')
+
+                    # Amplitude subplot
+                    axs[1].set_title("Amplitude of Reconstructed Sample Space")
+                    im1 = axs[1].imshow(amplitude, origin='lower', aspect='auto', cmap='viridis', vmin=vmin_amp, vmax=vmax_amp)
+                    axs[1].set_xlabel('z (pixels)')
+                    axs[1].set_ylabel('x (pixels)')
+                    fig.colorbar(im1, ax=axs[1], label='Amplitude')
                 if plot_forward:
                     print("    Forward Solution for Reconstructed Object")
                     self.visualisation.plot(self.convert_from_block_form(uk),
@@ -421,6 +445,10 @@ class LeastSquaresSolver:
 
             # Update the current estimate of the refractive index of the object
             nk[:, 1:] = nk[:, 1:] + alphakdk_re + 1j * alphakdk_im
+
+            # Apply a low pass filter to nk in the z direction
+            if low_pass_filter > 0.0:
+                nk[:, 1:] = gaussian_filter1d(nk[:, 1:], sigma=low_pass_filter, axis=1)
 
             # Compute beta using Polak-Ribière and Fletcher-Reeves
             betak_re = self.compute_betak(grad_least_squares_real,
@@ -462,7 +490,7 @@ class LeastSquaresSolver:
                                                     sparsity_lambda,
                                                     alphak_re) \
                     + 1j * self.soft_threshold(nk_imag,
-                                               sparsity_lambda*1e-1,
+                                               sparsity_lambda,
                                                alphak_im)
             
             # Compute source by solving the reverse problem

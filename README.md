@@ -10,11 +10,11 @@ minimization of simplified thick-sample ptychography model.
 
 ## Jupyter Notebooks
 
-* `1_sample_space_3d.ipynb` - This tutorial demonstrates how to use `thickptypy` to set up or load in a sample space.
-* `2_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
+* `1_sample_space_3d.ipynb` - This tutorial demonstrates how to use `thick-ptycho` to set up or load in a sample space.
+* `2_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thick-ptycho` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
 * `3_ptychography_simple_example.ipynb` — This tutorial uses EPie reconstructions assuming the simulated data is of a thin sample.
-* `4_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
-* `5_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thickptypy` to set up and solve a least_squares problem to reconstuct a thick sample.
+* `4_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thick-ptycho` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
+* `5_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thick-ptycho` to set up and solve a least_squares problem to reconstuct a thick sample.
 
 ---
 
@@ -23,8 +23,8 @@ minimization of simplified thick-sample ptychography model.
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/bryceshirley/thickptypy.git
-   cd thickptypy
+   git clone https://github.com/bryceshirley/thick-ptycho.git
+   cd thick-ptycho
    ```
 
 2. **Install dependencies (requires poetry to be installed)**:
@@ -42,14 +42,14 @@ minimization of simplified thick-sample ptychography model.
 4. **Activate Kernel for Jupyter Notebooks:**
 
    ```bash
-   poetry run ipython kernel install --name "thickptypy" --user
+   poetry run ipython kernel install --name "thick-ptycho" --user
    ```
 ---
 
 ## Project Structure
 
 ```
-thickptypy/
+thick-ptycho/
 ├── README.md                     # Project documentation
 ├── conftest.py                   # Test configuration
 ├── notebooks/                    # Jupyter notebooks for demonstrations
@@ -66,7 +66,7 @@ thickptypy/
 │   ├── test_solver_dirichlet_*.py
 │   ├── test_solver_impedance_*.py
 │   └── test_solver_neumann_*.py
-└── thickptypy/                   # Core Python package
+└── thick-ptycho/                   # Core Python package
     ├── forward_model/            # Forward modeling for wave propagation
     │   ├── boundary_conditions.py
     │   ├── initial_conditions.py
@@ -101,7 +101,7 @@ poetry run pytest tests/test_solver_neumann_2d.py --plot
 For coverage reports:
 
 ```bash
-poetry run pytest --cov=thickptypy tests/
+poetry run pytest --cov=thick-ptycho tests/
 ```
 
 ---

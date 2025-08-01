@@ -116,7 +116,7 @@ class InitialConditions:
             probe_type = self.probe_type
 
         if probe_type == "constant":
-            return 0
+            return 1.0
         elif probe_type == "gaussian":
             sd =  1
             if self.dimension == 1:
@@ -158,7 +158,7 @@ class InitialConditions:
         elif probe_type == "airy_disk":
             if self.dimension == 1:
                 r = np.abs(x - c_x)
-                kr = self.k * r / 2
+                kr = self.k * r/2
                 airy = np.where(r != 0, np.divide(
                     (2 * j1(kr))**2, (kr)**2, where=kr != 0), 1.0)
                 return airy
@@ -176,7 +176,7 @@ class InitialConditions:
         elif probe_type == "disk":
             if self.dimension == 1:
                 r = np.abs(x - c_x)
-                return np.where(r <= self.probe_diameter / 2, 1, 0)
+                return np.where(r <= self.probe_diameter / 2, 0.1, 0)
             else:
                 r = np.sqrt((x - c_x) ** 2 + (y - c_y) ** 2)
                 return np.where(r <= self.probe_diameter / 2, 1, 0)
