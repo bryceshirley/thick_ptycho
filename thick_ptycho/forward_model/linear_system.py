@@ -1,7 +1,21 @@
 import numpy as np
 import scipy.sparse as sp
 
+from scipy.special import j1
+from astropy.convolution import AiryDisk2DKernel
+
+
+def u0_nm_neumann(n, m):
+    """Returns the exact solution for a given n and m."""
+    return lambda x, y: np.cos(n * np.pi * x) * np.cos(m * np.pi * y)
+
+
+def u0_nm_dirichlet(n, m):
+    """Returns the exact solution for a given n and m."""
+    return lambda x, y: np.sin(n * np.pi * x) * np.sin(m * np.pi * y)
+
 from .boundary_conditions import BoundaryConditions
+
 
 from typing import Optional
 
@@ -12,12 +26,12 @@ class LinearSystemSetup:
     forward models and handle boundary conditions.
     """
 
-    def __init__(self, sample_space, initial_condition, thin_sample,
+    def __init__(self, sample_space, thin_sample,
                  full_system):
         self.sample_space = sample_space
-        self.initial_condition = initial_condition
         self.full_system = full_system
         self.thin_sample = thin_sample
+        self.signal_strength = 1.0  # Default signal strength
 
         # For thin samples, use sub-sampling
         if thin_sample:
@@ -31,18 +45,23 @@ class LinearSystemSetup:
 
         if self.sample_space.dimension == 1:
             self.block_size = self.nx
+            self.probes = np.zeros((self.sample_space.num_probes, self.nx), dtype=complex)
         else:
             self.block_size = self.nx * self.ny
+            self.probes = np.zeros((self.sample_space.num_probes, self.nx, self.ny), dtype=complex)
 
         self._probe_angle = 0.0
 
         if not self.thin_sample and self.full_system:
              self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
 
-        # Preallocate probes for speed
+        # Precompute probes for all scans
+        for scan in range(self.sample_space.num_probes):
+            self.probes[scan, ...] = self.apply_initial_condition(scan, probe_type=sample_space.probe_type)
+
+        # Preallocate Compute b0 for speed
         self.b0 = None
         if self.sample_space.dimension == 1:
-            self.probes = self.initial_condition.return_probes()
             if not self.thin_sample and self.full_system:
                 # Batch multiply B_slice @ probe.T -> (block_size, num_probes)
                 b0_mat = self.B_slice @ self.probes.T
@@ -87,7 +106,7 @@ class LinearSystemSetup:
         """Test Impedance Boundary Conditions in Free-Space Forward Model
         Right-Hand Side (RHS) Vector."""
         bcs = BoundaryConditions(
-            self.sample_space, self.initial_condition,
+            self.sample_space, self.probes[0, ...],
             thin_sample=self.thin_sample
         )
         z = self.sample_space.z
@@ -108,7 +127,7 @@ class LinearSystemSetup:
 
     def test_exact_impedance_rhs_slice(self, j: int):
         """Test if the exact impedance boundary conditions are satisfied."""
-        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
+        bcs = BoundaryConditions(self.sample_space, self.probes[0, ...],
                                  thin_sample=self.thin_sample)
         b_old = bcs.get_exact_boundary_conditions_system(
                     self.sample_space.z[j-1])
@@ -144,12 +163,9 @@ class LinearSystemSetup:
 
         # Apply initial condition if provided
         if probes is not None:
-            probe = probes[scan_index, :]
-        elif self.sample_space.dimension > 1:
-            probe = self.initial_condition.apply_initial_condition(
-                scan_index)
+            probe = probes[scan_index, ...].flatten()
         else:
-            probe = self.probes[scan_index, :]
+            probe = self.probes[scan_index, ...].flatten()
 
         # Apply probe angle (linear phase shift)
         if self._probe_angle != 0.0:
@@ -169,12 +185,178 @@ class LinearSystemSetup:
         return probe_contribution, probe
 
     def create_system_slice(self, scan_index: Optional[int] = 0):
-        """Create the linear system based on boundary conditions."""
-        bcs = BoundaryConditions(self.sample_space, self.initial_condition,
+        """Always rebuild (per-scan) matrices; no caching to avoid stale BC data."""
+        bcs = BoundaryConditions(self.sample_space,
+                                 self.probes[scan_index, ...],
                                  thin_sample=self.thin_sample,
                                  scan_index=scan_index)
-        # 2D system
         A_slice, B_slice = bcs.get_matrix_system()
         b_slice = bcs.get_initial_boundary_conditions_system()
-
         return A_slice, B_slice, b_slice
+    
+    def apply_initial_condition(self, scan, probe_type=None):
+        """
+        Apply initial condition to the solution grid, excluding boundaries if dirichlet.
+        Returns a matrix (1D or 2D) of initial condition values using meshgrid.
+        """
+        if probe_type is None:
+            probe_type = self.sample_space.probe_type
+        
+        radius = self.sample_space.probe_diameter_continuous / 2
+        radius_discrete = self.sample_space.probe_diameter / 2
+
+        # Get grid points
+        if self.sample_space.dimension == 1:
+            if self.thin_sample:
+                x = self.sample_space.detector_frame_info[scan]["sub_dimensions"][0]
+            else:
+                x = self.sample_space.x
+
+            if self.sample_space.bc_type == "dirichlet":
+                x_interior = x[1:-1]
+            else:
+                x_interior = x
+
+            x_mesh = x_interior
+        elif self.sample_space.dimension == 2:
+            if self.thin_sample:
+                x, y = self.sample_space.detector_frame_info[scan]["sub_dimensions"]
+            else:
+                x, y = self.sample_space.x, self.sample_space.y
+
+            if self.sample_space.bc_type == "dirichlet":
+                x_interior = x[1:-1]
+                y_interior = y[1:-1]
+            else:
+                x_interior = x
+                y_interior = y
+
+            x_mesh, y_mesh = np.meshgrid(x_interior, y_interior, indexing='ij')
+        else:
+            raise ValueError("Unsupported dimension: {}".format(self.sample_space.dimension))
+
+        # Allocate
+        if self.sample_space.dimension == 1:
+            initial_shape = x_mesh.shape
+        else:
+            initial_shape = x_mesh.shape
+        initial_solution = np.zeros(initial_shape, dtype=complex)
+
+        # Get probe centre
+        if self.sample_space.dimension == 1:
+            c_x = self.sample_space.detector_frame_info[scan]["probe_centre_continuous"]
+        else:
+            c_x, c_y = self.sample_space.detector_frame_info[scan]["probe_centre_continuous"]
+
+        # Probes:
+        if probe_type == "constant":
+            initial_solution[:] = 1.0
+
+        elif probe_type == "gaussian":
+            sd = max(radius / 2.0, 1e-12)
+            if self.sample_space.dimension == 1:
+                dx = (x_mesh - c_x) / sd
+                initial_solution = np.exp(-0.5 * dx**2)
+            else:
+                dx = (x_mesh - c_x) / sd
+                dy = (y_mesh - c_y) / sd
+                initial_solution = np.exp(-0.5 * (dx**2 + dy**2))
+
+        elif probe_type == "sinusoidal":
+            if self.sample_space.dimension == 1:
+                initial_solution = np.sin(np.pi * x_mesh)
+            else:
+                initial_solution = np.sin(np.pi * x_mesh) * np.sin(np.pi * y_mesh)
+
+        elif probe_type == "complex_exp":
+            if self.sample_space.dimension == 1:
+                initial_solution = -1j * np.exp(1j * np.pi * x_mesh)
+            else:
+                initial_solution = np.exp(1j * np.pi * (x_mesh + y_mesh))
+
+        elif probe_type == "dirichlet_test":
+            if self.sample_space.dimension == 1:
+                initial_solution = (
+                    np.sin(1 * np.pi * x_mesh) * np.sin(1 * np.pi * 0.5) +
+                    0.5 * np.sin(5 * np.pi * x_mesh) * np.sin(5 * np.pi * 0.5) +
+                    0.2 * np.sin(9 * np.pi * x_mesh) * np.sin(9 * np.pi * 0.5)
+                )
+            else:
+                initial_solution = (
+                    np.sin(1 * np.pi * x_mesh) * np.sin(1 * np.pi * y_mesh) +
+                    0.5 * np.sin(5 * np.pi * x_mesh) * np.sin(5 * np.pi * y_mesh) +
+                    0.2 * np.sin(9 * np.pi * x_mesh) * np.sin(9 * np.pi * y_mesh)
+                )
+
+        elif probe_type == "neumann_test":
+            if self.sample_space.dimension == 1:
+                initial_solution = (
+                    np.cos(1 * np.pi * x_mesh) * np.cos(1 * np.pi * 0) +
+                    0.5 * np.cos(2 * np.pi * x_mesh) * np.cos(2 * np.pi * 0) +
+                    0.2 * np.cos(5 * np.pi * x_mesh) * np.cos(5 * np.pi * 0)
+                )
+            else:
+                initial_solution = (
+                    np.cos(1 * np.pi * x_mesh) * np.cos(1 * np.pi * y_mesh) +
+                    0.5 * np.cos(2 * np.pi * x_mesh) * np.cos(2 * np.pi * y_mesh) +
+                    0.2 * np.cos(5 * np.pi * x_mesh) * np.cos(5 * np.pi * y_mesh)
+                )
+
+        elif probe_type == "airy_disk":
+            from scipy.special import j1
+            if self.sample_space.dimension == 1:
+                r = np.abs(x_mesh - c_x)
+                scaled_r = np.pi * r / max(radius, 1e-12)
+                amp = np.ones_like(r)
+                m = scaled_r != 0
+                amp[m] = (2 * j1(scaled_r[m]) / scaled_r[m])**2
+            else:
+                r = np.sqrt((x_mesh - c_x) ** 2 + (y_mesh - c_y) ** 2)
+                scaled_r = np.pi * r / max(radius, 1e-12)
+                amp = np.ones_like(r)
+                m = scaled_r != 0
+                amp[m] = (2 * j1(scaled_r[m]) / scaled_r[m])**2
+
+            initial_solution = amp
+        elif probe_type == "disk":
+            if self.sample_space.dimension == 1:
+                r = np.abs(x_mesh - c_x)
+            else:
+                r = np.sqrt((x_mesh - c_x) ** 2 + (y_mesh - c_y) ** 2)
+            amp = np.where(r <= radius, 1.0, 0)
+            # Complex field: amplitude × phase
+            initial_solution = amp #* np.exp(1j * phase)
+        elif probe_type == "blurred_disk":
+            if self.sample_space.dimension == 1:
+                r = np.abs(x_mesh - c_x)
+                pix_area = self.sample_space.dx
+                area = (2 * radius)
+            else:
+                r = np.hypot(x_mesh - c_x, y_mesh - c_y)
+                pix_area = self.sample_space.dx * self.sample_space.dy
+                area = (np.pi * radius**2)
+            portion_blur = 0.5  # 30% of radius
+            inner = radius - 0.5 * radius  # Inner radius for smooth edge
+            t = np.clip((r - inner) / max(portion_blur * radius, 1e-12), 0.0, 1.0)  # 0..1 in the rim
+            rim = 0.5 * (1 + np.cos(np.pi * t))                       # 1→0 smoothly
+            amp = np.where(r <= inner, 1.0, np.where(r >= radius, 0.0, rim))
+
+            # Optional: keep ∑|amp|^2 ≈ area of ideal disk so brightness stays comparable
+            target = area / pix_area
+            s = np.sqrt(target / (amp**2).sum())
+            amp *= s
+            
+            # Phase term: scaled and wrapped to [0, 0.5π]
+            phase = np.pi * (r / (radius**2))
+            phase = np.mod(phase, 0.5 * np.pi)
+
+            # Complex field: amplitude × phase
+            initial_solution = amp #* np.exp(1j * phase)
+
+        else:
+            raise ValueError("Not a valid initial condition type")
+
+        max_val = np.max(np.abs(initial_solution))
+        if max_val == 0:
+            return initial_solution
+        return self.signal_strength * initial_solution / max_val

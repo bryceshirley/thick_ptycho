@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from .optical_objects import OpticalObject
+from skimage import io, transform
 
 class SampleSpace:
     """
@@ -93,8 +94,10 @@ class SampleSpace1D:
             self.probe_diameter = probe_dimensions[0]
         else:
             self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = self.probe_diameter * self.dx
         # Wavenumber
         self.k = wave_number
+        self.wavelength = 2 * np.pi / self.k
 
         # List to store optical objects
         self.objects = []
@@ -200,8 +203,8 @@ class SampleSpace1D:
 
         return frames
 
-    def add_object(self, shape, refractive_index, side_length, centre, depth,
-                   guassian_blur=None):
+    def add_object(self, shape: str, refractive_index: complex, side_length: float, 
+                   centre: tuple, depth: float, gaussian_blur=None):
         """
         Add an optical object to the simulation.
 
@@ -227,7 +230,7 @@ class SampleSpace1D:
                 self.nz,
                 x,
                 self.z,
-                guassian_blur))
+                gaussian_blur))
 
     def generate_sample_space(self):
         """
@@ -350,8 +353,10 @@ class SampleSpace2D:
             self.probe_diameter = probe_dimensions[0]
         else:
             self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = self.probe_diameter * self.dx
         # Wavenumber
         self.k = wave_number
+        self.wavelength = 2 * np.pi / self.k
 
         # List to store optical objects
         self.objects = []
@@ -383,7 +388,7 @@ class SampleSpace2D:
 
         # Plot the scan path with flipped axes
         plt.figure(figsize=(6, 6))
-        plt.plot(self.centre_y, self.centre_x, marker='o', linestyle='-')
+        plt.plot(self.centre_y, self.centre_x, marker='o', linestyle='-', markersize=2)
         plt.title("2D Discrete Scan Path")
         plt.xlabel("Ny")
         plt.ylabel("Nx")
@@ -413,7 +418,6 @@ class SampleSpace2D:
             y_max = int(self.centre_y[1] + self.probe_dimensions[1] / 2)
             x_min = int(self.centre_x[1] - self.probe_dimensions[0] / 2)
             x_max = int(self.centre_x[1] + self.probe_dimensions[0] / 2)
-            print(f"Second probe area: ({x_min}, {y_min}) to ({x_max}, {y_max}), Total space: {self.nx}, {self.ny}")
             rect2 = plt.Rectangle(
                 (y_min, x_min), y_max - y_min, x_max - x_min,
                 linewidth=0, edgecolor='none', facecolor='green', alpha=0.2, label='Second Probe Area'
@@ -429,7 +433,7 @@ class SampleSpace2D:
         plt.grid()
         plt.show()
     
-    def load_sample_space(self, file_path: str): # TODO: correct for non free space medium
+    def load_sample_space(self, file_path: str, real_perturbation=1e-4, imaginary_perturbation=1e-6): # TODO: correct for non free space medium
         """
         Load the sample space with a precomputed refractive index field.
 
@@ -442,7 +446,36 @@ class SampleSpace2D:
 
         # Normalize the refractive index field and rescale it
         n_true = (n_true - np.mean(n_true)) / np.std(n_true) + 1
-        self.n_true = 1 + (1e-4 * n_true) + (1e-6 * 1j * n_true)
+        self.n_true = self.n_medium - (real_perturbation * n_true) - (imaginary_perturbation * 1j * n_true)
+
+    def load_cameraman(self, real_perturbation=1e-4, imaginary_perturbation=1e-6):  # TODO: correct for non free space medium
+        """
+        Load the cameraman image as the refractive index field and resize to sample space dimensions.
+
+        Sets self.n_true to shape (self.nx, self.ny, self.nz).
+        """
+
+        # Load cameraman image (assumed grayscale)
+        n_true_2d = io.imread('./cameraman.tif').astype(np.float32)
+
+        # Flip the image vertically
+        n_true_2d = np.flipud(n_true_2d)
+
+        
+        # Normalize to [0, 1] range
+        n_true_2d -= n_true_2d.min()  # Ensure zero baseline
+        n_true_2d /= n_true_2d.max()  # Normalize to unit peak
+
+        n_true_2d = transform.resize(n_true_2d, (self.nx, self.ny), preserve_range=True)
+
+        # Expand to 3D by repeating along z
+        n_true = np.repeat(n_true_2d[:, :, np.newaxis], self.nz, axis=2)
+
+        delta = (real_perturbation * n_true)
+        beta = (imaginary_perturbation * n_true)
+
+        # Set refractive index field
+        self.n_true = self.n_medium - delta - beta * 1j
 
     @property
     def detector_frame_info(self) -> List[Dict[str, Any]]:

@@ -5,7 +5,6 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from .initial_conditions import InitialConditions
 from .linear_system import LinearSystemSetup
 from thick_ptycho.sample_space.sample_space import SampleSpace
 
@@ -24,8 +23,6 @@ class ForwardModel():
         self.sample_space = sample_space
         self.nz = sample_space.nz
         self.probe_dimensions = sample_space.probe_dimensions
-        self.initial_condition = InitialConditions(sample_space,
-                                                   thin_sample=thin_sample)
         self.thin_sample = thin_sample
         self.full_system = full_system_solver
 
@@ -44,7 +41,6 @@ class ForwardModel():
             self.slice_dimensions_dirichlet = tuple(dim + 2 for dim in self.slice_dimensions)
 
         self.linear_system = LinearSystemSetup(sample_space,
-                                               self.initial_condition,
                                                self.thin_sample,
                                                self.full_system)
         
@@ -109,7 +105,7 @@ class ForwardModel():
             u[scan_index, ...] = solve_single_probe(scan_index)
         
         return u
-    
+
     def construct_iterative_lu(self, n: Optional[np.ndarray] = None, adjoint: bool = False,
                             reverse: bool = False) -> Tuple[Optional[spla.SuperLU], Optional[np.ndarray]]:
         """Solve the paraxial wave equation iteratively for a single probe."""
@@ -217,17 +213,13 @@ class ForwardModel():
         else:
             if reverse:
                 if initial_condition is None:
-                    raise ValueError(
-                        "Initial condition must be provided for reverse propagation.")
-                elif isinstance(initial_condition, np.ndarray):
-                    solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
-                else:
-                    raise ValueError("initial_condition must be np.ndarray, 0, or None")
+                    raise ValueError("Exit wave required for reverse propagation.")
+                # initial_condition expected shape (num_probes, block_size)
+                solution[:, 0] = initial_condition[scan_index, :].flatten()
             elif initial_condition is None:
-                solution[:, 0] = self.initial_condition.apply_initial_condition(
-                    scan_index).flatten()
+                solution[:, 0] = self.linear_system.probes[scan_index, ...].flatten()
             else:
-                solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
+                solution[:, 0] = initial_condition[scan_index, ...].flatten()
         
         # Solve with LU decomposition
         if iterative_lu is not None:
@@ -246,7 +238,7 @@ class ForwardModel():
                         b = b_block[:, j-1]
 
                 rhs_matrix = B_list[j - 1].dot(solution[:, j - 1]) + b
-                solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)
+                solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)#*self.sponge_mask()
         # For thin samples with spsolve
         else:
             object_slices = (
@@ -276,7 +268,7 @@ class ForwardModel():
                 A_with_object = A - C  # LHS Matrix
                 B_with_object = B + C  # RHS Matrix
                 rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
-                solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
+                solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)#*self.sponge_mask()
 
         # Flip solution in the z-direction if adjoint is True
         if adjoint:
@@ -345,3 +337,28 @@ class ForwardModel():
             elif self.sample_space.dimension == 1:
                 solution = solution[1:-1]
         return solution
+    
+    # def sponge_mask(self, nbuf=4, order=3, R=1e-8):
+    #     """
+    #     Returns a 2D damping mask W(x,y) to multiply after each z-step.
+    #     R: target amplitude at the outer edge (reflection ~ R).
+    #     nbuf: buffer thickness in pixels.
+    #     order: shape (3..6 works well).
+    #     """
+    #     nx = self.slice_dimensions[0]
+    #     ny = self.slice_dimensions[1] 
+    #     dz = self.sample_space.dz
+    #     wx = np.ones(nx); wy = np.ones(ny)
+    #     # attenuation profile that rises to -ln(R) over nbuf cells
+    #     def edge_prof(n):
+    #         t = np.linspace(0, 1, nbuf, endpoint=False)[::-1]   # 1..0
+    #         return (-np.log(R)) * (t**order) / nbuf            # per-step sigma sum
+    #     profx = edge_prof(nx); profy = edge_prof(ny)
+    #     # left/right
+    #     wx[:nbuf]  = np.exp(-profx[:nbuf] * dz)
+    #     wx[-nbuf:] = np.exp(-profx[:nbuf][::-1] * dz)
+    #     # bottom/top
+    #     wy[:nbuf]  = np.exp(-profy[:nbuf] * dz)
+    #     wy[-nbuf:] = np.exp(-profy[:nbuf][::-1] * dz)
+    #     return (wx[:, None] * wy[None, :]).flatten()
+

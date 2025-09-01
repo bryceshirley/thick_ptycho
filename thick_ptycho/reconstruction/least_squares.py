@@ -105,10 +105,15 @@ class LeastSquaresSolver:
         plt.show()
 
 
-        phase = np.angle(self.true_exit_waves)
+        phase = self.visualisation.compute_phase(self.true_exit_waves)
         amplitude = np.abs(self.true_exit_waves)
-        diff_phase = np.angle(diff_exit_waves)
+        diff_phase = self.visualisation.compute_phase(diff_exit_waves)
         diff_amplitude = np.abs(diff_exit_waves)
+
+        # Mask low-magnitude values
+        threshold = 1e-3  # Adjust based on your data
+        phase[amplitude < threshold] = 0.0  # or np.nan for masking
+        diff_phase[diff_amplitude < threshold] = 0.0  # or np.nan for masking
 
         fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
         im0 = axs[0].imshow(phase, cmap='viridis', origin='lower')
@@ -168,38 +173,28 @@ class LeastSquaresSolver:
 
     def compute_grad_least_squares(self, uk, grad_A):
         """Compute the gradient of least squares problem."""
-        # Compute the gradient efficiently
-        grad_real = np.zeros(self.nx * (self.nz - 1), dtype=complex)
-        grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=complex)
+        grad_real = np.zeros(self.nx * (self.nz - 1), dtype=float)
+        grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=float)
 
         # Preallocate zero vector
         exit_wave_error = self.compute_error_in_exit_wave(uk)
 
         for i in range(self.num_probes):
-            # Compute the error backpropagation
             if self.lu is not None:
-                error_backpropagation = self.lu.solve(
-                    exit_wave_error[i, :], trans='H')
-            if self.iterative_lu is not None:
+                error_backpropagation = self.lu.solve(exit_wave_error[i, :], trans='H')
+            elif self.iterative_lu is not None:
                 error_backpropagation = self.forward_model._solve_single_probe_iteratively(
                     initial_condition=0,
                     iterative_lu=self.adjoint_iterative_lu,
                     adjoint=True,
                     b_block=exit_wave_error[i, :])
-                error_backpropagation = error_backpropagation[:, :-1].transpose().flatten()
+                error_backpropagation = error_backpropagation[:, :-1].transpose().ravel()
             else:
-                error_backpropagation = spla.spsolve(
-                    self.Ak.conj().T, exit_wave_error[i, :])
+                error_backpropagation = spla.spsolve(self.Ak.conj().T, exit_wave_error[i, :])
 
-            # Compute the gradient for each probe
-            grad_real -= np.multiply((grad_A @
-                                     uk[i, :]).conj().T,
-                                     error_backpropagation).real
-
-            # Wirtinger derivative: ∂L/∂nk
-            grad_imag -= np.multiply((1j * grad_A @
-                                     uk[i, :]).conj().T,
-                                     error_backpropagation).real
+            g_base = (grad_A @ uk[i, :])
+            grad_real -= (g_base.conj() * error_backpropagation).real
+            grad_imag -= ((1j * g_base).conj() * error_backpropagation).real
 
         return grad_real, grad_imag
 
@@ -225,7 +220,7 @@ class LeastSquaresSolver:
         Compute alpha_k calculation.
 
         Parameters:
-        u (ndarray): Current solution vector, shape (num_probes, nx * (nz-1)).
+        u (ndarray): Current solution vector, shape (num_probes, nx * (nz - 1)).
         A (sp.spmatrix): Sparse matrix for the linear system.
         grad_A (sp.spmatrix): Gradient of A wrt n.
         d (ndarray): Descent direction vector.
@@ -240,7 +235,7 @@ class LeastSquaresSolver:
             perturbation = grad_A @ u[i, :]
             if self.lu is not None:
                 delta_u = self.lu.solve(perturbation)
-            if self.iterative_lu is not None:
+            elif self.iterative_lu is not None:
                 delta_u = self.forward_model._solve_single_probe_iteratively(
                     initial_condition=0,
                     iterative_lu=self.iterative_lu,
@@ -259,7 +254,7 @@ class LeastSquaresSolver:
         numerator = np.vdot(d, grad_E)
 
         # Compute the step size
-        alphak = - (numerator / denominator) if denominator != 0 else 0.0
+        alphak = - (numerator / denominator) if denominator > 0 else 0.0
         return alphak
 
     def compute_betak(self, grad_E, grad_E_old):
@@ -329,7 +324,7 @@ class LeastSquaresSolver:
             alpha0 = fixed_step_size
 
 
-        true_phase = np.angle(self.sample_space.n_true)
+        true_phase = self.visualisation.compute_phase(self.sample_space.n_true)
         true_amplitude = np.abs(self.sample_space.n_true)
         vmin_phase = np.min(true_phase)
         vmax_phase = np.max(true_phase)
@@ -380,9 +375,8 @@ class LeastSquaresSolver:
                 self.compute_grad_least_squares(uk, grad_Ak)
             )
             # Compute RMSE of the current refractive index estimate
-            error = nk - self.n_true
-            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2)) / \
-                rel_rmse_denominator
+            error = self.true_exit_waves - uk[:, -self.block_size:]
+            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2))
 
             residual.append(rel_rmse)
             # Check for convergence
@@ -400,7 +394,7 @@ class LeastSquaresSolver:
                     fig, axs = plt.subplots(1, 2, figsize=(16, 5))
 
                     # Get min and max values from the true sample space for color scaling
-                    phase = np.angle(nk)
+                    phase = self.visualisation.compute_phase(nk)
                     amplitude = np.abs(nk)
                     axs[0].set_title("Phase of Reconstructed Sample Space")
                     im0 = axs[0].imshow(phase, origin='lower', aspect='auto', cmap='viridis', vmin=vmin_phase, vmax=vmax_phase)

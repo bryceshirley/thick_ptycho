@@ -6,6 +6,12 @@ from ipywidgets import interact, IntSlider
 import ipywidgets as widgets
 from pathlib import Path
 
+try:
+    from skimage.restoration import unwrap_phase as _unwrap2d
+    _HAS_SKIMAGE = True
+except Exception:
+    _HAS_SKIMAGE = False
+
 class Visualisation:
     """
     A class for visualizing the results of the paraxial solver.
@@ -114,12 +120,12 @@ class Visualisation:
         fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 
         if plot_phase:
-            tol = 1e-8
-            real = plot_solution.real
-            imag = plot_solution.imag
-            mask = (np.abs(real) < tol) & (np.abs(imag) < tol)
+            # tol = 1e-8
+            # real = plot_solution.real
+            # imag = plot_solution.imag
+            # mask = (np.abs(real) < tol) & (np.abs(imag) < tol)
             p1 = self.compute_phase(plot_solution)
-            p1[mask] = 0.0
+            # p1[mask] = 0.0
             p2 = np.abs(plot_solution)
             title_p1 = 'Phase ' + title
             title_p2 = 'Amplitude ' + title
@@ -192,14 +198,14 @@ class Visualisation:
             z_frame = self.z[-(frame + 1)] if reverse else self.z[frame]
 
             im0 = axs[0].imshow(data1[:, :, frame], cmap='viridis', origin='lower', extent=[
-                        self.x.min(), self.x.max(), self.y.min(), self.y.max()], vmin=min_val1, vmax=max_val1)
+                        self.x.min(), self.x.max(), self.y.min(), self.y.max()])#, vmin=min_val1, vmax=max_val1)
             axs[0].set_title(f'{title1} at Z = {z_frame:.2f}')
             axs[0].set_xlabel('X')
             axs[0].set_ylabel('Y')
             fig.colorbar(im0, ax=axs[0])
 
             im1 = axs[1].imshow(data2[:, :, frame], cmap='viridis', origin='lower', extent=[
-                        self.x.min(), self.x.max(), self.y.min(), self.y.max()], vmin=min_val2, vmax=max_val2)
+                        self.x.min(), self.x.max(), self.y.min(), self.y.max()])#, vmin=min_val2, vmax=max_val2)
             axs[1].set_title(f'{title2} at Z = {z_frame:.2f}')
             axs[1].set_xlabel('X')
             axs[1].set_ylabel('Y')
@@ -208,7 +214,7 @@ class Visualisation:
             plt.tight_layout()
             plt.show()
 
-        interact(update, frame=IntSlider(min=0, max=len_z - 1, step=1, value=0, description="slice"))
+        interact(update, frame=IntSlider(min=0, max=len_z - 1, step=1, value=len_z - 1, description="slice"))
 
     # def plot_scan_1d(self, solution, reverse):
     #     """
@@ -301,33 +307,96 @@ class Visualisation:
             else:  # Odd row (right to left)
                 col = self.sample_space.scan_points - 1 - (idx % self.sample_space.scan_points)
 
-            im1 = axes1[row, col].imshow(data1[idx, :, :], cmap='viridis', vmin=min_val1, vmax=max_val1, origin='lower')
+            im1 = axes1[row, col].imshow(data1[idx, :, :], origin='lower', cmap='viridis')#, vmin=min_val1, vmax=max_val1)
             axes1[row, col].set_title(f'Scan {idx}')
 
-            im2 = axes2[row, col].imshow(data2[idx, :, :], cmap='viridis', vmin=min_val2, vmax=max_val2, origin='lower')
+            im2 = axes2[row, col].imshow(data2[idx, :, :], origin='lower', cmap='viridis')# vmin=min_val2, vmax=max_val2, origin='lower')
             axes2[row, col].set_title(f'Scan {idx}')
 
         if initial:
-            fig1.suptitle(f'Probe Waves {title1}')
-            fig2.suptitle(f'Probe Waves {title2}')
+            fig1.suptitle(f'Probe Waves {title1}', fontsize=18, fontweight="bold")
+            fig2.suptitle(f'Probe Waves {title2}', fontsize=18, fontweight="bold")
         else:
-            fig1.suptitle(f'Exit Waves {title1}')
-            fig2.suptitle(f'Exit Waves {title2}')
+            fig1.suptitle(f'Exit Waves {title1}', fontsize=18, fontweight="bold")
+            fig2.suptitle(f'Exit Waves {title2}', fontsize=18, fontweight="bold")
 
         fig1.colorbar(im1, ax=axes1)
         fig2.colorbar(im2, ax=axes2)
         plt.show()
 
-    def compute_phase(self, solution):
+    def compute_phase(self, solution, tol=5e-3, unwrap=False, recentre=True):
         """
-        Compute the phase of the solution account for small values.
-        This is used to avoid issues with np.angle() when the real and 
-        imaginary parts are close to zero.
+        Robust phase extraction for complex data.
+
+        - Avoids instability where |z| ~ 0 by zeroing phase there.
+        - Unwraps per-axis (no flattening), so image layout is preserved.
+        - Optionally recentres the global phase to reduce drift.
         """
-        tol = 1e-8
-        real = solution.real
-        imag = solution.imag
-        mask = (np.abs(real) < tol) & (np.abs(imag) < tol)
-        p1 = np.angle(solution)
-        p1[mask] = 0.0
-        return p1
+        z = np.asarray(solution)
+        phase = np.angle(z)
+        mag = np.abs(z)
+
+        # Mask near-zero magnitude: phase is meaningless there
+        mask = mag < tol
+        if np.any(mask):
+            phase = phase.copy()
+            phase[mask] = 0.0
+
+        if unwrap:
+            # IMPORTANT: unwrap along each axis separately (no ravel/reshape!)
+            if phase.ndim == 1:
+                phase = np.unwrap(phase, axis=0)
+            else:
+                for ax in range(phase.ndim):
+                    phase = np.unwrap(phase, axis=ax)
+
+        # Optional: remove a global offset (helps visual stability)
+        if recentre:
+            # Only use valid (non-masked) pixels to compute centre
+            valid = ~mask if phase.shape == mask.shape else slice(None)
+            offset = np.median(phase[valid]) if np.any(valid) else np.median(phase)
+            phase = phase - offset
+
+        return phase
+
+    # @staticmethod
+    # def compute_phase(z, tol=5e-6, use_2d_unwrap=True, detrend=True):
+    #     """
+    #     Robust phase with masking, optional 2-D unwrap, and plane detrend.
+    #     Falls back gracefully on older scikit-image (no mask support).
+    #     """
+    #     #z = np.asarray(solution, dtype=np.complex128)
+
+    #     # Safe angle (avoid any polluted globals)
+    #     phi_wrapped = np.arctan2(z.imag, z.real)
+    #     mag = np.abs(z)
+    #     mask = mag < tol
+
+    #     # UNWRAP
+    #     if use_2d_unwrap and _HAS_SKIMAGE and z.ndim >= 2:
+    #         try:
+    #             # Newer scikit-image (supports mask=)
+    #             phi = _unwrap2d(phi_wrapped, mask=mask)
+    #         except TypeError:
+    #             # Older scikit-image: no mask support
+    #             # -> run without mask (may leave small artifacts near |z|~0)
+    #             phi = _unwrap2d(phi_wrapped)
+    #     else:
+    #         # Numpy fallback: unwrap along each axis (no flattening)
+    #         phi = phi_wrapped.copy()
+    #         for ax in range(phi.ndim):
+    #             phi = np.unwrap(phi, axis=ax)
+
+    #     # DETREND (remove global plane so details are visible)
+    #     if detrend and phi.ndim == 2:
+    #         H, W = phi.shape
+    #         yy, xx = np.mgrid[0:H, 0:W]
+    #         valid = ~mask  # if we couldn't pass mask, this still trims low-|z| for the fit
+    #         if np.any(valid):
+    #             X = np.stack([xx[valid], yy[valid], np.ones(valid.sum())], axis=1)
+    #             y = phi[valid]
+    #             a, b, c = np.linalg.lstsq(X, y, rcond=None)[0]
+    #             plane = a*xx + b*yy + c
+    #             phi = np.where(valid, phi - plane, 0.0)
+
+    #     return phi

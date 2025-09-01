@@ -8,7 +8,7 @@ name = "thick_ptycho"
 version = "0.1.0-dev"
 description = "A Python package for thick sample ptychographic reconstruction"
 authors = [{ name = "Bryce Shirley", email = "bryce.shirley@stfc.ac.uk" }]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy >=1.21.0",
     "matplotlib >=3.4.0",
@@ -19,6 +19,9 @@ dependencies = [
     "ipykernel",
     "pytest (>=8.4.1,<9.0.0)",
     "line-profiler (>=4.2.0,<5.0.0)",
+    "scikit-image (>=0.24,<0.25)",
+    "astropy (>=7.1.0,<8.0.0)",
+    "ffmpeg-python (>=0.2.0,<0.3.0)",
 ]
 
 
