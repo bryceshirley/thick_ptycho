@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from thick-ptycho.sample_space.sample_space import SampleSpace
-from thick-ptycho.forward_model.solver import ForwardModel
+from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.forward_model.solver import ForwardModel
 
 
 def run_solver_with_objects(boundary_condition, initial_condtion):

@@ -2,9 +2,9 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from thick-ptycho.forward_model.solver import ForwardModel
-from thick-ptycho.sample_space.sample_space import SampleSpace
-from thick-ptycho.utils.visualisations import Visualisation
+from thick_ptycho.forward_model.solver import ForwardModel
+from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.utils.visualisations import Visualisation
 import time
 
 
