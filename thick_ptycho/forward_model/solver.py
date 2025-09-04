@@ -16,7 +16,9 @@ class ForwardModel():
 
     def __init__(self, sample_space: SampleSpace,
                  full_system_solver: Optional[bool] = False,
-                 thin_sample: Optional[bool] = True):
+                 thin_sample: Optional[bool] = True,
+                 probe_angle: Optional[float] = None,
+                 disk_blur: Optional[float] = None):
         """
         Initialize the solver.
         """
@@ -44,6 +46,8 @@ class ForwardModel():
                                                self.thin_sample,
                                                self.full_system)
         
+        self.probe_angle = probe_angle
+
         self.block_size = self.linear_system.block_size
 
     def solve(self, reverse=False,
@@ -69,7 +73,6 @@ class ForwardModel():
             if iterative_lu is None:
                 iterative_lu = self.construct_iterative_lu(
                     n=n, reverse=reverse)
-
 
         # Define wrapper for parallel execution
         def solve_single_probe(scan_index: int) -> np.ndarray:
@@ -174,6 +177,10 @@ class ForwardModel():
         probe_contribution, probe = self.linear_system.probe_contribution(
             scan_index=scan_index, probes=initial_condition)
 
+        # Apply probe angle (linear phase shift)
+        if self.probe_angle != 0.0:
+            probe = self.tilt_probe(probe)
+
         # Define Right Hand Side
         b = b_homogeneous + probe_contribution
 
@@ -220,7 +227,11 @@ class ForwardModel():
                 solution[:, 0] = self.linear_system.probes[scan_index, ...].flatten()
             else:
                 solution[:, 0] = initial_condition[scan_index, ...].flatten()
-        
+
+        # Apply probe angle (linear phase shift)
+        if self.probe_angle != 0.0:
+            solution[:, 0] = self.tilt_probe(solution[:, 0])
+
         # Solve with LU decomposition
         if iterative_lu is not None:
             A_lu_list, B_list, b = iterative_lu
@@ -338,27 +349,13 @@ class ForwardModel():
                 solution = solution[1:-1]
         return solution
     
-    # def sponge_mask(self, nbuf=4, order=3, R=1e-8):
-    #     """
-    #     Returns a 2D damping mask W(x,y) to multiply after each z-step.
-    #     R: target amplitude at the outer edge (reflection ~ R).
-    #     nbuf: buffer thickness in pixels.
-    #     order: shape (3..6 works well).
-    #     """
-    #     nx = self.slice_dimensions[0]
-    #     ny = self.slice_dimensions[1] 
-    #     dz = self.sample_space.dz
-    #     wx = np.ones(nx); wy = np.ones(ny)
-    #     # attenuation profile that rises to -ln(R) over nbuf cells
-    #     def edge_prof(n):
-    #         t = np.linspace(0, 1, nbuf, endpoint=False)[::-1]   # 1..0
-    #         return (-np.log(R)) * (t**order) / nbuf            # per-step sigma sum
-    #     profx = edge_prof(nx); profy = edge_prof(ny)
-    #     # left/right
-    #     wx[:nbuf]  = np.exp(-profx[:nbuf] * dz)
-    #     wx[-nbuf:] = np.exp(-profx[:nbuf][::-1] * dz)
-    #     # bottom/top
-    #     wy[:nbuf]  = np.exp(-profy[:nbuf] * dz)
-    #     wy[-nbuf:] = np.exp(-profy[:nbuf][::-1] * dz)
-    #     return (wx[:, None] * wy[None, :]).flatten()
+    def tilt_probe(self, probe):
+        """Tilt the probe by a given angle (in radians)."""
+        probe_shape = probe.shape
+        n = np.arange(probe.flatten().shape[0])
+        linear_phase = np.exp(1j * self.probe_angle * n)
+        probe *= linear_phase
+        probe = probe.reshape(probe_shape)
+        return probe
+
 

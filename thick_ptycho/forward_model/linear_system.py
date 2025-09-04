@@ -50,8 +50,6 @@ class LinearSystemSetup:
             self.block_size = self.nx * self.ny
             self.probes = np.zeros((self.sample_space.num_probes, self.nx, self.ny), dtype=complex)
 
-        self._probe_angle = 0.0
-
         if not self.thin_sample and self.full_system:
              self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
 
@@ -68,15 +66,6 @@ class LinearSystemSetup:
                 # Transpose and add b_slice
                 self.b0 = b0_mat.T + self.b_slice
 
-    @property
-    def probe_angle(self):
-        """Get the probe angle in radians."""
-        return self._probe_angle
-
-    @probe_angle.setter
-    def probe_angle(self, value):
-        """Set the probe angle in radians."""
-        self._probe_angle = value
 
     def setup_homogeneous_forward_model_lhs(self, scan_index: Optional[int] = 0):
         """Create Free-Space Forward Model Left-Hand Side (LHS) Matrix."""
@@ -166,12 +155,6 @@ class LinearSystemSetup:
             probe = probes[scan_index, ...].flatten()
         else:
             probe = self.probes[scan_index, ...].flatten()
-
-        # Apply probe angle (linear phase shift)
-        if self._probe_angle != 0.0:
-            n = np.arange(len(probe))
-            linear_phase = np.exp(1j * self._probe_angle * n)
-            probe *= linear_phase
 
 
         if self.sample_space.dimension == 1 and not self.thin_sample and self.full_system and probes is None:
@@ -316,7 +299,6 @@ class LinearSystemSetup:
                 amp = np.ones_like(r)
                 m = scaled_r != 0
                 amp[m] = (2 * j1(scaled_r[m]) / scaled_r[m])**2
-
             initial_solution = amp
         elif probe_type == "disk":
             if self.sample_space.dimension == 1:
@@ -324,8 +306,7 @@ class LinearSystemSetup:
             else:
                 r = np.sqrt((x_mesh - c_x) ** 2 + (y_mesh - c_y) ** 2)
             amp = np.where(r <= radius, 1.0, 0)
-            # Complex field: amplitude × phase
-            initial_solution = amp #* np.exp(1j * phase)
+            initial_solution = amp
         elif probe_type == "blurred_disk":
             if self.sample_space.dimension == 1:
                 r = np.abs(x_mesh - c_x)
@@ -335,27 +316,28 @@ class LinearSystemSetup:
                 r = np.hypot(x_mesh - c_x, y_mesh - c_y)
                 pix_area = self.sample_space.dx * self.sample_space.dy
                 area = (np.pi * radius**2)
-            portion_blur = 0.5  # 30% of radius
-            inner = radius - 0.5 * radius  # Inner radius for smooth edge
+
+            # Amplitude term: smooth disk with cosine edge
+            portion_blur = self._disk_blur  # 50% of radius
+            inner = radius - portion_blur * radius  # Inner radius for smooth edge
             t = np.clip((r - inner) / max(portion_blur * radius, 1e-12), 0.0, 1.0)  # 0..1 in the rim
-            rim = 0.5 * (1 + np.cos(np.pi * t))                       # 1→0 smoothly
+            rim = portion_blur * (1 + np.cos(np.pi * t))                       # 1→0 smoothly
             amp = np.where(r <= inner, 1.0, np.where(r >= radius, 0.0, rim))
 
             # Optional: keep ∑|amp|^2 ≈ area of ideal disk so brightness stays comparable
             target = area / pix_area
             s = np.sqrt(target / (amp**2).sum())
             amp *= s
-            
-            # Phase term: scaled and wrapped to [0, 0.5π]
-            phase = np.pi * (r / (radius**2))
-            phase = np.mod(phase, 0.5 * np.pi)
+            initial_solution = amp
 
-            # Complex field: amplitude × phase
-            initial_solution = amp #* np.exp(1j * phase)
 
         else:
             raise ValueError("Not a valid initial condition type")
 
+        max_val = np.max(np.abs(initial_solution))
+        if max_val == 0:
+            return initial_solution
+        
         max_val = np.max(np.abs(initial_solution))
         if max_val == 0:
             return initial_solution
