@@ -17,7 +17,7 @@ class ForwardModel():
     def __init__(self, sample_space: SampleSpace,
                  full_system_solver: Optional[bool] = False,
                  thin_sample: Optional[bool] = True,
-                 probe_angles: Optional[List[float]] = [0.0]):
+                 probe_angles_list: Optional[List[float]] = [0.0]):
         """
         Initialize the solver.
         """
@@ -43,9 +43,10 @@ class ForwardModel():
 
         self.linear_system = LinearSystemSetup(sample_space,
                                                self.thin_sample,
-                                               self.full_system)
+                                               self.full_system,
+                                               probe_angles_list)
 
-        self.probe_angles = probe_angles
+        self.probe_angles_list = probe_angles_list
 
         self.block_size = self.linear_system.block_size
 
@@ -74,20 +75,20 @@ class ForwardModel():
                     n=n, reverse=reverse)
 
         # Define wrapper for parallel execution
-        def solve_single_probe(scan_index: int, probe_angle: float) -> np.ndarray:
+        def solve_single_probe(scan_index: int, angle_index: float) -> np.ndarray:
             """Solve the paraxial wave equation for a single probe."""
 
             start_time = time.time()
             if self.full_system:
                 sol = self._solve_single_probe_full_system(
-                    n, scan_index=scan_index, probe_angle=probe_angle, reverse=reverse,
+                    n, scan_index=scan_index, angle_index=angle_index, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
                     lu=lu,
                     b_homogeneous=b_homogeneous)
             else:
                 sol = self._solve_single_probe_iteratively(
-                    n, scan_index=scan_index, probe_angle=probe_angle, reverse=reverse,
+                    n, scan_index=scan_index, angle_index=angle_index, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
                     iterative_lu=iterative_lu,
@@ -103,11 +104,11 @@ class ForwardModel():
             return sol
         
         # This could be made parallel
-        for probe_index, probe_angle in enumerate(self.probe_angles):
-            if verbose and len(self.probe_angles) > 1:
-                print(f"Solving for probe angle {probe_index+1}/{len(self.probe_angles)}: {probe_angle} radians")
+        for angle_index, probe_angle in enumerate(self.probe_angles_list):
+            if verbose and len(self.probe_angles_list) > 1:
+                print(f"Solving for probe angle {angle_index+1}/{len(self.probe_angles_list)}: {probe_angle} radians")
             for scan_index in range(self.sample_space.num_probes):
-                u[probe_index,scan_index, ...] = solve_single_probe(scan_index, probe_angle=probe_angle)
+                u[angle_index,scan_index, ...] = solve_single_probe(scan_index, angle_index=angle_index)
 
         return u
 
@@ -150,10 +151,10 @@ class ForwardModel():
             B_mod_list.append(B_with_object)
         
 
-        return (A_lu_list, B_mod_list, b*0.0)
+        return (A_lu_list, B_mod_list, b)
 
     def _solve_single_probe_full_system(self, n: np.ndarray,
-                                        probe_angle: float = 0.0,
+                                        angle_index: int = 0,
                                         scan_index: int = 0,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
@@ -165,6 +166,7 @@ class ForwardModel():
             raise ValueError(
                 "Reverse propagation is not supported in the full system solver. "
                 "Please use the iterative solver for reverse propagation.")
+    
         # Forward model rhs vector
         if test_impedance:
             b_homogeneous = (
@@ -178,11 +180,7 @@ class ForwardModel():
 
         # Edit this for impedance condition test
         probe_contribution, probe = self.linear_system.probe_contribution(
-            scan_index=scan_index, probes=initial_condition)
-
-        # Apply probe angle (linear phase shift)
-        if probe_angle != 0.0:
-            probe = self.tilt_probe(probe, probe_angle)
+            scan_index=scan_index,angle_index=angle_index, probes=initial_condition)
 
         # Define Right Hand Side
         b = b_homogeneous + probe_contribution
@@ -205,7 +203,7 @@ class ForwardModel():
         return np.concatenate([initial_condition, solution], axis=1)
 
     def _solve_single_probe_iteratively(self, n: Optional[np.ndarray] = None,
-                                        probe_angle: Optional[float] = 0,
+                                        angle_index: Optional[int] = 0,
                                         scan_index: Optional[int] = 0,
                                         reverse: Optional[bool] = False,
                                         adjoint: Optional[bool] = False,
@@ -217,7 +215,8 @@ class ForwardModel():
         # Initialize solution grid
         solution = np.zeros((self.block_size, self.nz),
                             dtype=complex)
-
+        probe_index = angle_index*self.sample_space.num_probes + scan_index
+        #print(f"{probe_index=},({angle_index=},{scan_index=})")
         # Set initial condition
         if isinstance(initial_condition, int):
             pass
@@ -226,15 +225,11 @@ class ForwardModel():
                 if initial_condition is None:
                     raise ValueError("Exit wave required for reverse propagation.")
                 # initial_condition expected shape (num_probes, block_size)
-                solution[:, 0] = initial_condition[scan_index, :].flatten()
+                solution[:, 0] = initial_condition[probe_index, :].flatten()
             elif initial_condition is None:
-                solution[:, 0] = self.linear_system.probes[scan_index, ...].flatten()
+                solution[:, 0] = self.linear_system.probes[probe_index, ...].flatten()
             else:
-                solution[:, 0] = initial_condition[scan_index, ...].flatten()
-
-        # Apply probe angle (linear phase shift)
-        if probe_angle != 0.0:
-            solution[:, 0] = self.tilt_probe(solution[:, 0], probe_angle)
+                solution[:, 0] = initial_condition[probe_index, ...].flatten()
 
         # Solve with LU decomposition
         if iterative_lu is not None:
@@ -310,13 +305,13 @@ class ForwardModel():
         # Initialize solution grid with initial condition
         if self.sample_space.bc_type == "dirichlet":
             u = np.zeros(
-                (len(self.probe_angles), self.sample_space.num_probes,
+                (len(self.probe_angles_list), self.sample_space.num_probes,
                     *self.slice_dimensions_dirichlet, self.nz),
                 dtype=complex
             )
         else:
             u = np.zeros(
-                (len(self.probe_angles), self.sample_space.num_probes,
+                (len(self.probe_angles_list), self.sample_space.num_probes,
                     *self.slice_dimensions, self.nz),
                 dtype=complex
             )
@@ -353,13 +348,33 @@ class ForwardModel():
                 solution = solution[1:-1]
         return solution
 
-    def tilt_probe(self, probe, probe_angle: float) -> np.ndarray:
-        """Tilt the probe by a given angle (in radians)."""
-        probe_shape = probe.shape
-        n = np.arange(probe.flatten().shape[0])
-        linear_phase = np.exp(1j * probe_angle * n)
-        probe *= linear_phase
-        probe = probe.reshape(probe_shape)
-        return probe
+    # def tilt_probe(self, probe, probe_angle: float) -> np.ndarray:
+    #     """Tilt the probe by a given angle (in radians)."""
+    #     probe_shape = probe.shape
+    #     n = np.arange(probe.flatten().shape[0])
+    #     linear_phase = np.exp(1j * probe_angle * n)
+    #     probe *= linear_phase
+    #     probe = probe.reshape(probe_shape)
+    #     return probe
+    
+    # def tilt_probe(self, probe, focus_strength: float) -> np.ndarray:
+    #     """Apply a quadratic phase (discrete lens) to make the probe converge/diverge.
+
+    #     Parameters
+    #     ----------
+    #     probe : np.ndarray
+    #         1D or 2D complex probe field.
+    #     focus_strength : float
+    #         Controls curvature strength (radians per index^2).
+    #         Positive -> converging, Negative -> diverging.
+    #     """
+    #     probe_shape = probe.shape
+    #     n = np.arange(probe.flatten().shape[0])
+    #     # Quadratic phase in discrete index space
+    #     quadratic_phase = np.exp(-1j * focus_strength * n**2)
+    #     probe *= quadratic_phase
+    #     probe = probe.reshape(probe_shape)
+    #     return probe
+
 
 

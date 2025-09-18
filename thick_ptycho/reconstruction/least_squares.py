@@ -8,7 +8,7 @@ from thick_ptycho.sample_space.sample_space import SampleSpace
 from thick_ptycho.utils.visualisations import Visualisation
 import time
 
-from typing import Optional
+from typing import Optional, List
 from scipy.ndimage import gaussian_filter1d
 
 
@@ -19,13 +19,16 @@ class LeastSquaresSolver:
     the least squares problem using the conjugate gradient method.
     """
 
-    def __init__(self, sample_space: SampleSpace, full_system_solver: bool = True):
+    def __init__(self, sample_space: SampleSpace, full_system_solver: bool = True,
+                 probe_angles_list: Optional[List[float]] = [0.0]):
         print("Initializing Least Squares Solver...")
         self.nx = sample_space.nx
         self.nz = sample_space.nz
         self.sample_space = sample_space
         self.wave_number = sample_space.k
         self.num_probes = sample_space.num_probes
+        self.num_angles = len(probe_angles_list)
+        self.probe_angles_list = probe_angles_list
         self.true_probe_type = sample_space.probe_type  # True Probe Type is contained in sample_space
 
         # Currently, only thick sample mode is supported
@@ -36,17 +39,15 @@ class LeastSquaresSolver:
         # Set up forward model, linear system and visualisation objects
         self.forward_model = ForwardModel(sample_space,
                                           full_system_solver=self.full_system,
-                                          thin_sample=self.thin_sample)
+                                          thin_sample=self.thin_sample,
+                                          probe_angles_list=probe_angles_list)
         self.linear_system = self.forward_model.linear_system
         self.visualisation = Visualisation(sample_space)
 
         # Set block size (number of pixels in the exit wave)
         self.block_size = self.linear_system.block_size
 
-        # Probe angle for steering the probe
-        self._probe_angle = 0.0
-
-        # Initialize LU decomposition
+        # Initialize LU decomposition handles
         self.lu = None
         self.iterative_lu = None
         self.adjoint_iterative_lu = None
@@ -54,42 +55,113 @@ class LeastSquaresSolver:
         # Initialize the Forward Model matrix
         self.Ak = None
 
-        # Define True Forward Solution
+        # --- Precompute the “true” forward solution (no plots here) ---
         print("Solving the true forward problem once to generate the dataset...")
         start_time = time.time()
-        self.u_true = self.convert_to_block_form(self.forward_model.solve())
+        u_true = self.forward_model.solve()
+        self.u_true = self.convert_to_block_form(u_true)
         self.probes_true = self.forward_model.linear_system.probes
         self.n_true = self.sample_space.n_true
-        end_time = time.time()
-        print(
-            f"True Forward Solution computed in {end_time - start_time:.2f} seconds.")
         self.true_exit_waves = self.u_true[:, -self.block_size:]
+        self.visualize_data()
 
-        data = np.zeros((self.num_probes, self.block_size))
+        # If square grid, also precompute the 90 degree rotation case once
+        self.u_true_rot = None
+        self.true_exit_waves_rot = None
+        if self.sample_space.nx == self.sample_space.nz:
+            self.n_true_rot = np.rot90(self.n_true, k=1)
+            self.u_true_rot, _ = self.compute_forward_model(self.n_true_rot)
+            self.true_exit_waves_rot = self.u_true_rot[:, -self.block_size:]
+            self.visualize_data(rotate=True)
+
+        end_time = time.time()
+        print(f"True Forward Solution computed in {end_time - start_time:.2f} seconds.")
+
+        print(f"Angle {probe_angles_list[0]}")
+        self.visualisation.plot(u_true[0],probe_index=0)
+        self.visualisation.plot(u_true[0])
+        self.visualisation.plot(u_true[0],probe_index=-1)
+        if self.num_angles > 1:
+            print(f"Angle {probe_angles_list[-1]}")
+            self.visualisation.plot(u_true[-1],probe_index=0)
+            self.visualisation.plot(u_true[-1])
+            self.visualisation.plot(u_true[-1],probe_index=-1)
+
+    def visualize_data(self, rotate: bool = False, phase_mask_threshold: float = 1e-3) -> None:
+        """
+        Visualize FFT intensities, phases, and amplitudes of the exit waves, plus
+        differences versus a homogeneous medium. Optionally uses the precomputed
+        rotated forward model (if available).
+
+        Parameters
+        ----------
+        rotate : bool, optional
+            If True and a rotated forward model was precomputed (nx == nz),
+            visualize results for the rotated refractive index n_true^T.
+            Falls back to the non-rotated case if unavailable.
+        phase_mask_threshold : float, optional
+            Magnitude threshold below which phase values are masked to 0.0 to
+            avoid noisy/unstable phase rendering.
+
+        Notes
+        -----
+        - This method performs the homogeneous-medium forward solve on demand so
+          that the difference plots are always in sync with the chosen orientation.
+        - Plots generated:
+            1) Exit wave FFT-squared intensity (far-field intensity)
+            2) Difference FFT-squared intensity vs. homogeneous medium
+            3) Exit wave phase and amplitude
+            4) Phase and amplitude differences vs. homogeneous medium
+        """
+
+        # Select exit waves according to the orientation
+        if rotate and (self.true_exit_waves_rot is not None):
+            exit_waves = self.true_exit_waves_rot
+            n_for_homog_shape = self.n_true_rot.shape
+            title_prefix = "(rotated)"
+
+            n_true = self.n_true_rot
+        else:
+            if rotate:
+                print("Warning: rotate=True requested, but rotated forward model "
+                      "was not precomputed (requires nx == nz). Using non-rotated data.")
+            exit_waves = self.true_exit_waves
+            n_for_homog_shape = self.n_true.shape
+            title_prefix = ""
+            n_true = self.n_true
 
 
-         # Create homogeneous forward model solution
-        n_homogeneous = np.ones_like(self.n_true, dtype=complex)*self.sample_space.n_medium
-        u_homogeneous = self.convert_to_block_form(self.forward_model.solve(n=n_homogeneous))
+        print("True Object")
+        self.visualisation.plot(n_true,
+                                title=title_prefix+'True Object')
+
+        # Compute homogeneous forward solution (same shape/orientation as selected case)
+        n_homogeneous = np.ones(n_for_homog_shape, dtype=complex) * self.sample_space.n_medium
+        if title_prefix:
+            # If we're visualizing the rotated case, make sure we pass the rotated
+            # n to the forward model (keep other settings identical).
+            u_homogeneous = self.convert_to_block_form(self.forward_model.solve(n=n_homogeneous))
+        else:
+            u_homogeneous = self.convert_to_block_form(self.forward_model.solve(n=n_homogeneous))
+
         exit_waves_homogeneous = u_homogeneous[:, -self.block_size:]
-        diff_exit_waves = exit_waves_homogeneous - self.true_exit_waves
+        diff_exit_waves = exit_waves_homogeneous - exit_waves
 
-        diff_data = np.zeros((self.num_probes, self.block_size))
+        # ---------- FFT-squared intensities ----------
+        data = np.zeros((self.num_probes * self.num_angles, self.block_size))
+        diff_data = np.zeros_like(data)
 
-        for i in range(self.num_probes):
-            # Extract the exit wave for each probe
-            # Compute the squared FFT (intensity) of the exit wave for each probe
-            exit_wave_fft = np.fft.fftshift(np.fft.fft(self.true_exit_waves[i, :]))
-            data[i,:] = np.abs(exit_wave_fft) ** 2
-            
+        for i in range(self.num_probes * self.num_angles):
+            exit_wave_fft = np.fft.fftshift(np.fft.fft(exit_waves[i, :]))
+            data[i, :] = np.abs(exit_wave_fft) ** 2
 
             diff_exit_wave_fft = np.fft.fftshift(np.fft.fft(diff_exit_waves[i, :]))
-            diff_data[i,:] = np.abs(diff_exit_wave_fft) ** 2
+            diff_data[i, :] = np.abs(diff_exit_wave_fft) ** 2
 
         plt.figure(figsize=(8, 4))
         plt.imshow(data, cmap='viridis', origin='lower')
         plt.colorbar(label='Intensity')
-        plt.title('Exit Wave Squared FFT Intensity')
+        plt.title(f'Exit Wave Squared FFT Intensity {title_prefix}'.strip())
         plt.xlabel('x')
         plt.ylabel('Image #')
         plt.tight_layout()
@@ -98,32 +170,32 @@ class LeastSquaresSolver:
         plt.figure(figsize=(8, 4))
         plt.imshow(diff_data, cmap='viridis', origin='lower')
         plt.colorbar(label='Intensity')
-        plt.title(f'Differences in Exit Waves:\nFar Field Intensity (squared fourier transform)')
+        plt.title(f'Differences in Exit Waves {title_prefix}:\nFar Field Intensity (squared Fourier transform)'.strip())
         plt.xlabel('x')
         plt.ylabel('Image #')
         plt.tight_layout()
         plt.show()
 
-
-        phase = self.visualisation.compute_phase(self.true_exit_waves)
-        amplitude = np.abs(self.true_exit_waves)
+        # ---------- Phase & Amplitude (and differences) ----------
+        phase = self.visualisation.compute_phase(exit_waves)
+        amplitude = np.abs(exit_waves)
         diff_phase = self.visualisation.compute_phase(diff_exit_waves)
         diff_amplitude = np.abs(diff_exit_waves)
 
-        # Mask low-magnitude values
-        threshold = 1e-3  # Adjust based on your data
-        phase[amplitude < threshold] = 0.0  # or np.nan for masking
-        diff_phase[diff_amplitude < threshold] = 0.0  # or np.nan for masking
+        # Mask low-magnitude values to stabilize phase display
+        if phase_mask_threshold is not None:
+            phase[amplitude < phase_mask_threshold] = 0.0
+            diff_phase[diff_amplitude < phase_mask_threshold] = 0.0
 
         fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
         im0 = axs[0].imshow(phase, cmap='viridis', origin='lower')
         plt.colorbar(im0, ax=axs[0], label='Phase')
-        axs[0].set_title('Exit Wave Phase')
+        axs[0].set_title(f'Exit Wave Phase {title_prefix}'.strip())
         axs[0].set_ylabel('Image #')
 
         im1 = axs[1].imshow(amplitude, cmap='viridis', origin='lower')
         plt.colorbar(im1, ax=axs[1], label='Amplitude')
-        axs[1].set_title('Exit Wave Amplitude')
+        axs[1].set_title(f'Exit Wave Amplitude {title_prefix}'.strip())
         axs[1].set_xlabel('x')
         axs[1].set_ylabel('Image #')
 
@@ -133,12 +205,12 @@ class LeastSquaresSolver:
         fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
         im0 = axs[0].imshow(diff_phase, cmap='viridis', origin='lower')
         plt.colorbar(im0, ax=axs[0], label='Phase')
-        axs[0].set_title(f'Phase Differences in Exit Waves:\nHomogeneous vs. Inhomogeneous Media')
+        axs[0].set_title(f'Phase Differences in Exit Waves {title_prefix}:\nHomogeneous vs. Inhomogeneous Media'.strip())
         axs[0].set_ylabel('Image #')
 
         im1 = axs[1].imshow(diff_amplitude, cmap='viridis', origin='lower')
         plt.colorbar(im1, ax=axs[1], label='Amplitude')
-        axs[1].set_title(f'Amplitude Differences in Exit Waves:\nHomogeneous vs. Inhomogeneous Media')
+        axs[1].set_title(f'Amplitude Differences in Exit Waves {title_prefix}:\nHomogeneous vs. Inhomogeneous Media'.strip())
         axs[1].set_xlabel('x')
         axs[1].set_ylabel('Image #')
 
@@ -171,13 +243,13 @@ class LeastSquaresSolver:
 
         return uk, grad_Ak
 
-    def compute_grad_least_squares(self, uk, grad_A):
+    def compute_grad_least_squares(self, uk, grad_A,rotate=False):
         """Compute the gradient of least squares problem."""
         grad_real = np.zeros(self.nx * (self.nz - 1), dtype=float)
         grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=float)
 
         # Preallocate zero vector
-        exit_wave_error = self.compute_error_in_exit_wave(uk)
+        exit_wave_error = self.compute_error_in_exit_wave(uk,rotate=rotate)
 
         for i in range(self.num_probes):
             if self.lu is not None:
@@ -198,7 +270,7 @@ class LeastSquaresSolver:
 
         return grad_real, grad_imag
 
-    def compute_error_in_exit_wave(self, uk):
+    def compute_error_in_exit_wave(self, uk,rotate=False):
         """
         Compute the error in the exit wave.
 
@@ -210,8 +282,12 @@ class LeastSquaresSolver:
         """
         exit_wave_error = np.zeros_like(uk, dtype=complex)
         exit_waves = uk[:, -self.block_size:]
-        exit_wave_error[:, -self.block_size:] = (
-            exit_waves - self.true_exit_waves)
+        if rotate:
+            exit_wave_error[:, -self.block_size:] = (
+            exit_waves - self.true_exit_waves_rot)
+        else:
+            exit_wave_error[:, -self.block_size:] = (
+                exit_waves - self.true_exit_waves)
 
         return exit_wave_error
 
@@ -271,20 +347,20 @@ class LeastSquaresSolver:
         Convert the input array to block form.
 
         Parameters:
-        u (ndarray): Input array to be converted. shape: (num_probes, nx, nz)
+        u (ndarray): Input array to be converted. shape: (ang_number, num_probes, nx, nz)
 
         Returns:
-        ndarray: Block-formatted array.
+        ndarray: Block-formatted array. (ang_number*num_probes, nx*nz)
         """
         # 2. Remove initial condition
-        u = u[:, :, 1:]  # shape: (num_probes, block_size, nz - 1)
+        u = u[:, :, :, 1:]  # shape: (ang_number, num_probes, block_size, nz - 1)
 
         # 3. Transpose axes
-        u = u.transpose(0, 2, 1) # shape: (num_probes, nz - 1, block_size)
+        u = u.transpose(0, 1, 3, 2) # shape: (ang_number, num_probes, nz - 1, block_size)
 
         # 4. Flatten last two dims
-        # shape: (num_probes, block_size * (nz - 1))
-        u = u.reshape(self.num_probes, -1)
+        # shape: (num_angles*num_probes, block_size * (nz - 1))
+        u = u.reshape(self.num_angles*self.num_probes, -1)
 
         return u
 
@@ -293,16 +369,16 @@ class LeastSquaresSolver:
         Reverse the block flattening process.
 
         Parameters:
-        u (ndarray): Flattened array of shape (num_probes, block_size * (nz - 1))
+        u (ndarray): Flattened array of shape (num_angles, num_probes, block_size * (nz - 1))
 
         Returns:
-        ndarray: Unflattened array of shape (num_probes, block_size, nz - 1)
+        ndarray: Unflattened array of shape (num_angles, num_probes, block_size, nz - 1)
         """
         # Step 1: Reshape to (num_probes, nz - 1, block_size)
-        reshaped = u.reshape(self.num_probes, self.nz-1, self.block_size)
+        reshaped = u.reshape(self.num_angles, self.num_probes, self.nz-1, self.block_size)
 
-        # Step 2: Transpose to (num_probes, nx, nz - 1)
-        return reshaped.transpose(0, 2, 1)
+        # Step 2: Transpose to (num_probes, num_probes, nx, nz - 1)
+        return reshaped.transpose(0, 1, 3, 2)
 
     def solve(
             self,
@@ -344,16 +420,25 @@ class LeastSquaresSolver:
                                     title='True Object')
         if plot_forward:
             print("True Forward Solution")
-            self.visualisation.plot(self.convert_from_block_form(self.u_true),
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[0],
+                                            probe_index=-1)
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[0])
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[0],
+                                    probe_index=0)
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[int(self.num_angles/2)],
                                     probe_index=-1)
-            self.visualisation.plot(self.convert_from_block_form(self.u_true))
-            self.visualisation.plot(self.convert_from_block_form(self.u_true),
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[int(self.num_angles/2)])
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[int(self.num_angles/2)],
+                                    probe_index=0)
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[-1],
+                                    probe_index=-1)
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[-1])
+            self.visualisation.plot(self.convert_from_block_form(self.u_true)[-1],
                                     probe_index=0)
 
         # Initialize residual
         residual = []
         nk = n0
-        rel_rmse_denominator = np.sqrt(np.mean(np.abs(n0) ** 2))
 
         # Define probe
         if solve_probe:
@@ -370,10 +455,10 @@ class LeastSquaresSolver:
             # Compute the Forward Model
             uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
 
-            # Compute the gradient of the least squares problem
             grad_least_squares_real, grad_least_squares_imag = (
                 self.compute_grad_least_squares(uk, grad_Ak)
             )
+
             # Compute RMSE of the current refractive index estimate
             error = self.true_exit_waves - uk[:, -self.block_size:]
             rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2))
@@ -388,7 +473,7 @@ class LeastSquaresSolver:
             if verbose:
                 print(f"Iteration {i + 1}/{max_iters}")
                 print(f"    RMSE: {residual[i]}")
-            if i == 0 or (i + 1) % 5 == 0:
+            if i == 0 or (i + 1) % 1 == 0:
                 if plot_object:
                     print("    Reconstructed Object")
                     fig, axs = plt.subplots(1, 2, figsize=(16, 5))
@@ -410,10 +495,20 @@ class LeastSquaresSolver:
                     fig.colorbar(im1, ax=axs[1], label='Amplitude')
                 if plot_forward:
                     print("    Forward Solution for Reconstructed Object")
-                    self.visualisation.plot(self.convert_from_block_form(uk),
+                    self.visualisation.plot(self.convert_from_block_form(uk)[0],
                                             probe_index=-1)
-                    self.visualisation.plot(self.convert_from_block_form(uk))
-                    self.visualisation.plot(self.convert_from_block_form(uk),
+                    self.visualisation.plot(self.convert_from_block_form(uk)[0])
+                    self.visualisation.plot(self.convert_from_block_form(uk)[0],
+                                            probe_index=0)
+                    self.visualisation.plot(self.convert_from_block_form(uk)[int(self.num_angles/2)],
+                                            probe_index=-1)
+                    self.visualisation.plot(self.convert_from_block_form(uk)[int(self.num_angles/2)])
+                    self.visualisation.plot(self.convert_from_block_form(uk)[int(self.num_angles/2)],
+                                            probe_index=0)
+                    self.visualisation.plot(self.convert_from_block_form(uk)[-1],
+                                            probe_index=-1)
+                    self.visualisation.plot(self.convert_from_block_form(uk)[-1])
+                    self.visualisation.plot(self.convert_from_block_form(uk)[-1],
                                             probe_index=0)
 
             # Set direction for first iteration Conjugate Gradient
@@ -437,8 +532,85 @@ class LeastSquaresSolver:
             alphakdk_re = (alphak_re * dk_re).reshape((self.nz - 1, self.nx)).T
             alphakdk_im = (alphak_im * dk_im).reshape((self.nz - 1, self.nx)).T
 
+            gradient_update = np.zeros((self.nx, self.nz), dtype=complex)
+            gradient_update[:, 1:] = alphakdk_re + 1j * alphakdk_im
+
+            fig, axs = plt.subplots(1, 2, figsize=(16, 5))
+
+            # Get min and max values from the true sample space for color scaling
+            phase = self.visualisation.compute_phase(gradient_update)
+            amplitude = np.abs(gradient_update)
+            axs[0].set_title("Phase of gradient_update")
+            im0 = axs[0].imshow(phase, origin='lower', aspect='auto', cmap='viridis')#, vmin=vmin_phase, vmax=vmax_phase)
+            axs[0].set_xlabel('z (pixels)')
+            axs[0].set_ylabel('x (pixels)')
+            fig.colorbar(im0, ax=axs[0], label='Phase (radians)')
+
+            # Amplitude subplot
+            axs[1].set_title("Amplitude of gradient_update")
+            im1 = axs[1].imshow(amplitude, origin='lower', aspect='auto', cmap='viridis')#, vmin=vmin_amp, vmax=vmax_amp)
+            axs[1].set_xlabel('z (pixels)')
+            axs[1].set_ylabel('x (pixels)')
+            fig.colorbar(im1, ax=axs[1], label='Amplitude')
+
+
+            # Combine with rotated object gradient
+            if self.nx == self.nz:
+                uk_rot, grad_Ak_rot = self.compute_forward_model(np.rot90(nk, k=1), probes=probesk)
+
+                # Compute the gradient of the least squares problem
+                grad_least_squares_real_rot, grad_least_squares_imag_rot = (
+                    self.compute_grad_least_squares(uk_rot, grad_Ak_rot,rotate=True)
+                )
+
+                if i == 0:
+                    dk_im_rot = - grad_least_squares_imag_rot
+                    grad_least_squares_imag_old_rot = grad_least_squares_imag_rot
+                    dk_re_rot = - grad_least_squares_real_rot
+                    grad_least_squares_real_old_rot = grad_least_squares_real_rot
+
+                # Compute the step size
+                if fixed_step_size is not None:
+                    alphak_re_rot = -alpha0 / (i + 1)
+                    alphak_im_rot = -alpha0 / (i + 1)
+                else:
+                    alphak_re_rot = self.compute_alphak(
+                        uk_rot, grad_Ak_rot, grad_least_squares_real_rot, dk_re_rot)
+                    alphak_im_rot = self.compute_alphak(
+                        uk_rot, 1j * grad_Ak_rot, grad_least_squares_imag_rot, dk_im_rot)
+
+                # Compute Product of step size and direction
+                alphakdk_re_rot = (alphak_re_rot * dk_re_rot).reshape((self.nx - 1, self.nz)).T
+                alphakdk_im_rot = (alphak_im_rot * dk_im_rot).reshape((self.nx - 1, self.nz)).T
+
+                gradient_update_rot = np.zeros((self.nz, self.nx), dtype=complex)
+                gradient_update_rot[:, 1:] = alphakdk_re_rot + 1j * alphakdk_im_rot
+
+                fig, axs = plt.subplots(1, 2, figsize=(16, 5))
+
+                # Get min and max values from the true sample space for color scaling
+                phase = self.visualisation.compute_phase(np.rot90(gradient_update_rot))
+                amplitude = np.abs(np.rot90(gradient_update_rot))
+                axs[0].set_title("Phase of gradient_update_rot")
+                im0 = axs[0].imshow(phase, origin='lower', aspect='auto', cmap='viridis')#, vmin=vmin_phase, vmax=vmax_phase)
+                axs[0].set_xlabel('z (pixels)')
+                axs[0].set_ylabel('x (pixels)')
+                fig.colorbar(im0, ax=axs[0], label='Phase (radians)')
+
+                # Amplitude subplot
+                axs[1].set_title("Amplitude of gradient_update_rot")
+                im1 = axs[1].imshow(amplitude, origin='lower', aspect='auto', cmap='viridis')#, vmin=vmin_amp, vmax=vmax_amp)
+                axs[1].set_xlabel('z (pixels)')
+                axs[1].set_ylabel('x (pixels)')
+                fig.colorbar(im1, ax=axs[1], label='Amplitude')
+
+                gradient_update += np.rot90(gradient_update_rot, k=-1)
+
+
             # Update the current estimate of the refractive index of the object
-            nk[:, 1:] = nk[:, 1:] + alphakdk_re + 1j * alphakdk_im
+            nk += gradient_update
+
+
 
             # Apply a low pass filter to nk in the z direction
             if low_pass_filter > 0.0:
@@ -455,6 +627,19 @@ class LeastSquaresSolver:
             grad_least_squares_real_old = grad_least_squares_real
             dk_im = -grad_least_squares_imag + betak_im * dk_im
             grad_least_squares_imag_old = grad_least_squares_imag
+
+            if self.nx == self.nz:
+                # Compute beta using Polak-Ribière and Fletcher-Reeves
+                betak_re_rot = self.compute_betak(grad_least_squares_real_rot,
+                                            grad_least_squares_real_old_rot)
+                betak_im_rot = self.compute_betak(grad_least_squares_imag_rot,
+                                            grad_least_squares_imag_old_rot)
+
+                # Update direction
+                dk_re_rot = -grad_least_squares_real_rot + betak_re_rot * dk_re_rot
+                grad_least_squares_real_old_rot = grad_least_squares_real_rot
+                dk_im_rot = -grad_least_squares_imag_rot + betak_im_rot * dk_im_rot
+                grad_least_squares_imag_old_rot = grad_least_squares_imag_rot
 
             
             # Nesterov accelerated gradient descent update

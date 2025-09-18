@@ -17,7 +17,7 @@ def u0_nm_dirichlet(n, m):
 from .boundary_conditions import BoundaryConditions
 
 
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 
 class LinearSystemSetup:
@@ -27,7 +27,8 @@ class LinearSystemSetup:
     """
 
     def __init__(self, sample_space, thin_sample,
-                 full_system):
+                 full_system,
+                 probe_angles_list=[0.0]):
         self.sample_space = sample_space
         self.full_system = full_system
         self.thin_sample = thin_sample
@@ -43,19 +44,27 @@ class LinearSystemSetup:
             if self.sample_space.dimension == 2:
                 self.ny = self.sample_space.ny
 
-        if self.sample_space.dimension == 1:
-            self.block_size = self.nx
-            self.probes = np.zeros((self.sample_space.num_probes, self.nx), dtype=complex)
-        else:
-            self.block_size = self.nx * self.ny
-            self.probes = np.zeros((self.sample_space.num_probes, self.nx, self.ny), dtype=complex)
-
         if not self.thin_sample and self.full_system:
              self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
 
+            
+        num_angles = len(probe_angles_list)
+
+        if self.sample_space.dimension == 1:
+            self.block_size = self.nx
+            self.probes = np.zeros((num_angles, self.sample_space.num_probes, self.nx), dtype=complex)
+        else:
+            self.block_size = self.nx * self.ny
+            self.probes = np.zeros((num_angles, self.sample_space.num_probes, self.nx, self.ny), dtype=complex)
+
         # Precompute probes for all scans
-        for scan in range(self.sample_space.num_probes):
-            self.probes[scan, ...] = self.apply_initial_condition(scan, probe_type=sample_space.probe_type)
+        #print(probe_angles_list)
+        for angle_index in range(num_angles):
+            for scan_index in range(self.sample_space.num_probes):
+                self.probes[angle_index,scan_index, ...] = self.apply_initial_condition(scan_index,
+                                                                                        probe_angle=probe_angles_list[angle_index])
+        flat_shape = (num_angles * self.sample_space.num_probes,) + self.probes.shape[2:]
+        self.probes = self.probes.reshape(flat_shape)
 
         # Preallocate Compute b0 for speed
         self.b0 = None
@@ -67,10 +76,11 @@ class LinearSystemSetup:
                 self.b0 = b0_mat.T + self.b_slice
 
 
-    def setup_homogeneous_forward_model_lhs(self, scan_index: Optional[int] = 0):
+    def setup_homogeneous_forward_model_lhs(self, scan_index: Optional[int] = 0,
+                                            angle_index: Optional[int] = 0):
         """Create Free-Space Forward Model Left-Hand Side (LHS) Matrix."""
         if self.thin_sample or not self.full_system:
-            self.A_slice, self.B_slice, _ = self.create_system_slice(scan_index=scan_index)
+            self.A_slice, self.B_slice, _ = self.create_system_slice(scan_index=scan_index,angle_index=angle_index)
 
         # Homogeneous forward model
         A_homogeneous = (
@@ -83,10 +93,12 @@ class LinearSystemSetup:
         )
         return A_homogeneous
 
-    def setup_homogeneous_forward_model_rhs(self, scan_index: Optional[int] = 0):
+    def setup_homogeneous_forward_model_rhs(self, scan_index: Optional[int] = 0,
+                                            angle_index: Optional[int] = 0):
+
         """Create Free-Space Forward Model Right-Hand Side (RHS) Vector."""
         if self.thin_sample or not self.full_system:
-            _, _, self.b_slice = self.create_system_slice(scan_index=scan_index)
+            _, _, self.b_slice = self.create_system_slice(scan_index=scan_index, angle_index=angle_index)
         # Homogeneous forward model
         b_homogeneous = np.tile(self.b_slice, self.sample_space.nz - 1)
         return b_homogeneous
@@ -144,17 +156,18 @@ class LinearSystemSetup:
         return sp.diags(object_slices.T.flatten(
         )) + sp.diags([object_slices[..., 1:].T.flatten()], [-self.block_size])
 
-    def probe_contribution(self, scan_index: Optional[int] = 0,
+    def probe_contribution(self, scan_index: Optional[int] = 0, angle_index: Optional[int] = 0,
                            probes: Optional[np.ndarray] = None):
         """Compute the probe contribution to the forward model."""
+        probe_index = angle_index*self.sample_space.num_probes + scan_index
         if self.thin_sample:
             _, self.B_slice, self.b_slice = self.create_system_slice(scan_index=scan_index)
 
         # Apply initial condition if provided
         if probes is not None:
-            probe = probes[scan_index, ...].flatten()
+            probe = probes[probe_index, ...].flatten()
         else:
-            probe = self.probes[scan_index, ...].flatten()
+            probe = self.probes[probe_index, ...].flatten()
 
 
         if self.sample_space.dimension == 1 and not self.thin_sample and self.full_system and probes is None:
@@ -167,23 +180,31 @@ class LinearSystemSetup:
 
         return probe_contribution, probe
 
-    def create_system_slice(self, scan_index: Optional[int] = 0):
+    def create_system_slice(self, scan_index: Optional[int] = 0, angle_index: Optional[int] = 0):
         """Always rebuild (per-scan) matrices; no caching to avoid stale BC data."""
+        probe_index = angle_index*self.sample_space.num_probes + scan_index
         bcs = BoundaryConditions(self.sample_space,
-                                 self.probes[scan_index, ...],
+                                 self.probes[probe_index, ...],
                                  thin_sample=self.thin_sample,
                                  scan_index=scan_index)
         A_slice, B_slice = bcs.get_matrix_system()
         b_slice = bcs.get_initial_boundary_conditions_system()
         return A_slice, B_slice, b_slice
     
-    def apply_initial_condition(self, scan, probe_type=None):
+    def apply_initial_condition(self, scan, probe_type=None,probe_focus=None,
+                            probe_angle=None):
         """
         Apply initial condition to the solution grid, excluding boundaries if dirichlet.
         Returns a matrix (1D or 2D) of initial condition values using meshgrid.
         """
         if probe_type is None:
             probe_type = self.sample_space.probe_type
+        if probe_focus is None:
+            probe_focus = self.sample_space.probe_focus
+        if probe_angle is None:
+            probe_angle_val = self.sample_space.probe_angle
+        else:
+            probe_angle_val = probe_angle
         
         radius = self.sample_space.probe_diameter_continuous / 2
         radius_discrete = self.sample_space.probe_diameter / 2
@@ -201,6 +222,12 @@ class LinearSystemSetup:
                 x_interior = x
 
             x_mesh = x_interior
+
+            if isinstance(probe_angle_val, (int, float)):
+                angle_x = float(probe_angle_val)
+            else:
+                raise ValueError("In 1D, probe_angle must be a single float.")
+            angle_y = 0.0  # unused in 1D
         elif self.sample_space.dimension == 2:
             if self.thin_sample:
                 x, y = self.sample_space.detector_frame_info[scan]["sub_dimensions"]
@@ -215,6 +242,14 @@ class LinearSystemSetup:
                 y_interior = y
 
             x_mesh, y_mesh = np.meshgrid(x_interior, y_interior, indexing='ij')
+
+            if isinstance(probe_angle_val, (tuple, list)) and len(probe_angle_val) == 2:
+                angle_x, angle_y = probe_angle_val
+            elif isinstance(probe_angle_val, (int, float)):
+                # allow a float -> only x tilt
+                angle_x, angle_y = float(probe_angle_val), 0.0
+            else:
+                raise ValueError("In 2D, probe_angle must be a float or (angle_x, angle_y).")
         else:
             raise ValueError("Unsupported dimension: {}".format(self.sample_space.dimension))
 
@@ -333,12 +368,35 @@ class LinearSystemSetup:
 
         else:
             raise ValueError("Not a valid initial condition type")
-
-        max_val = np.max(np.abs(initial_solution))
-        if max_val == 0:
-            return initial_solution
         
-        max_val = np.max(np.abs(initial_solution))
-        if max_val == 0:
-            return initial_solution
-        return self.signal_strength * initial_solution / max_val
+        # #quadratic phase (focus)
+        k = self.sample_space.k
+        # Quadratic phase (focus)
+        if probe_focus is not None and np.isfinite(probe_focus) and probe_focus != 0.0:
+            if self.sample_space.dimension == 1:
+                phase_focus = np.exp(-1j * k * (x_mesh - c_x)**2 / (2.0 * probe_focus))
+            else:
+                r2 = (x_mesh - c_x)**2 + (y_mesh - c_y)**2
+                phase_focus = np.exp(-1j * k * r2 / (2.0 * probe_focus))
+            initial_solution = initial_solution * phase_focus
+
+        # Linear tilt phase (consistent with same focus)
+        if self.sample_space.dimension == 1:
+            if angle_x != 0.0:
+                phase_tilt = np.exp(1j * k * (x_mesh - c_x) * np.sin(angle_x))
+                initial_solution = initial_solution * phase_tilt
+        elif self.sample_space.dimension == 2:
+            if angle_x != 0.0 or angle_y != 0.0:
+                phase_tilt = np.exp(1j * (
+                    k * (x_mesh - c_x) * np.sin(angle_x) +
+                    k * (y_mesh - c_y) * np.sin(angle_y)
+                ))
+                initial_solution = initial_solution * phase_tilt
+
+        return initial_solution
+
+        
+        # max_val = np.max(np.abs(initial_solution))
+        # if max_val == 0:
+        #     return initial_solution
+        # return self.signal_strength * initial_solution / max_val

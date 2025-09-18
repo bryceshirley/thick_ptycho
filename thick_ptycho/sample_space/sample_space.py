@@ -36,6 +36,8 @@ class SampleSpace1D:
             probe_type,
             wave_number,
             probe_diameter=None,
+            probe_focus=None,
+            probe_angle=None,
             n_medium=1.0):
         """
         Initialize the 1D sample space.
@@ -63,6 +65,12 @@ class SampleSpace1D:
 
         # Probe Type
         self.probe_type = probe_type
+        if isinstance(probe_angle, (list, tuple, np.ndarray)):
+            self.probe_angle = probe_angle[0]
+        else:
+            self.probe_angle = probe_angle
+        self.probe_focus = probe_focus
+
 
         # Discrete sample space dimensions (pixels)
         self.nx = discrete_dimensions[0]
@@ -127,16 +135,21 @@ class SampleSpace1D:
         """ Print a summary of the sample space and scan parameters.
         """
         # Print summary of the scan
-        continuous_stepsize = (
-            self.xlims[1] - self.xlims[0]) * (self.step_size / self.nx)
+        continuous_stepsize = self.step_size * self.dx  
+
+        # Overlap in meters
         overlap = self.probe_diameter * self.dx - continuous_stepsize
-        print("Summary of the scan (continuous):")
-        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} um")
-        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} um")
-        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} um")
-        print(f"    Number of scan points: {self.scan_points}")
+
+        print("=== Scan Summary (Continuous) ===")
+        print(f"  Sample space (x-range): {self.xlims[1] - self.xlims[0]:.3e} m")
+        print(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
+        print(f"  Probe diameter:         {self.probe_diameter * self.dx:.3e} m")
+        print(f"  Number of scan points:  {self.scan_points}")
+
         if self.scan_points > 1:
-            print(f"    Max Overlap: {overlap:.2f} um \n")
+            print(f"  Max Overlap:            {overlap:.3e} m")
+            print(f"  Percentage Overlap:     {overlap / (self.probe_diameter * self.dx) * 100:.2f}%\n")
+
 
     
     def _generate_scan_frames(self) -> List[Dict[str, Any]]:
@@ -378,13 +391,13 @@ class SampleSpace2D:
             self.xlims[1] - self.xlims[0]) * (self.step_size / self.nx)
         overlap = self.probe_diameter * self.dx - continuous_stepsize
         print("Summary of the scan (continuous):")
-        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} um")
-        print(f"    Sample space y: {self.ylims[1] - self.ylims[0]} um")
-        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} um")
-        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} um")
+        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} m")
+        print(f"    Sample space y: {self.ylims[1] - self.ylims[0]} m")
+        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} m")
+        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} m")
         print(f"    Number of scan points: {self.num_probes}")
         if self.scan_points > 1:
-            print(f"    Max Overlap: {overlap:.2f} um \n")
+            print(f"    Max Overlap: {overlap:.2f} m \n")
 
         # Plot the scan path with flipped axes
         plt.figure(figsize=(6, 6))
