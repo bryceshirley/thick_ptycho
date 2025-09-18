@@ -1,0 +1,68 @@
+# ===== Physical & medium =====
+bc_type: "impedance"              # impedance / dirichlet / neumann
+probe_type: "airy_disk"
+
+wavelength_m: 6.35e-7             # 0.635 µm
+nb: 1.0                           # background refractive index (soft tissue in vacuum)
+delta: 0.01                       # Re(n) perturbation (soft tissue)
+beta: 0.001                       # Im(n) perturbation (absorption)
+
+# ===== Continuous domain (meters) =====
+xlims_m: [0.0, 0.00015]           # [0, 150 µm]
+zlims_m: [0.0, 0.00015]           # [0, 150 µm]
+
+# Axial step strategy: nz computed from dz = wavelength / 2
+# (∆z ≈ λ/2 → paraxial-ish resolution)
+axial_step_from_wavelength_fraction: 0.5   # dz = wavelength / 2
+
+# ===== Discrete domain (pixels) =====
+probe_dimensions_px: [40]         # square probe window (nx_probe = 40)
+probe_diameter_fraction: 0.8      # probe_diameter = 0.8 * min(probe_dimensions)
+scan_points: 124
+step_size_px: 3                    # scan step in pixels
+probe_focus_m: -1.0e-5            # focal length
+
+# ===== Probe angles (radians or degrees as expected by your library) =====
+probe_angles_list: [0.0]
+
+# ===== Visuals / object generation =====
+gaussian_blur_px: 3
+
+# Circles defined by fractions of the domain (0..1).
+# side_length_fraction multiplies xlims_m[1]; depth_fraction multiplies zlims_m[1].
+circles:
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.3, 0.3]
+    depth_fraction: 0.05
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.5, 0.65]
+    depth_fraction: 0.05
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.7, 0.65]  
+    depth_fraction: 0.05
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.4, 0.5] 
+    depth_fraction: 0.05
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.6, 0.3]  
+    depth_fraction: 0.05
+  - type: "circle"
+    side_length_fraction: 0.05
+    centre_fraction: [0.3, 0.7]  
+    depth_fraction: 0.05
+
+# ===== Solver options =====
+solver:
+  full_system_solver: false
+  max_iters: 10
+  plot_forward: false
+  plot_reverse: false
+  plot_object: true
+  solve_probe: false
+  sparsity_lambda: 2.0e-5
+  low_pass_filter: 0.0
