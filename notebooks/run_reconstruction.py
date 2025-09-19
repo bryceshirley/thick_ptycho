@@ -20,20 +20,19 @@ def _scale_centre(centre_fraction, x_max: float, z_max: float) -> Tuple[float, f
 
 
 # -----------------------
-# ConfigSampleSpace
+# Config SampleSpace
 # -----------------------
 
-def setup_sample_space_and_visualisation(
+def setup_sample_space(
     cfg: Dict[str, Any], results_dir: str
 ) -> Tuple[SampleSpace, Visualisation, List[float]]:
     """
     Parse all sample-space-related config, compute derived dimensions,
-    build the SampleSpace, add objects, generate it, and create the Visualisation.
+    build the SampleSpace, add objects, generate it
 
     Returns
     -------
     sample_space : SampleSpace
-    visualisation : Visualisation
     probe_angles_list : List[float]  # passed to solver later
     """
     # === Physical params ===
@@ -141,6 +140,7 @@ def parse_solver_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "solve_probe": bool(s["solve_probe"]),
         "sparsity_lambda": float(s["sparsity_lambda"]),
         "low_pass_filter": float(s["low_pass_filter"]),
+        "rotate90": bool(s["rotate90"]),
     }
 
 
@@ -163,7 +163,7 @@ def main(cfg_path: str = "config.yaml") -> None:
     print(f"Results: {results_dir}\nGit commit: {commit_hash}")
 
     # Build sample space + viz in one go
-    sample_space, probe_angles_list = setup_sample_space_and_visualisation(cfg, results_dir)
+    sample_space, probe_angles_list = setup_sample_space(cfg, results_dir)
 
     # Solver
     solver_params = parse_solver_config(cfg)
@@ -171,6 +171,7 @@ def main(cfg_path: str = "config.yaml") -> None:
         sample_space,
         full_system_solver=solver_params["full_system_solver"],
         probe_angles_list=probe_angles_list,
+        rotate90=solver_params["rotate90"],
         results_dir=results_dir,
     )
 

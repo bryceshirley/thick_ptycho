@@ -70,3 +70,4 @@ solver:
   solve_probe: false
   sparsity_lambda: 0.0 # 2.0e-5
   low_pass_filter: 0.0
+  rotate90: False

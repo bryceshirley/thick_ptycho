@@ -45,6 +45,7 @@ class LeastSquaresSolver:
                  sample_space: SampleSpace, 
                  full_system_solver: bool = True,
                  probe_angles_list: Optional[List[float]] = [0.0],
+                 rotate90=False,
                  *, # all arguments after the * must be passed as keyword arguments
                  results_dir: str = None,
                  use_logging: bool = True,
@@ -90,6 +91,13 @@ class LeastSquaresSolver:
         # Initialize the Forward Model matrix
         self.Ak = None
 
+        # Check if Sample Can be Rotated
+        self.rotate90 = False
+        if self.nx == self.nz:
+            self.rotate90 = rotate90
+        elif rotate90:
+            self._log("90 degree rotation not possible since nx != nz")
+
         # Set up
         self.setup()
 
@@ -108,7 +116,7 @@ class LeastSquaresSolver:
         # If square grid, also precompute the 90 degree rotation case once
         self.u_true_rot = None
         self.true_exit_waves_rot = None
-        if self.nx == self.nz:
+        if self.rotate90:
             self.n_true_rot = np.rot90(self.n_true, k=1)
             self.u_true_rot, _ = self.compute_forward_model(self.n_true_rot)
             self.true_exit_waves_rot = self.u_true_rot[:, -self.block_size:]
@@ -486,7 +494,7 @@ class LeastSquaresSolver:
 
 
             # Combine with rotated object gradient
-            if self.nx == self.nz:
+            if self.rotate90:
                 uk_rot, grad_Ak_rot = self.compute_forward_model(np.rot90(nk, k=1), probes=probesk)
 
                 # Compute the gradient of the least squares problem
@@ -550,7 +558,7 @@ class LeastSquaresSolver:
             dk_im = -grad_least_squares_imag + betak_im * dk_im
             grad_least_squares_imag_old = grad_least_squares_imag
 
-            if self.nx == self.nz:
+            if self.rotate90:
                 # Compute beta using Polak-Ribière and Fletcher-Reeves
                 betak_re_rot = self.compute_betak(grad_least_squares_real_rot,
                                             grad_least_squares_real_old_rot)
