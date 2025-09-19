@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 
 from thick_ptycho.utils.utils import setup_log
 from .optical_objects import OpticalObject
-from skimage import io, transform
+from skimage import data, transform
 
 class SampleSpace:
     """
@@ -482,7 +482,8 @@ class SampleSpace2D:
         """
 
         # Load cameraman image (assumed grayscale)
-        n_true_2d = io.imread('./cameraman.tif').astype(np.float32)
+        # Load built-in grayscale cameraman image (uint8 -> float32)
+        n_true_2d = data.camera().astype(np.float32)
 
         # Flip the image vertically
         n_true_2d = np.flipud(n_true_2d)
