@@ -43,6 +43,10 @@
 *.venv
 *.pyc
 *.npy:*
+*.png
+*.txt
+*.csv
+
 
 ## Some common local save or copy matches
 *_save*

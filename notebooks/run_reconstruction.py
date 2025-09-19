@@ -1,64 +1,49 @@
-from pathlib import Path
+import os
 import numpy as np
-import yaml
 import shutil
-from datetime import datetime
-import subprocess
+from typing import Dict, Any, List, Tuple
 
 from thick_ptycho.sample_space.sample_space import SampleSpace
 from thick_ptycho.reconstruction.least_squares import LeastSquaresSolver
 from thick_ptycho.utils.visualisations import Visualisation
+from thick_ptycho.utils.utils import load_config, get_git_commit_hash, results_dir_name
 
 
-def load_config(path: str | Path) -> dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+# -----------------------
+# Helpers
+# -----------------------
+
+def _scale_centre(centre_fraction, x_max: float, z_max: float) -> Tuple[float, float]:
+    cx = float(centre_fraction[0]) * x_max
+    cz = float(centre_fraction[1]) * z_max
+    return (cx, cz)
 
 
-def compute_nz(zlims_m: list[float], wavelength_m: float, axial_fraction: float) -> int:
-    """nz = int( (z_max - z_min) / (wavelength * axial_fraction) )."""
-    z_range = zlims_m[1] - zlims_m[0]
-    dz = wavelength_m * axial_fraction
-    nz = int(z_range / dz)
-    return max(nz, 1)
+# -----------------------
+# ConfigSampleSpace
+# -----------------------
 
+def setup_sample_space_and_visualisation(
+    cfg: Dict[str, Any], results_dir: str
+) -> Tuple[SampleSpace, Visualisation, List[float]]:
+    """
+    Parse all sample-space-related config, compute derived dimensions,
+    build the SampleSpace, add objects, generate it, and create the Visualisation.
 
-def get_git_commit_hash() -> str:
-    """Return current git commit hash, or 'unknown' if not available."""
-    try:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-        ).decode("utf-8").strip()
-        return commit
-    except Exception:
-        return "unknown"
-
-
-def main(cfg_path: str = "config.yaml") -> None:
-    cfg_path = Path(cfg_path)
-    cfg = load_config(cfg_path)
-
-    # === Results folder (timestamped) ===
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_dir = Path("results") / timestamp
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save a copy of the config file for reproducibility
-    config_copy_path = run_dir / cfg_path.name
-    shutil.copy(cfg_path, config_copy_path)
-    print(f"Config copied to: {config_copy_path.resolve()}")
-
-    # Save git commit hash
-    commit_hash = get_git_commit_hash()
-    with open(run_dir / "git_commit.txt", "w") as f:
-        f.write(commit_hash + "\n")
-    print(f"Git commit hash saved: {commit_hash}")
-
+    Returns
+    -------
+    sample_space : SampleSpace
+    visualisation : Visualisation
+    probe_angles_list : List[float]  # passed to solver later
+    """
     # === Physical params ===
     bc_type: str = cfg["bc_type"]
     probe_type: str = cfg["probe_type"]
 
-    wavelength = float(cfg["wavelength_m"])
+    wl_raw = cfg.get("wavelength", None)
+    if wl_raw is None:
+        raise ValueError("Config must include 'wavelength' (meters).")
+    wavelength = float(wl_raw)
     k0 = 2 * np.pi / wavelength
 
     nb = float(cfg["nb"])
@@ -66,93 +51,151 @@ def main(cfg_path: str = "config.yaml") -> None:
     beta = float(cfg["beta"])
     refractive_index_perturbation = -delta - 1j * beta
 
-    # === Continuous domain (meters) ===
-    xlims = list(map(float, cfg["xlims_m"]))
-    zlims = list(map(float, cfg["zlims_m"]))
-    axial_fraction = float(cfg.get("axial_step_from_wavelength_fraction", 0.5))
+    # Spatial dimensions
+    xlims = [float(v) for v in cfg.get("xlims")]
+    zlims = [float(v) for v in cfg.get("zlims")]
+    if "ylims" in cfg:
+        ylims = [float(v) for v in cfg.get("ylims")]
+        continuous_dimensions = [xlims, ylims, zlims]
+    else:
+        ylims = None
+        continuous_dimensions = [xlims, zlims]
 
-    # === Discrete / sampling ===
+    # z resolution
+    z_steps_per_lambda = float(cfg["z_step_per_wavelength"])
+    if z_steps_per_lambda <= 0:
+        raise ValueError("'z_step_per_wavelength' must be > 0.")
+    dz = wavelength / z_steps_per_lambda
+    z_range = zlims[1] - zlims[0]
+    nz = max(1, int(z_range / dz))
+
+    # Discrete/probe params
     probe_dimensions = list(map(int, cfg["probe_dimensions_px"]))
     probe_diameter = int(float(cfg["probe_diameter_fraction"]) * min(probe_dimensions))
     scan_points = int(cfg["scan_points"])
     step_size = int(cfg["step_size_px"])
-    probe_focus = float(cfg["probe_focus_m"])
-
+    probe_focus = float(cfg["probe_focus"])
     probe_angles_list = [float(x) for x in cfg.get("probe_angles_list", [0.0])]
 
-    # === Derived grid sizes ===
-    nz = compute_nz(zlims, wavelength, axial_fraction)
-    print(f"nz={nz}")
-
     min_nx = int(scan_points * step_size + probe_dimensions[0])
-    print(f"min_nx={min_nx}")
-
     nx = nz if nz >= min_nx else min_nx
     discrete_dimensions = [nx, nz]
 
     # === Build SampleSpace ===
     sample_space = SampleSpace(
-        [xlims, zlims],
-        discrete_dimensions,
-        probe_dimensions,
-        scan_points,
-        step_size,
-        bc_type,
-        probe_type,
-        k0,
+        continuous_dimensions=continuous_dimensions,
+        discrete_dimensions=discrete_dimensions,
+        probe_dimensions=probe_dimensions,
+        scan_points=scan_points,
+        step_size=step_size,
+        bc_type=bc_type,
+        probe_type=probe_type,
+        wave_number=k0,
         probe_diameter=probe_diameter,
         probe_focus=probe_focus,
         n_medium=nb,
+        results_dir=results_dir,
     )
 
-    sample_space.summarize_sample_space()
-    visualisation = Visualisation(sample_space)
-
-    # === Add objects ===
-    gaussian_blur = int(cfg["gaussian_blur_px"])
-    circles = cfg.get("circles", [])
+    # Add objects
+    gaussian_blur = int(cfg.get("gaussian_blur_px", 0))
+    sample_space_objects = cfg.get("sample_space_objects", [])
 
     x_max, z_max = xlims[1], zlims[1]
-
-    for obj in circles:
-        if obj["type"] != "circle":
-            continue
-        side_length = float(obj["side_length_fraction"]) * x_max
-        cx = float(obj["centre_fraction"][0]) * x_max
-        cz = float(obj["centre_fraction"][1]) * z_max
+    for obj in sample_space_objects:
+        obj_type = obj.get("type")
+        centre = _scale_centre(obj["centre_fraction"], x_max, z_max)
         depth = float(obj["depth_fraction"]) * z_max
+        side_length = float(obj["side_length_fraction"]) * x_max
 
         sample_space.add_object(
-            "circle",
+            obj_type,
             refractive_index_perturbation,
-            side_length=side_length,
-            centre=(cx, cz),
-            depth=depth,
             gaussian_blur=gaussian_blur,
+            centre=centre,
+            depth=depth,
+            side_length=side_length,
         )
 
+    # Generate field & create Visualisation
     sample_space.generate_sample_space()
 
-    # === Solver ===
-    solver_cfg = cfg["solver"]
-    least_squares = LeastSquaresSolver(
+    # Optional quick summary
+    sample_space.summarize_sample_space()
+
+    return sample_space, probe_angles_list
+
+
+# -----------------------
+# Solver config
+# -----------------------
+
+def parse_solver_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    s = cfg["solver"]
+    return {
+        "max_iters": int(s["max_iters"]),
+        "full_system_solver": bool(s["full_system_solver"]),
+        "plot_forward": bool(s["plot_forward"]),
+        "plot_reverse": bool(s["plot_reverse"]),
+        "plot_object": bool(s["plot_object"]),
+        "solve_probe": bool(s["solve_probe"]),
+        "sparsity_lambda": float(s["sparsity_lambda"]),
+        "low_pass_filter": float(s["low_pass_filter"]),
+    }
+
+
+# -----------------------
+# Main
+# -----------------------
+
+def main(cfg_path: str = "config.yaml") -> None:
+    cfg_path = os.path.abspath(cfg_path)
+    cfg = load_config(cfg_path)
+
+    # Results folder
+    results_dir = results_dir_name()
+
+    # Save config & commit
+    shutil.copy(cfg_path, os.path.join(results_dir, os.path.basename(cfg_path)))
+    commit_hash = get_git_commit_hash()
+    with open(os.path.join(results_dir, "git_commit.txt"), "w") as f:
+        f.write(commit_hash + "\n")
+    print(f"Results: {results_dir}\nGit commit: {commit_hash}")
+
+    # Build sample space + viz in one go
+    sample_space, probe_angles_list = setup_sample_space_and_visualisation(cfg, results_dir)
+
+    # Solver
+    solver_params = parse_solver_config(cfg)
+    solver = LeastSquaresSolver(
         sample_space,
-        full_system_solver=bool(solver_cfg["full_system_solver"]),
+        full_system_solver=solver_params["full_system_solver"],
         probe_angles_list=probe_angles_list,
+        results_dir=results_dir,
     )
 
-    reconstructed_sample_space, reconstructed_wave, residual_history = least_squares.solve(
-        max_iters=int(solver_cfg["max_iters"]),
-        plot_forward=bool(solver_cfg["plot_forward"]),
-        plot_reverse=bool(solver_cfg["plot_reverse"]),
-        plot_object=bool(solver_cfg["plot_object"]),
-        solve_probe=bool(solver_cfg["solve_probe"]),
-        sparsity_lambda=float(solver_cfg["sparsity_lambda"]),
-        low_pass_filter=float(solver_cfg["low_pass_filter"]),
+    reconstructed_refractive_index, reconstructed_forward_wave, residual_history = solver.solve(
+        max_iters=solver_params["max_iters"],
+        plot_forward=solver_params["plot_forward"],
+        plot_reverse=solver_params["plot_reverse"],
+        plot_object=solver_params["plot_object"],
+        solve_probe=solver_params["solve_probe"],
+        sparsity_lambda=solver_params["sparsity_lambda"],
+        low_pass_filter=solver_params["low_pass_filter"],
     )
 
-    # Save residual history as a numpy file in run_dir
-    np.save(run_dir / "residual_history.npy", residual_history)
+    # Plots
+    visualisation = Visualisation(sample_space, results_dir=results_dir)
+    visualisation.plot_residual(residual_history)
+    visualisation.plot_refractive_index(
+        reconstructed_refractive_index, title="Reconstructed Sample Space"
+    )
+    visualisation.plot_auto(
+        reconstructed_forward_wave[0],
+        view="phase_amp",
+        layout="single",
+        title_prefix="reconstructed_forward_wave ",
+    )
 
 
 if __name__ == "__main__":

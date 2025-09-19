@@ -8,6 +8,7 @@ import scipy.sparse.linalg as spla
 from .linear_system import LinearSystemSetup
 from thick_ptycho.sample_space.sample_space import SampleSpace
 
+
 class ForwardModel():
     """
     A solver for the paraxial wave equation using finite difference methods.
@@ -17,10 +18,14 @@ class ForwardModel():
     def __init__(self, sample_space: SampleSpace,
                  full_system_solver: Optional[bool] = False,
                  thin_sample: Optional[bool] = True,
-                 probe_angles_list: Optional[List[float]] = [0.0]):
+                 probe_angles_list: Optional[List[float]] = [0.0],
+                 log = None
+                 ):
         """
         Initialize the solver.
         """
+        self._log = log
+
         self.sample_space = sample_space
         self.nz = sample_space.nz
         self.probe_dimensions = sample_space.probe_dimensions
@@ -97,16 +102,16 @@ class ForwardModel():
             sol = self._handle_dirichlet_bcs(sol)
             end_time = time.time()
 
-            # Print time taken for each scan if verbose is True
+            # Time taken for each scan if verbose is True
             if verbose:
-                print(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
+                self._log(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
             
             return sol
         
         # This could be made parallel
         for angle_index, probe_angle in enumerate(self.probe_angles_list):
             if verbose and len(self.probe_angles_list) > 1:
-                print(f"Solving for probe angle {angle_index+1}/{len(self.probe_angles_list)}: {probe_angle} radians")
+                self._log(f"Solving for probe angle {angle_index+1}/{len(self.probe_angles_list)}: {probe_angle} radians")
             for scan_index in range(self.sample_space.num_probes):
                 u[angle_index,scan_index, ...] = solve_single_probe(scan_index, angle_index=angle_index)
 
@@ -216,7 +221,7 @@ class ForwardModel():
         solution = np.zeros((self.block_size, self.nz),
                             dtype=complex)
         probe_index = angle_index*self.sample_space.num_probes + scan_index
-        #print(f"{probe_index=},({angle_index=},{scan_index=})")
+
         # Set initial condition
         if isinstance(initial_condition, int):
             pass
@@ -347,34 +352,6 @@ class ForwardModel():
             elif self.sample_space.dimension == 1:
                 solution = solution[1:-1]
         return solution
-
-    # def tilt_probe(self, probe, probe_angle: float) -> np.ndarray:
-    #     """Tilt the probe by a given angle (in radians)."""
-    #     probe_shape = probe.shape
-    #     n = np.arange(probe.flatten().shape[0])
-    #     linear_phase = np.exp(1j * probe_angle * n)
-    #     probe *= linear_phase
-    #     probe = probe.reshape(probe_shape)
-    #     return probe
-    
-    # def tilt_probe(self, probe, focus_strength: float) -> np.ndarray:
-    #     """Apply a quadratic phase (discrete lens) to make the probe converge/diverge.
-
-    #     Parameters
-    #     ----------
-    #     probe : np.ndarray
-    #         1D or 2D complex probe field.
-    #     focus_strength : float
-    #         Controls curvature strength (radians per index^2).
-    #         Positive -> converging, Negative -> diverging.
-    #     """
-    #     probe_shape = probe.shape
-    #     n = np.arange(probe.flatten().shape[0])
-    #     # Quadratic phase in discrete index space
-    #     quadratic_phase = np.exp(-1j * focus_strength * n**2)
-    #     probe *= quadratic_phase
-    #     probe = probe.reshape(probe_shape)
-    #     return probe
 
 
 

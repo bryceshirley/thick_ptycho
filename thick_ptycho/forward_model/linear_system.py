@@ -2,7 +2,11 @@ import numpy as np
 import scipy.sparse as sp
 
 from scipy.special import j1
-from astropy.convolution import AiryDisk2DKernel
+
+from .boundary_conditions import BoundaryConditions
+
+
+from typing import Optional
 
 
 def u0_nm_neumann(n, m):
@@ -13,11 +17,6 @@ def u0_nm_neumann(n, m):
 def u0_nm_dirichlet(n, m):
     """Returns the exact solution for a given n and m."""
     return lambda x, y: np.sin(n * np.pi * x) * np.sin(m * np.pi * y)
-
-from .boundary_conditions import BoundaryConditions
-
-
-from typing import Optional, Tuple, Union
 
 
 class LinearSystemSetup:
@@ -58,7 +57,6 @@ class LinearSystemSetup:
             self.probes = np.zeros((num_angles, self.sample_space.num_probes, self.nx, self.ny), dtype=complex)
 
         # Precompute probes for all scans
-        #print(probe_angles_list)
         for angle_index in range(num_angles):
             for scan_index in range(self.sample_space.num_probes):
                 self.probes[angle_index,scan_index, ...] = self.apply_initial_condition(scan_index,
@@ -321,7 +319,6 @@ class LinearSystemSetup:
                 )
 
         elif probe_type == "airy_disk":
-            from scipy.special import j1
             if self.sample_space.dimension == 1:
                 r = np.abs(x_mesh - c_x)
                 scaled_r = np.pi * r / max(radius, 1e-12)

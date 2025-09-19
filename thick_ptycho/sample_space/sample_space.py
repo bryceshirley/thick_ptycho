@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Any
 import numpy as np
 from matplotlib import pyplot as plt
 
+from thick_ptycho.utils.utils import setup_log
 from .optical_objects import OpticalObject
 from skimage import io, transform
 
@@ -38,7 +39,10 @@ class SampleSpace1D:
             probe_diameter=None,
             probe_focus=None,
             probe_angle=None,
-            n_medium=1.0):
+            n_medium=1.0,
+            results_dir=None,
+            use_logging=True,
+            verbose=False):
         """
         Initialize the 1D sample space.
 
@@ -51,6 +55,8 @@ class SampleSpace1D:
         wave_number (float): Wavenumber in 1/nm.
         probe_diameter (float, optional): Probe diameter in continuous units. Default is 12.
         """
+        self._log = setup_log(results_dir,log_file_name="sample_space_log.txt",
+                               use_logging=use_logging, verbose=verbose)
         # Set the dimension to 1D
         self.dimension = 1
 
@@ -140,15 +146,15 @@ class SampleSpace1D:
         # Overlap in meters
         overlap = self.probe_diameter * self.dx - continuous_stepsize
 
-        print("=== Scan Summary (Continuous) ===")
-        print(f"  Sample space (x-range): {self.xlims[1] - self.xlims[0]:.3e} m")
-        print(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
-        print(f"  Probe diameter:         {self.probe_diameter * self.dx:.3e} m")
-        print(f"  Number of scan points:  {self.scan_points}")
+        self._log("=== Scan Summary (Continuous) ===")
+        self._log(f"  Sample space (x-range): {self.xlims[1] - self.xlims[0]:.3e} m")
+        self._log(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
+        self._log(f"  Probe diameter:         {self.probe_diameter * self.dx:.3e} m")
+        self._log(f"  Number of scan points:  {self.scan_points}")
 
         if self.scan_points > 1:
-            print(f"  Max Overlap:            {overlap:.3e} m")
-            print(f"  Percentage Overlap:     {overlap / (self.probe_diameter * self.dx) * 100:.2f}%\n")
+            self._log(f"  Max Overlap:            {overlap:.3e} m")
+            self._log(f"  Percentage Overlap:     {overlap / (self.probe_diameter * self.dx) * 100:.2f}%\n")
 
 
     
@@ -305,7 +311,11 @@ class SampleSpace2D:
             probe_type,
             wave_number,
             probe_diameter=None,
-            n_medium=1.0):
+            n_medium=1.0,
+            *,
+            results_dir=None,
+            use_logging=True,
+            verbose=False):
         """
         Initialize the 2D sample space.
 
@@ -316,6 +326,9 @@ class SampleSpace2D:
         bc_type (str): boundary condition type (impedance, dirichlet, neumann)
         wave_number (float): wavenumber in 1/nm
         """
+        self._log = setup_log(results_dir,log_file_name="sample_space_log.txt",
+                               use_logging=use_logging, verbose=verbose)
+
         # Set the dimension to 2D
         self.dimension = 2
 
@@ -390,14 +403,14 @@ class SampleSpace2D:
         continuous_stepsize = (
             self.xlims[1] - self.xlims[0]) * (self.step_size / self.nx)
         overlap = self.probe_diameter * self.dx - continuous_stepsize
-        print("Summary of the scan (continuous):")
-        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} m")
-        print(f"    Sample space y: {self.ylims[1] - self.ylims[0]} m")
-        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} m")
-        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} m")
-        print(f"    Number of scan points: {self.num_probes}")
+        self._log("Summary of the scan (continuous):")
+        self._log(f"    Sample space x: {self.xlims[1] - self.xlims[0]} m")
+        self._log(f"    Sample space y: {self.ylims[1] - self.ylims[0]} m")
+        self._log(f"    Sample space z: {self.zlims[1] - self.zlims[0]} m")
+        self._log(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} m")
+        self._log(f"    Number of scan points: {self.num_probes}")
         if self.scan_points > 1:
-            print(f"    Max Overlap: {overlap:.2f} m \n")
+            self._log(f"    Max Overlap: {overlap:.2f} m \n")
 
         # Plot the scan path with flipped axes
         plt.figure(figsize=(6, 6))
@@ -454,7 +467,7 @@ class SampleSpace2D:
         n_true (np.ndarray): Precomputed refractive index field.
         """
         n_true = np.load(file_path)
-        print(f"Loaded sample space shape: {n_true.shape}")
+        self._log(f"Loaded sample space shape: {n_true.shape}")
         assert n_true.shape == (self.nx, self.ny, self.nz), "Loaded n_true must have the same shape as the sample space."
 
         # Normalize the refractive index field and rescale it
