@@ -7,7 +7,7 @@ bc_type: "impedance"
 probe_type: "airy_disk"
 
 # Probe angles
-probe_angles_list: [0.0]
+probe_angles_list: [-0.1, 0.0, 0.1]
 
 wavelength: 6.35e-7
 
@@ -29,7 +29,7 @@ probe_dimensions_px: [40]
 probe_diameter_fraction: 0.8 
 scan_points: 124
 step_size_px: 3
-probe_focus: -1.0e-5
+probe_focus: 0.0 #-1.0e-5
 
 # Add Shapes to 
 # side_length_fraction multiplies xlims_m[1]; depth_fraction multiplies zlims_m[1].
@@ -62,12 +62,13 @@ sample_space_objects:
 
 # Solver options
 solver:
+  poisson_noise: True
   full_system_solver: false
-  max_iters: 50
+  max_iters: 10
   plot_forward: false
   plot_reverse: false
-  plot_object: true
   solve_probe: false
-  sparsity_lambda: 0.0 # 2.0e-5
+  sparsity_lambda: 0.0 #2.0e-5
   low_pass_filter: 0.0
-  rotate90: False
+  rotate90: True
+  known_phase: True
