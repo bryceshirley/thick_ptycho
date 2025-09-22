@@ -180,6 +180,8 @@ def main(cfg_path: str = "config.yaml") -> None:
         layout="single",
         title_prefix="reconstructed_forward_wave ",
     )
+    np.save(os.path.join(results_dir, 'reconstructed_refractive_index.npy'), reconstructed_refractive_index)
+    np.save(os.path.join(results_dir, 'reconstructed_forward_wave'), reconstructed_refractive_index)
 
 
 if __name__ == "__main__":
