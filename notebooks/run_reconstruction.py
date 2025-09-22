@@ -77,7 +77,9 @@ def setup_sample_space(
     probe_angles_list = [float(x) for x in cfg.get("probe_angles_list", [0.0])]
 
     min_nx = int(scan_points * step_size + probe_dimensions[0])
+    #nx = nz if (cfg["solver"]["rotate90"] and nz >= min_nx) else min_nx
     nx = nz if nz >= min_nx else min_nx
+
     discrete_dimensions = [nx, nz]
 
     # === Build SampleSpace ===
@@ -124,26 +126,6 @@ def setup_sample_space(
 
     return sample_space, probe_angles_list
 
-
-# -----------------------
-# Solver config
-# -----------------------
-
-def parse_solver_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    s = cfg["solver"]
-    return {
-        "max_iters": int(s["max_iters"]),
-        "full_system_solver": bool(s["full_system_solver"]),
-        "plot_forward": bool(s["plot_forward"]),
-        "plot_reverse": bool(s["plot_reverse"]),
-        "plot_object": bool(s["plot_object"]),
-        "solve_probe": bool(s["solve_probe"]),
-        "sparsity_lambda": float(s["sparsity_lambda"]),
-        "low_pass_filter": float(s["low_pass_filter"]),
-        "rotate90": bool(s["rotate90"]),
-    }
-
-
 # -----------------------
 # Main
 # -----------------------
@@ -166,20 +148,21 @@ def main(cfg_path: str = "config.yaml") -> None:
     sample_space, probe_angles_list = setup_sample_space(cfg, results_dir)
 
     # Solver
-    solver_params = parse_solver_config(cfg)
+    solver_params = cfg["solver"]
     solver = LeastSquaresSolver(
         sample_space,
         full_system_solver=solver_params["full_system_solver"],
         probe_angles_list=probe_angles_list,
         rotate90=solver_params["rotate90"],
         results_dir=results_dir,
+        poisson_noise=solver_params["poisson_noise"]
     )
 
     reconstructed_refractive_index, reconstructed_forward_wave, residual_history = solver.solve(
+        known_phase=solver_params["known_phase"],
         max_iters=solver_params["max_iters"],
         plot_forward=solver_params["plot_forward"],
         plot_reverse=solver_params["plot_reverse"],
-        plot_object=solver_params["plot_object"],
         solve_probe=solver_params["solve_probe"],
         sparsity_lambda=solver_params["sparsity_lambda"],
         low_pass_filter=solver_params["low_pass_filter"],
