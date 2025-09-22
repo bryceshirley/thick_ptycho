@@ -151,6 +151,8 @@ class SampleSpace1D:
         self._log(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
         self._log(f"  Probe diameter:         {self.probe_diameter * self.dx:.3e} m")
         self._log(f"  Number of scan points:  {self.scan_points}")
+        self._log(f"  Steps in z:             {self.nz}")
+        self._log(f"  Detector Pixels:        {self.nx}")
 
         if self.scan_points > 1:
             self._log(f"  Max Overlap:            {overlap:.3e} m")
