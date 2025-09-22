@@ -46,6 +46,7 @@ class LeastSquaresSolver:
                  full_system_solver: bool = True,
                  probe_angles_list: Optional[List[float]] = [0.0],
                  rotate90=False,
+                 poisson_noise=True,
                  *, # all arguments after the * must be passed as keyword arguments
                  results_dir: str = None,
                  use_logging: bool = True,
@@ -98,6 +99,9 @@ class LeastSquaresSolver:
         elif rotate90:
             self._log("90 degree rotation not possible since nx != nz")
 
+        # Add Poisson Noise to Data
+        self.poisson_noise = poisson_noise
+
         # Set up
         self.setup()
 
@@ -108,6 +112,7 @@ class LeastSquaresSolver:
         start_time = time.time()
         u_true = self.forward_model.solve()
         self.u_true = self.convert_to_block_form(u_true)
+        self.data = None
         self.probes_true = self.forward_model.linear_system.probes
         self.n_true = self.sample_space.n_true
         self.true_exit_waves = self.u_true[:, -self.block_size:]
@@ -116,6 +121,7 @@ class LeastSquaresSolver:
         # If square grid, also precompute the 90 degree rotation case once
         self.u_true_rot = None
         self.true_exit_waves_rot = None
+        self.data_rot = None
         if self.rotate90:
             self.n_true_rot = np.rot90(self.n_true, k=1)
             self.u_true_rot, _ = self.compute_forward_model(self.n_true_rot)
@@ -176,11 +182,18 @@ class LeastSquaresSolver:
         diff_data = np.zeros_like(data)
 
         for i in range(self.num_probes * self.num_angles):
-            exit_wave_fft = np.fft.fftshift(np.fft.fft(exit_waves[i, :]))
-            data[i, :] = np.abs(exit_wave_fft) ** 2
+            exit_wave_fft = np.fft.fft(exit_waves[i, :])
 
-            diff_exit_wave_fft = np.fft.fftshift(np.fft.fft(diff_exit_waves[i, :]))
+            if self.poisson_noise:
+                data[i, :] = np.random.poisson(np.square(np.abs(exit_wave_fft)))  
+
+            diff_exit_wave_fft = np.fft.fft(diff_exit_waves[i, :])
             diff_data[i, :] = np.abs(diff_exit_wave_fft) ** 2
+
+        if rotate:
+            self.data_rot = data
+        else:
+            self.data = data
 
         if self._results_dir:
             fig = plt.figure(figsize=(8, 4))
@@ -188,7 +201,7 @@ class LeastSquaresSolver:
             plt.colorbar(label='Intensity')
             plt.title(f'Exit Wave Squared FFT Intensity {title_prefix}'.strip())
             plt.xlabel('x'); plt.ylabel('Image #'); plt.tight_layout()
-            fig.savefig(os.path.join(self._results_dir, f'fft_intensity{ "_rot" if title_prefix else ""}.png'),
+            fig.savefig(os.path.join(self._results_dir, f'true_fft_intensity{ "_rot" if title_prefix else ""}.png'),
                         bbox_inches="tight")
             plt.close(fig)
 
@@ -197,7 +210,7 @@ class LeastSquaresSolver:
             plt.colorbar(label='Intensity')
             plt.title(f'Differences in Exit Waves {title_prefix}:\nFar Field Intensity'.strip())
             plt.xlabel('x'); plt.ylabel('Image #'); plt.tight_layout()
-            fig.savefig(os.path.join(self._results_dir, f'fft_intensity_diff{ "_rot" if title_prefix else ""}.png'),
+            fig.savefig(os.path.join(self._results_dir, f'true_fft_intensity_diff{ "_rot" if title_prefix else ""}.png'),
                         bbox_inches="tight")
             plt.close(fig)
 
@@ -246,13 +259,13 @@ class LeastSquaresSolver:
 
         return uk, grad_Ak
 
-    def compute_grad_least_squares(self, uk, grad_A,rotate=False):
+    def compute_grad_least_squares(self, uk, grad_A,rotate=False,known_phase=True):
         """Compute the gradient of least squares problem."""
         grad_real = np.zeros(self.nx * (self.nz - 1), dtype=float)
         grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=float)
 
         # Preallocate zero vector
-        exit_wave_error = self.compute_error_in_exit_wave(uk,rotate=rotate)
+        exit_wave_error = self.compute_error_in_exit_wave(uk,rotate=rotate,known_phase=known_phase)
 
         for i in range(self.num_probes):
             if self.lu is not None:
@@ -273,7 +286,7 @@ class LeastSquaresSolver:
 
         return grad_real, grad_imag
 
-    def compute_error_in_exit_wave(self, uk,rotate=False):
+    def compute_error_in_exit_wave(self, uk,rotate=False,known_phase=True):
         """
         Compute the error in the exit wave.
 
@@ -285,12 +298,50 @@ class LeastSquaresSolver:
         """
         exit_wave_error = np.zeros_like(uk, dtype=complex)
         exit_waves = uk[:, -self.block_size:]
-        if rotate:
-            exit_wave_error[:, -self.block_size:] = (
-            exit_waves - self.true_exit_waves_rot)
+        if known_phase:
+            if rotate:
+                exit_wave_error[:, -self.block_size:] = (
+                exit_waves - self.true_exit_waves_rot)
+            else:
+                exit_wave_error[:, -self.block_size:] = (
+                    exit_waves - self.true_exit_waves)
         else:
+            fmodel = np.fft.fft(exit_waves)
+            # The model in Fourier space
+            fmodel = fmodel/np.abs(fmodel)
+            emodel = np.zeros((self.num_probes * self.num_angles, self.block_size), dtype=complex)
+            emodel = np.zeros_like(emodel)
+            for i in range(self.num_probes * self.num_angles):
+                # Apply the data constraint
+                if rotate:
+                    fmodel[i, :] = np.sqrt(self.data[i,:]) * np.exp(1j * np.angle(fmodel[i,:]))
+                else:
+                    fmodel[i, :] = np.sqrt(self.data_rot[i,:]) * np.exp(1j * np.angle(fmodel[i,:]))
+                # New exit wave
+                emodel[i,:] = np.fft.ifft(fmodel[i, :])
+            
             exit_wave_error[:, -self.block_size:] = (
-                exit_waves - self.true_exit_waves)
+                    exit_waves - emodel)
+            
+            if self._results_dir:
+                self.visualisation.plot_single(
+                    exit_waves, view="phase_amp", time="final",
+                    filename=f"exit_phase_amp_old.png",
+                    title_left=f"Old Exit Wave Phase".strip(),
+                    title_right=f"Old Exit Wave Amplitude".strip(),
+                    xlabel_left="x",  ylabel_left="Image #",
+                    xlabel_right="x", ylabel_right="Image #",
+                    )
+
+                self.visualisation.plot_single(
+                    emodel, view="phase_amp", time="final",
+                    filename=f"exit_phase_amp_updated.png",
+                    title_left=f"Updated Exit Wave Phase".strip(),
+                    title_right=f"Updated Exit Wave Amplitude".strip(),
+                    xlabel_left="x",  ylabel_left="Image #",
+                    xlabel_right="x", ylabel_right="Image #",
+                    )
+
 
         return exit_wave_error
 
@@ -386,9 +437,9 @@ class LeastSquaresSolver:
     def solve(
             self,
             n_initial=None,
+            known_phase=True,
             max_iters=10,
             tol=1e-8,
-            plot_object=False,
             plot_forward=False,
             plot_gradient=False,
             plot_reverse=False,
@@ -408,11 +459,6 @@ class LeastSquaresSolver:
             n0 = n_initial
         else:
             n0 = np.ones((self.block_size, self.nz), dtype=complex)*self.sample_space.n_medium
-
-        # Output True Object and Forward Solution if requested
-        if plot_object:
-            self._log("True Object")
-            self.visualisation.plot_refractive_index()
 
         if plot_forward:
             self._log("True Forward Solution")
@@ -441,7 +487,7 @@ class LeastSquaresSolver:
             uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
 
             grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(uk, grad_Ak)
+                self.compute_grad_least_squares(uk, grad_Ak,known_phase=known_phase)
             )
 
             # Compute RMSE of the current refractive index estimate
