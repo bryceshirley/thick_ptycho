@@ -267,7 +267,7 @@ class LeastSquaresSolver:
         # Preallocate zero vector
         exit_wave_error = self.compute_error_in_exit_wave(uk,rotate=rotate,known_phase=known_phase)
 
-        for i in range(self.num_probes):
+        for i in range(self.num_probes*self.num_angles):
             if self.lu is not None:
                 error_backpropagation = self.lu.solve(exit_wave_error[i, :], trans='H')
             elif self.iterative_lu is not None:
@@ -360,7 +360,7 @@ class LeastSquaresSolver:
         """
         denominator = 0.0
 
-        for i in range(self.num_probes):
+        for i in range(self.num_probes*self.num_angles):
             # Compute the perturbation for each probe
             perturbation = grad_A @ u[i, :]
             if self.lu is not None:
@@ -587,7 +587,6 @@ class LeastSquaresSolver:
             nk += gradient_update
 
 
-
             # Apply a low pass filter to nk in the z direction
             if low_pass_filter > 0.0:
                 nk[:, 1:] = gaussian_filter1d(nk[:, 1:], sigma=low_pass_filter, axis=1)
@@ -681,11 +680,7 @@ class LeastSquaresSolver:
             
         if plot_reverse:
             self._log("    Reverse Solution for Reconstructed Object")
-            # self.visualisation.plot(uk_reverse,
-            #                         probe_index=-1)
-            self.visualisation.plot(uk_reverse)
-            # self.visualisation.plot(uk_reverse,
-            #                         probe_index=0)
+            self.visualisation.plot_auto(uk_reverse[int(self.num_angles/2)], view="phase_amp", layout="single")
     
         # Convert to block form
         uk_reverse = self.convert_to_block_form(uk_reverse)
