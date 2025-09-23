@@ -193,17 +193,19 @@ class Visualisation:
                 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
                 im = ax.imshow(d1[:, :, frame], cmap="viridis", origin="lower", extent=extent)
                 fig.colorbar(im, ax=ax); ax.set_title(f"{t1} z={frame}")
-                fig.tight_layout(); self._figs.append(fig)
+                fig.tight_layout(); #self._figs.append(fig)
+                fig.show()
             with out2:
                 out2.clear_output(wait=True)
                 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
                 im = ax.imshow(d2[:, :, frame], cmap="viridis", origin="lower", extent=extent)
                 fig.colorbar(im, ax=ax); ax.set_title(f"{t2} z={frame}")
-                fig.tight_layout(); self._figs.append(fig)
+                fig.tight_layout(); #self._figs.append(fig)
+                fig.show()
 
         interactive_output(_update, {"frame": slider})
         box = VBox([slider, HBox([out1, out2])])
-        self._widgets.append(box)
+        #self._widgets.append(box)
         return box
 
     def show(self, clear_queue: bool = True):

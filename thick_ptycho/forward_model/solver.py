@@ -7,6 +7,7 @@ import scipy.sparse.linalg as spla
 
 from .linear_system import LinearSystemSetup
 from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.utils.utils import setup_log
 
 
 class ForwardModel():
@@ -19,12 +20,19 @@ class ForwardModel():
                  full_system_solver: Optional[bool] = False,
                  thin_sample: Optional[bool] = True,
                  probe_angles_list: Optional[List[float]] = [0.0],
-                 log = None
+                 log = None,
+                 results_dir: str = "",
+                 use_logging: Optional[bool] = False,
+                 verbose: Optional[bool] = True
                  ):
         """
         Initialize the solver.
         """
-        self._log = log
+        if log:
+            self._log = log
+        else:
+            self._log = setup_log(results_dir,log_file_name="solver_log.txt",
+                               use_logging=use_logging, verbose=verbose)
 
         self.sample_space = sample_space
         self.nz = sample_space.nz

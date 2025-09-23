@@ -312,6 +312,8 @@ class SampleSpace2D:
             bc_type,
             probe_type,
             wave_number,
+            probe_focus=None,
+            probe_angle=None,
             probe_diameter=None,
             n_medium=1.0,
             *,
@@ -336,6 +338,8 @@ class SampleSpace2D:
 
         # Probe shape (pixels)
         self.probe_dimensions = probe_dimensions
+        self.probe_focus = probe_focus
+        self.probe_angle = probe_angle
 
         # Number of scan points along one axis
         self.scan_points = scan_points
