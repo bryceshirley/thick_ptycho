@@ -46,6 +46,7 @@
 *.png
 *.txt
 *.csv
+*checkpoint*
 
 
 ## Some common local save or copy matches

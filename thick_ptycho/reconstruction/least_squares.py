@@ -182,13 +182,13 @@ class LeastSquaresSolver:
         diff_data = np.zeros_like(data)
 
         for i in range(self.num_probes * self.num_angles):
-            exit_wave_fft = np.fft.fft(exit_waves[i, :])
+            data[i, :] = np.square(np.abs(np.fft.fft(exit_waves[i, :])))
 
             if self.poisson_noise:
-                data[i, :] = np.random.poisson(np.square(np.abs(exit_wave_fft)))  
+                data[i, :] = np.random.poisson(data[i, :])
 
             diff_exit_wave_fft = np.fft.fft(diff_exit_waves[i, :])
-            diff_data[i, :] = np.abs(diff_exit_wave_fft) ** 2
+            diff_data[i, :] = np.square(np.abs(diff_exit_wave_fft))
 
         if rotate:
             self.data_rot = data
@@ -314,9 +314,10 @@ class LeastSquaresSolver:
             for i in range(self.num_probes * self.num_angles):
                 # Apply the data constraint
                 if rotate:
-                    fmodel[i, :] = np.sqrt(self.data[i,:]) * np.exp(1j * np.angle(fmodel[i,:]))
-                else:
                     fmodel[i, :] = np.sqrt(self.data_rot[i,:]) * np.exp(1j * np.angle(fmodel[i,:]))
+                else:
+                    fmodel[i, :] = np.sqrt(self.data[i,:]) * np.exp(1j * np.angle(fmodel[i,:]))
+
                 # New exit wave
                 emodel[i,:] = np.fft.ifft(fmodel[i, :])
             
@@ -657,6 +658,10 @@ class LeastSquaresSolver:
             if verbose:
                 self._log(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
+                
+            self.visualisation.plot_refractive_index(
+                nk, title=f"Reconstructed Sample Space")
+    
 
         return nk, self.convert_from_block_form(uk), residual
 
