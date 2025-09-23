@@ -4,8 +4,8 @@ import numpy as np
 from typing import Optional, Sequence, Tuple, Union
 
 try:
+    from ipywidgets import interact, IntSlider
     import ipywidgets as widgets
-    from ipywidgets import IntSlider, VBox, HBox, interactive_output
     _HAS_WIDGETS = True
 except Exception:
     _HAS_WIDGETS = False
@@ -42,15 +42,17 @@ class Visualisation:
     def plot_auto(self, solution: np.ndarray, *,
                   view: str = "phase_amp", layout: str = "single",
                   time: str = "final", probe_index: Optional[int] = None,
-                  title_prefix: str = "",
+                  title: str = "",
                   axes: Optional[Sequence] = None,
-                  filename: Optional[str] = None):
+                  filename: Optional[str] = None,
+                  reverse: Optional[bool] = False):
         """Automatically choose plotting style."""
         if probe_index is None:
             probe_index = int(self.num_probes * 0.5)
 
         if layout == "slider":
-            return self.build_slider_widget(solution, view=view, time=time, probe_index=probe_index)
+            return self.build_slider_widget(solution, view=view, reverse=reverse, title=title,
+                    probe_index=probe_index)
 
         if self.dimension == 1:
             if solution.ndim == 3:
@@ -58,7 +60,7 @@ class Visualisation:
                 sol = solution[sel, :, :]
             else:
                 sol = solution
-            return self.plot_single(sol, view=view, time=time,title_prefix=title_prefix,
+            return self.plot_single(sol, view=view, time=time,title=title,
                                     axes=axes, filename=filename)
 
         if layout == "grid" and self.num_probes > 1:
@@ -75,7 +77,7 @@ class Visualisation:
                 view: str = "phase_amp", time: str = "final",
                 axes: Optional[Sequence] = None,
                 filename: Optional[str] = None,
-                title_prefix: Optional[str] = None,
+                title: Optional[str] = None,
                 title_left: Optional[str] = None,
                 title_right: Optional[str] = None,
                 xlabel_left: Optional[str] = None,
@@ -110,9 +112,9 @@ class Visualisation:
             p1, p2 = to_plot.real, to_plot.imag
             t1_default, t2_default = "Real", "Imaginary"
 
-        if title_prefix:
-            t1_default = title_prefix + t1_default
-            t2_default = title_prefix + t2_default
+        if title:
+            t1_default = title + t1_default
+            t2_default = title + t2_default
 
         # Left panel
         im0 = ax0.imshow(p1, cmap="viridis", origin="lower")
@@ -169,44 +171,63 @@ class Visualisation:
         self._figs += [fig1, fig2]
         return fig1, axes1, fig2, axes2
 
-    def build_slider_widget(self, solution: np.ndarray, *,
-                            view: str = "phase_amp"):
-        """Interactive slice slider (Jupyter)."""
-        if not _HAS_WIDGETS:
-            raise RuntimeError("ipywidgets not available")
 
-        nz = getattr(self.sample_space, "nz", solution.shape[-1])
+    def build_slider_widget(self, solution: np.ndarray, view: str = "phase_amp", reverse=False, title=None,
+                    probe_index=0):
+        """
+        Plot the solution using an interactive slider (Jupyter Notebook only).
+        """
+        if title == "" or title is None:
+            title = f' (probe {probe_index}, '
+            if self.bc_type == "dirichlet":
+                title += 'dirichlet, '
+            elif self.bc_type == "neumann":
+                title += 'neumann, '
+            else:
+                title += 'impedance, '
+            title += ' reverse)' if reverse else ' forward)'
+
+        len_z = self.sample_space.nz
+
         if view == "phase_amp":
-            d1, d2 = self.phase(solution), np.abs(solution)
-            t1, t2 = "Phase", "Amplitude"
+            data1 = self.phase(solution)
+            data2 = np.abs(solution)
+            title1 = 'Phase' + title
+            title2 = 'Amplitude' + title
         else:
-            d1, d2 = solution.real, solution.imag
-            t1, t2 = "Real", "Imaginary"
+            data1 = solution.real
+            data2 = solution.imag
+            title1 = 'Real' + title
+            title2 = 'Imaginary' + title
 
-        extent = [self.x.min(), self.x.max(), self.y.min(), self.y.max()] if self.dimension == 2 and self.y is not None else None
-        slider = IntSlider(min=0, max=nz - 1, step=1, value=0, description="slice")
-        out1, out2 = widgets.Output(), widgets.Output()
+        max_val1 = np.max(data1)
+        min_val1 = np.min(data1)
+        max_val2 = np.max(data2)
+        min_val2 = np.min(data2)
 
-        def _update(frame):
-            with out1:
-                out1.clear_output(wait=True)
-                fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-                im = ax.imshow(d1[:, :, frame], cmap="viridis", origin="lower", extent=extent)
-                fig.colorbar(im, ax=ax); ax.set_title(f"{t1} z={frame}")
-                fig.tight_layout(); #self._figs.append(fig)
-                fig.show()
-            with out2:
-                out2.clear_output(wait=True)
-                fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-                im = ax.imshow(d2[:, :, frame], cmap="viridis", origin="lower", extent=extent)
-                fig.colorbar(im, ax=ax); ax.set_title(f"{t2} z={frame}")
-                fig.tight_layout(); #self._figs.append(fig)
-                fig.show()
+        def update(frame):
+            fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+            z_frame = self.z[-(frame + 1)] if reverse else self.z[frame]
 
-        interactive_output(_update, {"frame": slider})
-        box = VBox([slider, HBox([out1, out2])])
-        #self._widgets.append(box)
-        return box
+            im0 = axs[0].imshow(data1[:, :, frame], cmap='viridis', origin='lower', extent=[
+                        self.x.min(), self.x.max(), self.y.min(), self.y.max()], vmin=min_val1, vmax=max_val1)
+            axs[0].set_title(f'{title1} at Z = {z_frame:.2f}')
+            axs[0].set_xlabel('X')
+            axs[0].set_ylabel('Y')
+            fig.colorbar(im0, ax=axs[0])
+
+            im1 = axs[1].imshow(data2[:, :, frame], cmap='viridis', origin='lower', extent=[
+                        self.x.min(), self.x.max(), self.y.min(), self.y.max()], vmin=min_val2, vmax=max_val2)
+            axs[1].set_title(f'{title2} at Z = {z_frame:.2f}')
+            axs[1].set_xlabel('X')
+            axs[1].set_ylabel('Y')
+            fig.colorbar(im1, ax=axs[1])
+
+            plt.tight_layout()
+            plt.show()
+
+        interact(update, frame=IntSlider(min=0, max=len_z - 1, step=1, value=0, description="slice"))
+
 
     def show(self, clear_queue: bool = True):
         """Display queued figures and widgets."""
