@@ -47,6 +47,7 @@
 *.txt
 *.csv
 *checkpoint*
+*.png
 
 
 ## Some common local save or copy matches
@@ -66,3 +67,5 @@
 
 ## Jupyter notebook .tiff outputs
 *.tiff
+
+*/.ipynb_checkpoints/*
