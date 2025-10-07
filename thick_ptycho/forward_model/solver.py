@@ -1,14 +1,14 @@
 import time
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, List
 
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from .initial_conditions import initial_condition_setup
 from .linear_system import LinearSystemSetup
 from thick_ptycho.sample_space.sample_space import SampleSpace
-from scipy.sparse.linalg import LinearOperator, spilu
+from thick_ptycho.utils.utils import setup_log
+
 
 class ForwardModel():
     """
@@ -18,14 +18,25 @@ class ForwardModel():
 
     def __init__(self, sample_space: SampleSpace,
                  full_system_solver: Optional[bool] = False,
-                 thin_sample: Optional[bool] = True):
+                 thin_sample: Optional[bool] = True,
+                 probe_angles_list: Optional[List[float]] = [0.0],
+                 log = None,
+                 results_dir: str = "",
+                 use_logging: Optional[bool] = False,
+                 verbose: Optional[bool] = True
+                 ):
         """
         Initialize the solver.
         """
+        if log:
+            self._log = log
+        else:
+            self._log = setup_log(results_dir,log_file_name="solver_log.txt",
+                               use_logging=use_logging, verbose=verbose)
+
         self.sample_space = sample_space
         self.nz = sample_space.nz
         self.probe_dimensions = sample_space.probe_dimensions
-        self.initial_condition = initial_condition_setup(sample_space)
         self.thin_sample = thin_sample
         self.full_system = full_system_solver
 
@@ -44,18 +55,22 @@ class ForwardModel():
             self.slice_dimensions_dirichlet = tuple(dim + 2 for dim in self.slice_dimensions)
 
         self.linear_system = LinearSystemSetup(sample_space,
-                                               self.initial_condition,
                                                self.thin_sample,
-                                               self.full_system)
-        
-        self.lu = None  # Preconditioner matrix, initialized to None
+                                               self.full_system,
+                                               probe_angles_list)
+
+        self.probe_angles_list = probe_angles_list
+
+        self.block_size = self.linear_system.block_size
 
     def solve(self, reverse=False,
               initial_condition: Optional[np.ndarray] = None,
               test_impedance=False,
               verbose: Optional[bool] = False,
               n: Optional[np.ndarray] = None,
-              lu: Optional[spla.SuperLU] = None) -> np.ndarray:
+              lu: Optional[spla.SuperLU] = None,
+              iterative_lu: Tuple[Optional[list[spla.SuperLU]], Optional[list[np.ndarray]], Optional[list[np.ndarray]]] = None,
+              b_block: Optional[list[np.ndarray]] = None) -> np.ndarray:
         """Solve the paraxial wave equation."""
         # Initialize solution grid with initial condition
         u = self._create_solution()
@@ -66,38 +81,94 @@ class ForwardModel():
             b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs()
         else:
             b_homogeneous = None
+        
+        if not self.thin_sample and not self.full_system:
+            if iterative_lu is None:
+                iterative_lu = self.construct_iterative_lu(
+                    n=n, reverse=reverse)
 
-        # Solve for each probe
-        for scan_index in range(self.sample_space.num_probes):
-            # Solve the forward model
+        # Define wrapper for parallel execution
+        def solve_single_probe(scan_index: int, angle_index: float) -> np.ndarray:
+            """Solve the paraxial wave equation for a single probe."""
+
             start_time = time.time()
             if self.full_system:
-                solution = self._solve_single_probe_full_system(
-                    scan_index, n, reverse=reverse,
+                sol = self._solve_single_probe_full_system(
+                    n, scan_index=scan_index, angle_index=angle_index, reverse=reverse,
                     initial_condition=initial_condition,
                     test_impedance=test_impedance,
                     lu=lu,
                     b_homogeneous=b_homogeneous)
             else:
-                solution = self._solve_single_probe_iteratively(
-                    scan_index, n, reverse=reverse,
+                sol = self._solve_single_probe_iteratively(
+                    n, scan_index=scan_index, angle_index=angle_index, reverse=reverse,
                     initial_condition=initial_condition,
-                    test_impedance=test_impedance)
+                    test_impedance=test_impedance,
+                    iterative_lu=iterative_lu,
+                    b_block=b_block)
+            # Handle Dirichlet BCs
+            sol = self._handle_dirichlet_bcs(sol)
             end_time = time.time()
 
-            # Print time taken for each scan if verbose is True
+            # Time taken for each scan if verbose is True
             if verbose:
-                print(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
-
-            # Handle Dirichlet BCs
-            solution = self._handle_dirichlet_bcs(solution)
+                self._log(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
             
-            # Store the solution for this scan index
-            u[scan_index, ...] = solution
+            return sol
         
+        # This could be made parallel
+        for angle_index, probe_angle in enumerate(self.probe_angles_list):
+            if verbose and len(self.probe_angles_list) > 1:
+                self._log(f"Solving for probe angle {angle_index+1}/{len(self.probe_angles_list)}: {probe_angle} radians")
+            for scan_index in range(self.sample_space.num_probes):
+                u[angle_index,scan_index, ...] = solve_single_probe(scan_index, angle_index=angle_index)
+
         return u
-    
-    def _solve_single_probe_full_system(self, scan_index: int, n: np.ndarray,
+
+    def construct_iterative_lu(self, n: Optional[np.ndarray] = None, adjoint: bool = False,
+                            reverse: bool = False) -> Tuple[Optional[spla.SuperLU], Optional[np.ndarray]]:
+        """Solve the paraxial wave equation iteratively for a single probe."""
+        # Precompute C, A_mod, B_mod, LU factorizations
+        A_lu_list = []
+        B_mod_list = []
+
+        object_slices = self.sample_space.create_sample_slices(
+                            self.thin_sample,
+                            n=n).reshape(-1, self.nz - 1)
+
+
+        # Create Linear System and Apply Boundary Conditions
+        A, B, b = self.linear_system.create_system_slice()
+
+        if reverse:
+            A, B = B, A
+            b = - b
+
+        # Iterate over the z dimension
+        for j in range(1, self.nz):
+            if reverse:
+                C = - sp.diags(object_slices[:, -j])
+            elif adjoint:
+                C = sp.diags(object_slices[:, -j])
+            else:
+                C = sp.diags(object_slices[:, j - 1])
+
+            A_with_object = A - C  # LHS Matrix
+            B_with_object = B + C  # RHS Matrix
+
+            if adjoint:
+                A_with_object, B_with_object = A_with_object.conj().T, B_with_object.conj().T
+
+            A_lu = spla.splu(A_with_object.tocsc())
+            A_lu_list.append(A_lu)
+            B_mod_list.append(B_with_object)
+        
+
+        return (A_lu_list, B_mod_list, b)
+
+    def _solve_single_probe_full_system(self, n: np.ndarray,
+                                        angle_index: int = 0,
+                                        scan_index: int = 0,
                                         reverse: bool = False,
                                         initial_condition: Optional[np.ndarray] = None,
                                         test_impedance: bool = False,
@@ -108,12 +179,21 @@ class ForwardModel():
             raise ValueError(
                 "Reverse propagation is not supported in the full system solver. "
                 "Please use the iterative solver for reverse propagation.")
+    
         # Forward model rhs vector
-        if b_homogeneous is None:
-            b_homogeneous = self.linear_system.setup_homogeneous_forward_model_rhs(scan_index=scan_index)
+        if test_impedance:
+            b_homogeneous = (
+                self.linear_system.test_exact_impedance_forward_model_rhs()
+            )
+        elif b_homogeneous is None:
+            b_homogeneous = (
+                self.linear_system.setup_homogeneous_forward_model_rhs(
+                    scan_index=scan_index)
+            )
 
         # Edit this for impedance condition test
-        probe_contribution, probe = self.linear_system.probe_contribution(scan_index=scan_index)
+        probe_contribution, probe = self.linear_system.probe_contribution(
+            scan_index=scan_index,angle_index=angle_index, probes=initial_condition)
 
         # Define Right Hand Side
         b = b_homogeneous + probe_contribution
@@ -128,60 +208,94 @@ class ForwardModel():
             solution = spla.spsolve(forward_model_matrix, b)
 
         # Reshape solution
-        solution = solution.reshape(self.nz - 1, self.linear_system.block_size).transpose()
+        solution = solution.reshape(self.nz - 1,
+                                    self.block_size).transpose()
 
         # Concatenate initial condition (nx, 1) with solution (nx, nz-1)
-        initial_condition = probe.reshape(self.linear_system.block_size, 1)
+        initial_condition = probe.reshape(self.block_size, 1)
         return np.concatenate([initial_condition, solution], axis=1)
 
-    def _solve_single_probe_iteratively(self, scan_index: int, n: np.ndarray,
-                                        reverse: bool = False,
+    def _solve_single_probe_iteratively(self, n: Optional[np.ndarray] = None,
+                                        angle_index: Optional[int] = 0,
+                                        scan_index: Optional[int] = 0,
+                                        reverse: Optional[bool] = False,
+                                        adjoint: Optional[bool] = False,
                                         initial_condition: Optional[np.ndarray] = None,
-                                        test_impedance: bool = False) -> np.ndarray:
+                                        test_impedance: Optional[bool] = False,
+                                        iterative_lu: Optional[Tuple[list[spla.SuperLU], list[np.ndarray], list[np.ndarray]]] = None,
+                                        b_block: Optional[list[np.ndarray]] = None) -> np.ndarray:
         """Solve the paraxial wave equation iteratively for a single probe."""
-        object_slices = (
-                self.sample_space.create_sample_slices(
-                    self.thin_sample, n=n, scan_index=scan_index
-                )
-            )
-
-        # Initialize solution grid with initial condition
-        solution = np.zeros((self.linear_system.block_size, self.nz),
+        # Initialize solution grid
+        solution = np.zeros((self.block_size, self.nz),
                             dtype=complex)
+        probe_index = angle_index*self.sample_space.num_probes + scan_index
 
-        # Create Linear System and Apply Boundary Conditions
-        A, B, b = self.linear_system.create_system_slice(
-            scan_index=scan_index)
-
-        if reverse:
-            A, B = B, A
-            b = - b
-            if initial_condition is None:
-                raise ValueError(
-                    "Initial condition must be provided for reverse propagation.")
-            solution[:, 0] = self._remove_dirichlet_padding(initial_condition[scan_index, ...]).flatten()
+        # Set initial condition
+        if isinstance(initial_condition, int):
+            pass
         else:
-            solution[:, 0] = self.initial_condition.apply_initial_condition(
-                scan_index,
-                self.thin_sample).flatten()
-
-        # Iterate over the z dimension
-        for j in range(1, self.nz):
-            if test_impedance:
-                b = self.linear_system.test_exact_impedance_rhs_slice(
-                    self.sample_space.z[j - 1],
-                    scan_index=scan_index)
-            
             if reverse:
-                C = - sp.diags(object_slices.reshape(-1, self.nz - 1)[:, -j])
+                if initial_condition is None:
+                    raise ValueError("Exit wave required for reverse propagation.")
+                # initial_condition expected shape (num_probes, block_size)
+                solution[:, 0] = initial_condition[probe_index, :].flatten()
+            elif initial_condition is None:
+                solution[:, 0] = self.linear_system.probes[probe_index, ...].flatten()
             else:
-                C = sp.diags(object_slices.reshape(-1, self.nz - 1)[:, j - 1])
+                solution[:, 0] = initial_condition[probe_index, ...].flatten()
 
-            A_with_object = A - C  # LHS Matrix
-            B_with_object = B + C  # RHS Matrix
-            rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
-            solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
+        # Solve with LU decomposition
+        if iterative_lu is not None:
+            A_lu_list, B_list, b = iterative_lu
 
+            if b_block is not None:
+                b_block = b_block.reshape(self.nz-1, self.block_size).transpose()
+            # Iterate over the z dimension
+            for j in range(1, self.nz):
+                if test_impedance:
+                    b = self.linear_system.test_exact_impedance_rhs_slice(j)
+                if b_block is not None:
+                    if adjoint:
+                        b = b_block[:, -j]
+                    else:
+                        b = b_block[:, j-1]
+
+                rhs_matrix = B_list[j - 1].dot(solution[:, j - 1]) + b
+                solution[:, j] = A_lu_list[j - 1].solve(rhs_matrix)#*self.sponge_mask()
+        # For thin samples with spsolve
+        else:
+            object_slices = (
+                    self.sample_space.create_sample_slices(
+                        self.thin_sample, n=n, scan_index=scan_index
+                    )
+                ).reshape(-1, self.nz - 1)
+
+            # Create Linear System and Apply Boundary Conditions
+            A, B, b = self.linear_system.create_system_slice(
+                scan_index=scan_index)
+
+            if reverse:
+                A, B = B, A
+                b = - b
+
+            # Iterate over the z dimension
+            for j in range(1, self.nz):
+                if test_impedance:
+                    b = self.linear_system.test_exact_impedance_rhs_slice(j)
+                
+                if reverse:
+                    C = - sp.diags(object_slices[:, -j])
+                else:
+                    C = sp.diags(object_slices[:, j - 1])
+
+                A_with_object = A - C  # LHS Matrix
+                B_with_object = B + C  # RHS Matrix
+                rhs_matrix = B_with_object.dot(solution[:, j - 1]) + b
+                solution[:, j] = spla.spsolve(A_with_object, rhs_matrix)
+
+        # Flip solution in the z-direction if adjoint is True
+        if adjoint:
+            solution = np.flip(solution, axis=1)
         return solution
 
     def return_forward_model_matrix(self, scan_index: int = 0,
@@ -204,13 +318,13 @@ class ForwardModel():
         # Initialize solution grid with initial condition
         if self.sample_space.bc_type == "dirichlet":
             u = np.zeros(
-                (self.sample_space.num_probes,
+                (len(self.probe_angles_list), self.sample_space.num_probes,
                     *self.slice_dimensions_dirichlet, self.nz),
                 dtype=complex
             )
         else:
             u = np.zeros(
-                (self.sample_space.num_probes,
+                (len(self.probe_angles_list), self.sample_space.num_probes,
                     *self.slice_dimensions, self.nz),
                 dtype=complex
             )
@@ -246,26 +360,6 @@ class ForwardModel():
             elif self.sample_space.dimension == 1:
                 solution = solution[1:-1]
         return solution
-    
-    def build_gmres_preconditioner(self, n: Optional[np.ndarray] = None, drop_tol: float = 1e-4, fill_factor: float = 10.0):
-        """
-        Build an ILU preconditioner for GMRES using scipy.sparse.linalg.spilu.
 
-        Parameters:
-            n: Optional refractive index array.
-            scan_index: Index of the probe scan.
-            drop_tol: Drop tolerance for spilu.
-            fill_factor: Fill factor for spilu.
 
-        Returns:
-            A linear operator suitable for use as a GMRES preconditioner.
-        """
 
-        A = self.return_forward_model_matrix(n=n)
-        ilu = spilu(A, drop_tol=drop_tol, fill_factor=fill_factor)
-
-        def preconditioner(x):
-            return ilu.solve(x)
-
-        M = LinearOperator(A.shape, matvec=preconditioner, dtype=A.dtype)
-        return M

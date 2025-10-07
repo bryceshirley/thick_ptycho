@@ -3,7 +3,9 @@ from typing import Dict, List, Tuple, Any
 import numpy as np
 from matplotlib import pyplot as plt
 
+from thick_ptycho.utils.utils import setup_log
 from .optical_objects import OpticalObject
+from skimage import data, transform
 
 class SampleSpace:
     """
@@ -34,7 +36,13 @@ class SampleSpace1D:
             bc_type,
             probe_type,
             wave_number,
-            probe_diameter=None):
+            probe_diameter=None,
+            probe_focus=None,
+            probe_angle=None,
+            n_medium=1.0,
+            results_dir=None,
+            use_logging=True,
+            verbose=False):
         """
         Initialize the 1D sample space.
 
@@ -47,6 +55,8 @@ class SampleSpace1D:
         wave_number (float): Wavenumber in 1/nm.
         probe_diameter (float, optional): Probe diameter in continuous units. Default is 12.
         """
+        self._log = setup_log(results_dir,log_file_name="sample_space_log.txt",
+                               use_logging=use_logging, verbose=verbose)
         # Set the dimension to 1D
         self.dimension = 1
 
@@ -61,6 +71,12 @@ class SampleSpace1D:
 
         # Probe Type
         self.probe_type = probe_type
+        if isinstance(probe_angle, (list, tuple, np.ndarray)):
+            self.probe_angle = probe_angle[0]
+        else:
+            self.probe_angle = probe_angle
+        self.probe_focus = probe_focus
+
 
         # Discrete sample space dimensions (pixels)
         self.nx = discrete_dimensions[0]
@@ -92,19 +108,22 @@ class SampleSpace1D:
             self.probe_diameter = probe_dimensions[0]
         else:
             self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = self.probe_diameter * self.dx
         # Wavenumber
         self.k = wave_number
+        self.wavelength = 2 * np.pi / self.k
 
         # List to store optical objects
         self.objects = []
 
         # Initialize the refractive index field
-        self.n_true = np.ones((self.nx, self.nz), dtype=complex)
+        self.n_medium = complex(n_medium, 0)  # Ensure n_medium is complex
+        self.n_true = np.ones((self.nx, self.nz), dtype=complex)*self.n_medium
 
         # Total number of probes (scan_points squared)
         self.num_probes = scan_points
 
-        self._detector_frame_info = self._generate_scan_frames()
+        self._detector_frame_info = self._generate_scan_frames()#
 
     
     @property
@@ -122,16 +141,23 @@ class SampleSpace1D:
         """ Print a summary of the sample space and scan parameters.
         """
         # Print summary of the scan
-        continuous_stepsize = (
-            self.xlims[1] - self.xlims[0]) * (self.step_size / self.nx)
+        continuous_stepsize = self.step_size * self.dx  
+
+        # Overlap in meters
         overlap = self.probe_diameter * self.dx - continuous_stepsize
-        print("Summary of the scan (continuous):")
-        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} um")
-        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} um")
-        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} um")
-        print(f"    Number of scan points: {self.scan_points}")
+
+        self._log("=== Scan Summary (Continuous) ===")
+        self._log(f"  Sample space (x-range): {self.xlims[1] - self.xlims[0]:.3e} m")
+        self._log(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
+        self._log(f"  Probe diameter:         {self.probe_diameter * self.dx:.3e} m")
+        self._log(f"  Number of scan points:  {self.scan_points}")
+        self._log(f"  Steps in z:             {self.nz}")
+        self._log(f"  Detector Pixels:        {self.nx}")
+
         if self.scan_points > 1:
-            print(f"    Max Overlap: {overlap:.2f} um \n")
+            self._log(f"  Max Overlap:            {overlap:.3e} m")
+            self._log(f"  Percentage Overlap:     {overlap / (self.probe_diameter * self.dx) * 100:.2f}%\n")
+
 
     
     def _generate_scan_frames(self) -> List[Dict[str, Any]]:
@@ -160,7 +186,7 @@ class SampleSpace1D:
 
         # Generate x for the scan path
         centre_x = np.floor(np.linspace(
-            edge_margin, self.nx + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.nx - edge_margin, self.scan_points)).astype(int)
 
         # --- Construct detector frames ---
         frames = []
@@ -198,8 +224,8 @@ class SampleSpace1D:
 
         return frames
 
-    def add_object(self, shape, refractive_index, side_length, centre, depth,
-                   guassian_blur=None):
+    def add_object(self, shape: str, refractive_index: complex, side_length: float, 
+                   centre: tuple, depth: float, gaussian_blur=None):
         """
         Add an optical object to the simulation.
 
@@ -225,7 +251,7 @@ class SampleSpace1D:
                 self.nz,
                 x,
                 self.z,
-                guassian_blur))
+                gaussian_blur))
 
     def generate_sample_space(self):
         """
@@ -259,9 +285,9 @@ class SampleSpace1D:
 
         # Compute the coefficient based on whether we want the gradient or not
         if grad:
-            coefficient = (self.k / 1j) * n
+            coefficient = (self.k / 1j) * n # np.ones(n.shape)
         else:
-            coefficient = ((self.k / 2j) * (n**2 - 1))
+            coefficient = ((self.k / 2j) * (n**2 - 1))  # ((self.k / 2j) * (1+2*(n-1)))
 
         # Compute all half time_step slices at once using vectorized operations
         # Shape: (nx, nz-1)
@@ -286,7 +312,14 @@ class SampleSpace2D:
             bc_type,
             probe_type,
             wave_number,
-            probe_diameter=None):
+            probe_focus=None,
+            probe_angle=None,
+            probe_diameter=None,
+            n_medium=1.0,
+            *,
+            results_dir=None,
+            use_logging=True,
+            verbose=False):
         """
         Initialize the 2D sample space.
 
@@ -297,11 +330,16 @@ class SampleSpace2D:
         bc_type (str): boundary condition type (impedance, dirichlet, neumann)
         wave_number (float): wavenumber in 1/nm
         """
+        self._log = setup_log(results_dir,log_file_name="sample_space_log.txt",
+                               use_logging=use_logging, verbose=verbose)
+
         # Set the dimension to 2D
         self.dimension = 2
 
         # Probe shape (pixels)
         self.probe_dimensions = probe_dimensions
+        self.probe_focus = probe_focus
+        self.probe_angle = probe_angle
 
         # Number of scan points along one axis
         self.scan_points = scan_points
@@ -347,14 +385,17 @@ class SampleSpace2D:
             self.probe_diameter = probe_dimensions[0]
         else:
             self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = self.probe_diameter * self.dx
         # Wavenumber
         self.k = wave_number
+        self.wavelength = 2 * np.pi / self.k
 
         # List to store optical objects
         self.objects = []
 
         # Initialize the refractive index field
-        self.n_true = np.ones((self.nx, self.ny, self.nz), dtype=complex)
+        self.n_medium = complex(n_medium, 0)  # Ensure n_medium is complex
+        self.n_true = np.ones((self.nx, self.ny, self.nz), dtype=complex)*n_medium
 
         # Total number of probes (scan_points squared)
         self.num_probes = scan_points**2
@@ -368,18 +409,18 @@ class SampleSpace2D:
         continuous_stepsize = (
             self.xlims[1] - self.xlims[0]) * (self.step_size / self.nx)
         overlap = self.probe_diameter * self.dx - continuous_stepsize
-        print("Summary of the scan (continuous):")
-        print(f"    Sample space x: {self.xlims[1] - self.xlims[0]} um")
-        print(f"    Sample space y: {self.ylims[1] - self.ylims[0]} um")
-        print(f"    Sample space z: {self.zlims[1] - self.zlims[0]} um")
-        print(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} um")
-        print(f"    Number of scan points: {self.num_probes}")
+        self._log("Summary of the scan (continuous):")
+        self._log(f"    Sample space x: {self.xlims[1] - self.xlims[0]} m")
+        self._log(f"    Sample space y: {self.ylims[1] - self.ylims[0]} m")
+        self._log(f"    Sample space z: {self.zlims[1] - self.zlims[0]} m")
+        self._log(f"    Probe Diameter: {self.probe_diameter*self.dx:.2f} m")
+        self._log(f"    Number of scan points: {self.num_probes}")
         if self.scan_points > 1:
-            print(f"    Max Overlap: {overlap:.2f} um \n")
+            self._log(f"    Max Overlap: {overlap:.2f} m \n")
 
         # Plot the scan path with flipped axes
         plt.figure(figsize=(6, 6))
-        plt.plot(self.centre_y, self.centre_x, marker='o', linestyle='-')
+        plt.plot(self.centre_y, self.centre_x, marker='o', linestyle='-', markersize=2)
         plt.title("2D Discrete Scan Path")
         plt.xlabel("Ny")
         plt.ylabel("Nx")
@@ -424,7 +465,7 @@ class SampleSpace2D:
         plt.grid()
         plt.show()
     
-    def load_sample_space(self, file_path: str):
+    def load_sample_space(self, file_path: str, real_perturbation=1e-4, imaginary_perturbation=1e-6): # TODO: correct for non free space medium
         """
         Load the sample space with a precomputed refractive index field.
 
@@ -432,12 +473,42 @@ class SampleSpace2D:
         n_true (np.ndarray): Precomputed refractive index field.
         """
         n_true = np.load(file_path)
-        print(f"Loaded sample space shape: {n_true.shape}")
+        self._log(f"Loaded sample space shape: {n_true.shape}")
         assert n_true.shape == (self.nx, self.ny, self.nz), "Loaded n_true must have the same shape as the sample space."
 
         # Normalize the refractive index field and rescale it
         n_true = (n_true - np.mean(n_true)) / np.std(n_true) + 1
-        self.n_true = 1 + (1e-4 * n_true) + (1e-6 * 1j * n_true)
+        self.n_true = self.n_medium - (real_perturbation * n_true) - (imaginary_perturbation * 1j * n_true)
+
+    def load_cameraman(self, real_perturbation=1e-4, imaginary_perturbation=1e-6):  # TODO: correct for non free space medium
+        """
+        Load the cameraman image as the refractive index field and resize to sample space dimensions.
+
+        Sets self.n_true to shape (self.nx, self.ny, self.nz).
+        """
+
+        # Load cameraman image (assumed grayscale)
+        # Load built-in grayscale cameraman image (uint8 -> float32)
+        n_true_2d = data.camera().astype(np.float32)
+
+        # Flip the image vertically
+        n_true_2d = np.flipud(n_true_2d)
+
+        
+        # Normalize to [0, 1] range
+        n_true_2d -= n_true_2d.min()  # Ensure zero baseline
+        n_true_2d /= n_true_2d.max()  # Normalize to unit peak
+
+        n_true_2d = transform.resize(n_true_2d, (self.nx, self.ny), preserve_range=True)
+
+        # Expand to 3D by repeating along z
+        n_true = np.repeat(n_true_2d[:, :, np.newaxis], self.nz, axis=2)
+
+        delta = (real_perturbation * n_true)
+        beta = (imaginary_perturbation * n_true)
+
+        # Set refractive index field
+        self.n_true = self.n_medium - delta - beta * 1j
 
     @property
     def detector_frame_info(self) -> List[Dict[str, Any]]:
@@ -477,9 +548,9 @@ class SampleSpace2D:
 
         # Generate x and y positions for the scan path
         x_positions = np.floor(np.linspace(
-            edge_margin, self.nx + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.nx - edge_margin, self.scan_points)).astype(int)
         y_positions = np.floor(np.linspace(
-            edge_margin, self.ny + 2 - edge_margin, self.scan_points)).astype(int)
+            edge_margin, self.ny - edge_margin, self.scan_points)).astype(int)
 
         centre_x = []
         centre_y = []

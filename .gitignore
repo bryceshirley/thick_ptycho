@@ -43,6 +43,12 @@
 *.venv
 *.pyc
 *.npy:*
+*.png
+*.txt
+*.csv
+*checkpoint*
+*.png
+
 
 ## Some common local save or copy matches
 *_save*
@@ -61,3 +67,5 @@
 
 ## Jupyter notebook .tiff outputs
 *.tiff
+
+*/.ipynb_checkpoints/*

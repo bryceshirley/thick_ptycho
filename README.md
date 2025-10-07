@@ -90,12 +90,17 @@ Tests are located in the `tests/` directory and cover a wide range of solver con
 To run convergence tests (e.g., 2D Neumann BCs):
 
 ```bash
-poetry run pytest tests/test_solver_neumann_2d.py
+poetry run pytest -s tests/test_solver_neumann_2d.py
 ```
 
 For convergence plots
 ```bash
-poetry run pytest tests/test_solver_neumann_2d.py --plot
+poetry run pytest -s tests/test_solver_neumann_2d.py --plot
+```
+
+Select specific tests (Iterations is the fastest)
+```bash
+poetry run pytest -s tests/test_solver_neumann_2d.py -k "[Iterations-thick]"
 ```
 
 For coverage reports:
