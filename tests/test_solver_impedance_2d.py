@@ -4,6 +4,10 @@ import numpy as np
 import pytest
 from thick_ptycho.sample_space.sample_space import SampleSpace
 from thick_ptycho.forward_model.solver import ForwardModel
+<<<<<<< HEAD
+=======
+from thick_ptycho.utils.visualisations import Visualisation
+>>>>>>> main
 
 import os
 

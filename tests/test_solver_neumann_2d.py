@@ -4,10 +4,14 @@ import numpy as np
 import pytest
 from thick_ptycho.sample_space.sample_space import SampleSpace
 from thick_ptycho.forward_model.solver import ForwardModel
+<<<<<<< HEAD
 
 def u_nm(a, n):
     """Returns the exact solution for a given n in 1D."""
     return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.cos(n * np.pi * x)
+=======
+from thick_ptycho.utils.visualisations import Visualisation
+>>>>>>> main
 
 
 def compute_error(nx, nz, thin_sample, full_system_solver):
