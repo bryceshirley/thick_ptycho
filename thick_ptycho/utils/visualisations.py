@@ -117,14 +117,14 @@ class Visualisation:
             t2_default = title + t2_default
 
         # Left panel
-        im0 = ax0.imshow(p1, cmap="viridis", origin="lower")
+        im0 = ax0.imshow(p1, cmap="viridis", aspect='auto', origin="lower")
         fig.colorbar(im0, ax=ax0)
         ax0.set_title(title_left if title_left is not None else t1_default)
         ax0.set_xlabel(xlabel_left if xlabel_left is not None else dim1)
         ax0.set_ylabel(ylabel_left if ylabel_left is not None else dim2)
 
         # Right panel
-        im1 = ax1.imshow(p2, cmap="viridis", origin="lower")
+        im1 = ax1.imshow(p2, cmap="viridis", aspect='auto', origin="lower")
         fig.colorbar(im1, ax=ax1)
         ax1.set_title(title_right if title_right is not None else t2_default)
         ax1.set_xlabel(xlabel_right if xlabel_right is not None else dim1)
@@ -244,7 +244,7 @@ class Visualisation:
             self._figs.clear(); self._widgets.clear()
 
     @staticmethod
-    def phase(arr: np.ndarray, tol: float = 5e-3) -> np.ndarray:
+    def phase(arr: np.ndarray, tol: float = 5e-12) -> np.ndarray:
         """Phase with near-zero magnitude masked to 0."""
         ph = np.angle(arr)
         mag = np.abs(arr)

@@ -76,12 +76,6 @@ class BoundaryConditions:
             else:
                 self.beta_y = 0
 
-        # precompute y-coupling (independent of BC modifications)
-        if sample_space.dimension == 2:
-            off = np.ones(self.ny - 1, dtype=complex)
-            self._Ay_coupling = sp.diags([off, off], offsets=[-1, 1],
-                                         shape=(self.ny, self.ny), dtype=complex)
-
     def get_initial_boundary_conditions_system(self):
 
         if self.sample_space.dimension == 1:
@@ -119,12 +113,12 @@ class BoundaryConditions:
         """RHS contributions (zero for Neumann & Impedance under this formulation)."""
         ubc = np.zeros(self.nx, dtype=complex)
         if self.bc_type == "dirichlet":
-            ubc[0]  += 2 * self.mu_x * self.probe[0]
-            ubc[-1] += 2 * self.mu_x * self.probe[-1]
+            ubc[1]  += 2 * self.mu_x * self.probe[0]
+            ubc[-2] += 2 * self.mu_x * self.probe[-1]
 
-        # elif self.bc_type == "impedance":
-        #     ubc[0]  -= 2 * self.beta_x * self.probe[0]
-        #     ubc[-1] -= 2 * self.beta_x * self.probe[-1]
+        elif self.bc_type == "impedance":
+            ubc[0]  -= 2 * self.beta_x * self.probe[0]
+            ubc[-1] -= 2 * self.beta_x * self.probe[-1]
 
         return ubc.flatten()
         
@@ -134,28 +128,37 @@ class BoundaryConditions:
 
         # Dirichlet Boundary Conditions
         if self.bc_type == "dirichlet":
-            ubc[0, :] += 2 * self.mu_x * self.probe[0, :]  # Top boundary
-            ubc[-1, :] += 2 * self.mu_x * self.probe[-1, :]  # Bottom boundary
-            ubc[:, 0] += 2 * self.mu_y * self.probe[:, 0]  # Left boundary
-            ubc[:, -1] += 2 * self.mu_y * self.probe[:, -1]  # Right boundary
+            ubc[1, :] += 2 * self.mu_x * self.probe[0, :]  # Top boundary
+            ubc[-2, :] += 2 * self.mu_x * self.probe[-1, :]  # Bottom boundary
+            ubc[:, 1] += 2 * self.mu_y * self.probe[:, 0]  # Left boundary
+            ubc[:, -2] += 2 * self.mu_y * self.probe[:, -1]  # Right boundary
 
-        # # Impedance Boundary Conditions
-        # elif self.bc_type == "impedance":
-        #     ubc[0, :] -= 2 * self.beta_x * self.probe[0, :]
-        #     ubc[-1, :] -= 2 * self.beta_x * self.probe[-1, :]
-        #     ubc[:, 0] -= 2 * self.beta_y * self.probe[:, 0]
-        #     ubc[:, -1] -= 2 * self.beta_y * self.probe[:, -1]
-        #     return ubc.flatten()
+        # Impedance Boundary Conditions
+        elif self.bc_type == "impedance":
+            ubc[1, :] -= 2 * self.beta_x * self.probe[0, :]
+            ubc[-2, :] -= 2 * self.beta_x * self.probe[-1, :]
+            ubc[:, 1] -= 2 * self.beta_y * self.probe[:, 0]
+            ubc[:, -2] -= 2 * self.beta_y * self.probe[:, -1]
+            return ubc.flatten()
 
         return ubc.flatten()
 
     # Create Matrices for 1D Boundary Conditions
     def _create_1D_dirichlet(self):
         e = np.ones(self.nx, dtype=complex)
-        return sp.diags(
+        K = sp.diags(
             [self.mu_x * e, -2 * (self.mu_x + self.mu_y) * e, self.mu_x * e],
             offsets=[-1, 0, 1], shape=(self.nx, self.nx), dtype=complex
-        )
+        ).tolil()  # Convert once to LIL for efficient row assignment
+
+        if self.bc_type == "dirchlet":
+            K[0, :] = 0
+            K[0, 0] = 1
+            K[-1, :] = 0
+            K[-1, -1] = 1
+
+        return K.tocsr()  # Convert back to CSR for efficient arithmetic
+
 
     def _apply_1D_neumann(self, K):
         """Modify matrix K for 1D Neumann boundary conditions."""
@@ -190,17 +193,21 @@ class BoundaryConditions:
         
         return Ax.tocsr(), Bx.tocsr()
     
-    # --- 2D builders (leave single versions only) ---
-    # Ensure only one set of 2D _create/_apply functions remains below.
+    # --- 2D builders ----
     def _create_2D_dirichlet(self, Ax, Bx):
         """Apply Dirichlet boundary conditions in 2D."""
         Ix = sp.eye(self.nx)
         Iy = sp.eye(self.ny)
         Axy = sp.kron(
-            Iy, Ax) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), -self.mu_y * Ix)
+            Iy, Ax) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), -self.mu_y * Ix).tolil()
         Bxy = sp.kron(
-            Iy, Bx) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), self.mu_y * Ix)
-        return Axy, Bxy
+            Iy, Bx) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), self.mu_y * Ix).tolil()
+        if self.bc_type == "dirichlet":
+            Axy[:self.nx, :self.nx] = Ix
+            Axy[-self.nx:, -self.nx:] = Ix
+            Bxy[:self.nx, :self.nx] = Ix
+            Bxy[-self.nx:, -self.nx:] = Ix
+        return Axy.tocsr(), Bxy.tocsr()
 
     def _apply_2D_neumann(self, Axy, Bxy):
         """Modify matrices Axy, Bxy for 2D Neumann boundary conditions."""
@@ -221,38 +228,6 @@ class BoundaryConditions:
         Axy[-self.nx:, -self.nx:] -= self.beta_y * Ix
         Bxy[:self.nx, :self.nx] += self.beta_y * Ix
         Bxy[-self.nx:, -self.nx:] += self.beta_y * Ix
-        return Axy.tocsr(), Bxy.tocsr()
-
-
-    def _create_2D_dirichlet(self, Ax, Bx):
-        """Base (Dirichlet) 2D operator slices (no BC modification yet)."""
-        Ix = sp.eye(self.nx, dtype=complex)
-        Iy = sp.eye(self.ny, dtype=complex)
-        Axy = sp.kron(Iy, Ax) - self.mu_y * sp.kron(self._Ay_coupling, Ix)
-        Bxy = sp.kron(Iy, Bx) + self.mu_y * sp.kron(self._Ay_coupling, Ix)
-        return Axy.tocsr(), Bxy.tocsr()
-
-    def _apply_2D_neumann(self, Axy, Bxy):
-        """Scale first off-boundary stencil rows for Neumann in y-direction."""
-        Axy = Axy.tolil()
-        Bxy = Bxy.tolil()
-        # Top coupling rows
-        Axy[:self.nx, self.nx:2*self.nx] *= 2
-        Bxy[:self.nx, self.nx:2*self.nx] *= 2
-        # Bottom coupling rows
-        Axy[-self.nx:, -2*self.nx:-self.nx] *= 2
-        Bxy[-self.nx:, -2*self.nx:-self.nx] *= 2
-        return Axy.tocsr(), Bxy.tocsr()
-
-    def _apply_2D_impedance(self, Axy, Bxy):
-        """Modify matrices Axy, Bxy for 2D Impedance boundary conditions."""
-        Ix = sp.eye(self.nx, dtype=complex)
-        Axy = Axy.tolil()
-        Bxy = Bxy.tolil()
-        Axy[:self.nx, :self.nx]     -= self.beta_y * Ix
-        Axy[-self.nx:, -self.nx:]   -= self.beta_y * Ix
-        Bxy[:self.nx, :self.nx]     += self.beta_y * Ix
-        Bxy[-self.nx:, -self.nx:]   += self.beta_y * Ix
         return Axy.tocsr(), Bxy.tocsr()
     
     def get_matrices_2d_system(self):
@@ -303,4 +278,4 @@ class BoundaryConditions:
         ubc[-1] -= 2 * self.beta_x * ue(self.x[-1], z)
 
         return ubc.flatten()
-
+ 
