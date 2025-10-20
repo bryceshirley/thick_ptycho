@@ -8,7 +8,7 @@ from thick_ptycho.forward_model.pwe_solver import (
     ForwardModelPWEFull,
     ForwardModelPWEIterative,
 )
-from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.utils.utils import setup_log
 
 

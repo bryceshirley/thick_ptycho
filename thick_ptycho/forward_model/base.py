@@ -2,9 +2,9 @@ import numpy as np
 import time
 from typing import Optional, List, Literal, Any
 
-from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.utils.utils import setup_log
-from thick_ptycho.forward_model.probes import Probes
+from thick_ptycho.thick_ptycho.simulation.ptycho_probe import Probes
 
 # # ---------------------------- Enums & Config ---------------------------- #
 
@@ -32,16 +32,13 @@ from thick_ptycho.forward_model.probes import Probes
 #     verbose: bool = True
 #     use_logging: bool = False
 #     results_dir: str = ""
-
-
-
 import numpy as np
 import time
 from typing import Optional, List, Literal, Any, Dict
 
-from thick_ptycho.sample_space.sample_space import SampleSpace
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.utils.utils import setup_log
-from thick_ptycho.forward_model.probes import Probes
+from thick_ptycho.thick_ptycho.simulation.ptycho_probe import Probes
 
 
 class BaseForwardModel:

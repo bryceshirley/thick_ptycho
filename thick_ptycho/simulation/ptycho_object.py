@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from thick_ptycho.utils.utils import setup_log
-from .optical_objects import OpticalObject
+from .shapes import OpticalObject
 from skimage import data, transform
 
 class SampleSpace:

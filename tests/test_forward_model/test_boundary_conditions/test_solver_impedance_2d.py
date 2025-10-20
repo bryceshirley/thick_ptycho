@@ -2,12 +2,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thick_ptycho.sample_space.sample_space import SampleSpace
-from thick_ptycho.forward_model.solver import ForwardModel
-<<<<<<< HEAD
-=======
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
+from thick_ptycho.thick_ptycho.forward_model.base import ForwardModel
 from thick_ptycho.utils.visualisations import Visualisation
->>>>>>> main
 
 import os
 

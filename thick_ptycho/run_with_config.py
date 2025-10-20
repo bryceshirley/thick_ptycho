@@ -3,8 +3,8 @@ import numpy as np
 import shutil
 from typing import Dict, Any, List, Tuple
 
-from thick_ptycho.sample_space.sample_space import SampleSpace
-from thick_ptycho.reconstruction.least_squares import LeastSquaresSolver
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
+from thick_ptycho.thick_ptycho.reconstruction.pwe_reconstructor import LeastSquaresSolver
 from thick_ptycho.utils.visualisations import Visualisation
 from thick_ptycho.utils.utils import load_config, get_git_commit_hash, results_dir_name
 

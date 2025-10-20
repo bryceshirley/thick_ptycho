@@ -1,4 +1,4 @@
-from . import forward_model
+from .forward_model import pwe_finite_differences
 #from . import reconstruction
-from . import sample_space
+from . import simulation
 from . import utils

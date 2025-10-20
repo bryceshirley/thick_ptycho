@@ -4,7 +4,7 @@ from scipy.special import jv
 from typing import Optional, Tuple, Union
 
 from .boundary_conditions import BoundaryConditions
-from ..probes import Probes
+from ...simulation.ptycho_probe import Probes
 
 
 class ForwardModelPWE:

@@ -2,7 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from thick_ptycho.forward_model.base_solver import BaseForwardModel
+from thick_ptycho.thick_ptycho.forward_model.base import BaseForwardModel
 from thick_ptycho.forward_model.PWE.linear_system import ForwardModelPWE
 
 

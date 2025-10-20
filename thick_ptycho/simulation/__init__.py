@@ -1,2 +1,2 @@
-from .optical_objects import OpticalObject
-from .sample_space import SampleSpace
+from .shapes import OpticalObject
+from .ptycho_object import SampleSpace
