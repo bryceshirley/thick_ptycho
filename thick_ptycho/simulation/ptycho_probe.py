@@ -12,7 +12,7 @@ def u0_nm_dirichlet(n, m):
     return lambda x, y: np.sin(n * np.pi * x) * np.sin(m * np.pi * y)
 
 
-class Probes:
+class PtychoProbes:
     """
     Probe field generator with reusable phase utilities.
 

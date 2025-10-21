@@ -7,22 +7,22 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from scipy.ndimage import gaussian_filter
 
-class OpticalObject:
+class OpticalShape:
     """
     Interface class to create either 1D or 2D initial conditions.
     """
     def __new__(cls, centre, *args, **kwargs):
         dimension = len(centre) - 1
         if dimension == 1:
-            return OpticalObject1D(centre, *args, **kwargs)
+            return OpticalShape1D(centre, *args, **kwargs)
         elif dimension == 2:
-            return OpticalObject2D(centre, *args, **kwargs)
+            return OpticalShape2D(centre, *args, **kwargs)
         else:
             raise ValueError("Unsupported dimension: {}".format(dimension))
 
 
-class OpticalObject1D:
-    """Represents an optical object in the simulation in 1D."""
+class OpticalShape1D:
+    """Represents an optical shape in the simulation in 1D."""
 
     def __init__(self, centre, shape, refractive_index, side_length, depth,
                  nx, nz, x, z, guassian_blur):
@@ -137,18 +137,6 @@ class OpticalObject1D:
             (self.cx - half_side_length, self.cz + half_depth)   # Bottom-left
         ]
 
-        # # Rotate the points by 45 degrees around the center
-        # angle_rad = math.radians(45)
-        # cos_angle = math.cos(angle_rad)
-        # sin_angle = math.sin(angle_rad)
-
-        # rotated_points = []
-        # for x, z in square_points:
-        #     x_rot = self.cx + (x - self.cx) * cos_angle - (z - self.cz) * sin_angle
-        #     z_rot = self.cz + (x - self.cx) * sin_angle + (z - self.cz) * cos_angle
-        #     rotated_points.append((x_rot, z_rot))
-
-        # square_points = rotated_points
         return square_points
 
     def _triangle_points(self):
@@ -208,8 +196,8 @@ class OpticalObject1D:
         return points
 
 
-class OpticalObject2D:
-    """Represents an optical object in the simulation in 2D."""
+class OpticalShape2D:
+    """Represents an optical shape in the simulation in 2D."""
 
     def __init__(self, centre, shape, refractive_index, side_length, depth,
                  nx, ny, nz, x, y, z, guassian_blur):
@@ -231,7 +219,6 @@ class OpticalObject2D:
         assert centre[2] - depth/2 >= z[0], "Object out of bounds"
         assert centre[2] + depth/2 <= z[-1], "Object out of bounds"
 
-        # TODO: Change to descrete side scale incase nx != ny
         # Convert the side_lengthof object face to discrete side
         self.discrete_side_length = int(
             np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
