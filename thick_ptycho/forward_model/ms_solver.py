@@ -1,5 +1,5 @@
 import numpy as np
-from thick_ptycho.thick_ptycho.forward_model.base import BaseForwardModel
+from thick_ptycho.thick_ptycho.forward_model.base_solver import BaseForwardModel
 
 
 class ForwardModelMS(BaseForwardModel):

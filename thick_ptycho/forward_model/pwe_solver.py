@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.thick_ptycho.forward_model.base import BaseForwardModel
+from thick_ptycho.thick_ptycho.forward_model.base_solver import BaseForwardModel
 from thick_ptycho.forward_model.pwe_finite_differences import PWEFiniteDifferences
 
 

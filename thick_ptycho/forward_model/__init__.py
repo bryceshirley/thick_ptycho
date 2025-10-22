@@ -1,2 +1,2 @@
 from .multislice.multislice import MultiSlicePWE
-from .base import ForwardModel
+from .base_solver import ForwardModel
