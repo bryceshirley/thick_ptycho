@@ -1,0 +1,97 @@
+"""
+Configuration definitions for ptychographic simulations.
+
+This module provides typed configuration structures and enumerations
+used throughout the simulation package, including boundary conditions,
+probe field types, and general simulation parameters.
+"""
+
+from typing import List, Tuple, Optional
+from dataclasses import dataclass
+
+from enum import Enum
+
+class BoundaryCondition(Enum):
+    """Supported boundary condition types for the simulation domain."""
+    DIRICHLET = "dirichlet"
+    NEUMANN = "neumann"
+    IMPEDANCE = "impedance"
+
+    @classmethod
+    def list(cls):
+        """Return a list of all boundary condition names."""
+        return [bc.value for bc in cls]
+
+class ProbeType(Enum):
+    """Enumeration of supported probe field types."""
+    CONSTANT = "constant"
+    GAUSSIAN = "gaussian"
+    SINUSOIDAL = "sinusoidal"
+    COMPLEX_EXP = "complex_exp"
+    DIRICHLET_TEST = "dirichlet_test"
+    NEUMANN_TEST = "neumann_test"
+    AIRY_DISK = "airy_disk"
+    DISK = "disk"
+    BLURRED_DISK = "blurred_disk"
+
+    @classmethod
+    def list(cls):
+        """Return a list of all probe type names."""
+        return [p.value for p in cls]
+
+@dataclass
+class SimulationConfig:
+    """
+    Configuration object for defining the simulation space and probe parameters.
+
+    Attributes
+    ----------
+    continuous_dimensions : tuple
+        Coordinate arrays defining the simulation domain.
+    discrete_dimensions : tuple of int
+        Number of discrete grid points in each spatial dimension.
+    probe_dimensions : tuple of int
+        Dimensions of the probe region.
+    scan_points : int
+        Number of scan positions in one dimension.
+    step_size : float
+        Step size between scan positions.
+    bc_type : BoundaryCondition
+        Boundary condition type for the simulation domain.
+    probe_type : ProbeType
+        Type of probe field to use.
+    wave_number : float
+        Optical wavenumber (2π / λ).
+    probe_diameter : float, optional
+        Diameter of the probe aperture.
+    probe_focus : float, optional
+        Focal length of the probe.
+    probe_angle_list : List[float]
+        List of probe tilt angle(s) in degrees.
+    thin_sample : bool, default=False
+        Whether to use a thin-sample approximation.
+    n_medium : float, default=1.0
+        Refractive index of the propagation medium.
+    results_dir : str, optional
+        Output directory for simulation results.
+    use_logging : bool, default=True
+        Whether to enable logging.
+    verbose : bool, default=False
+        Whether to print additional debug information.
+    """
+    continuous_dimensions: Tuple
+    discrete_dimensions: Tuple[int, ...]
+    probe_dimensions: Tuple[int, ...]
+    scan_points: Tuple
+    step_size: float
+    bc_type: BoundaryCondition
+    probe_type: ProbeType
+    wave_number: float
+    probe_diameter: Optional[float] = None
+    probe_focus: Optional[float] = 0.0
+    probe_angle_list: List[float] = [0.0]
+    thin_sample: bool = False
+    n_medium: float = 1.0
+    results_dir: Optional[str] = None
+    use_logging: bool = True
+    verbose: bool = False

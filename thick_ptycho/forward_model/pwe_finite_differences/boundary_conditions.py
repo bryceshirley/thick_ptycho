@@ -2,103 +2,57 @@ import numpy as np
 import scipy.sparse as sp
 
 
-def u_nm(a, n, m):
-    """Returns the exact solution for a given n and m."""
-    return lambda x, y, z: np.exp(-a * ((n**2) + (m**2)) * (np.pi**2)
-                                  * z) * np.cos(n * np.pi * x) * np.cos(m * np.pi * y)
-
-
-def u_exact_neuman_1d(a):
-    return lambda x, z: u_nm(a, 1, 0)(
-        x, 0, z) + 0.5 * u_nm(a, 2, 0)(x, 0, z) + 0.2 * u_nm(a, 5, 0)(x, 0, z)
-
-
-def u_exact_neuman_2d(a):
-    return lambda x, y, z: u_nm(a, 1, 1)(
-        x, y, z) + 0.5 * u_nm(a, 2, 2)(x, y, z) + 0.2 * u_nm(a, 5, 5)(x, y, z)
-
-
 class BoundaryConditions:
     """
     Handles boundary conditions and sets up the system matrices.
     """
 
-    def __init__(self, sample_space, probe, thin_sample=False,
-                 scan_index=0):
-        self.sample_space = sample_space
+    def __init__(self, simulation_space, probe):
+        self.simulation_space = simulation_space
         self.probe = probe
-        self.bc_type = sample_space.bc_type
-        self.probe_type = sample_space.probe_type
-        self.dz = sample_space.dz
-        self.k = sample_space.k
+        self.bc_type = simulation_space.bc_type
+        self.probe_type = simulation_space.probe_type
+        self.dz = simulation_space.dz
+        self.k = simulation_space.k
         self.a = 1j / (2 * self.k)
-        self.scan_index = scan_index
-        self.thin_sample = thin_sample
 
-        # If thin_sample use sub_dimensions
-        if thin_sample:
-            self.x = sample_space.detector_frame_info[scan_index]['sub_dimensions'][0]
-            self.nx = sample_space.sub_nx
-            if self.sample_space.dimension == 2:
-                self.ny = self.sample_space.sub_ny
+        if simulation_space.dimension == 2:
+            self.nx, self.ny = simulation_space.slice_dimensions
+            self.dy = simulation_space.dy
         else:
-            self.x = sample_space.x
-            self.nx = sample_space.nx
-            if self.sample_space.dimension == 2:
-                self.ny = self.sample_space.ny
+            self.nx = simulation_space.slice_dimensions[0]
+        self.dx = simulation_space.dx
 
-        if sample_space.dimension == 2:
-            if thin_sample:
-                self.y = sample_space.detector_frame_info[scan_index]['sub_dimensions'][1]
-                self.ny = sample_space.sub_ny
-                self.dy = self.y[1] - self.y[0]
-            else:
-                self.y = sample_space.y
-                self.ny = sample_space.ny
-                self.dy = sample_space.dy
-
-        self.dx = sample_space.dx
-
-        r_x = (0.5 * sample_space.dz / self.dx**2)
+        r_x = (0.5 * simulation_space.dz / self.dx**2)
         self.mu_x = self.a * r_x
 
-        if sample_space.dimension == 2:
-            r_y = (0.5 * sample_space.dz / self.dy**2)
+        if simulation_space.dimension == 2:
+            r_y = (0.5 * simulation_space.dz / self.dy**2)
             self.mu_y = self.a * r_y
         else:
             self.mu_y = 0
 
-        if sample_space.bc_type == "impedance":  # Impedance
+        if simulation_space.bc_type == "impedance":  # Impedance
             self.beta_x = self.mu_x * 2 * 1j * self.k * self.dx
 
-            if sample_space.dimension == 2:
+            if simulation_space.dimension == 2:
                 self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy
             else:
                 self.beta_y = 0
 
     def get_initial_boundary_conditions_system(self):
-
-        if self.sample_space.dimension == 1:
+        if self.simulation_space.dimension == 1:
             return self.get_initial_boundary_conditions_1d_system()
-        elif self.sample_space.dimension == 2:
+        elif self.simulation_space.dimension == 2:
             return self.get_initial_boundary_conditions_2d_system()
-        else:
-            raise ValueError("Unsupported dimension")
-    
-    def get_exact_boundary_conditions_system(self, z):
-        """Get the exact boundary conditions for the system."""
-        if self.sample_space.dimension == 1:
-            return self.get_exact_boundary_conditions_1d_test(z)
-        elif self.sample_space.dimension == 2:
-            return self.get_exact_boundary_conditions_2d_test(z)
         else:
             raise ValueError("Unsupported dimension")
 
     def get_matrix_system(self):
         """Get the system matrices based on the boundary condition type."""
-        if self.sample_space.dimension == 1:
+        if self.simulation_space.dimension == 1:
             return self.get_matrices_1d_system()
-        elif self.sample_space.dimension == 2:
+        elif self.simulation_space.dimension == 2:
             return self.get_matrices_2d_system()
         else:
             raise ValueError("Unsupported dimension")
@@ -253,29 +207,4 @@ class BoundaryConditions:
             raise ValueError(
                 "Invalid boundary condition type. Please choose from dirichlet, neumann or dirichlet.")
     
-    # Test Methods for Impedance Boundary Conditions
-
-    def get_exact_boundary_conditions_2d_test(self, z):
-        """Apply the initial condition to the boundaries."""
-        ubc = np.zeros((self.nx, self.ny), dtype=complex)
-
-        # Impedance Boundary Conditions
-        ue = u_exact_neuman_2d(self.a)
-        ubc[0, :] -= 2 * self.beta_x * ue(self.x[0], self.y, z)
-        ubc[-1, :] -= 2 * self.beta_x * ue(self.x[-1], self.y, z)
-        ubc[:, 0] -= 2 * self.beta_y * ue(self.x, self.y[0], z)
-        ubc[:, -1] -= 2 * self.beta_y * ue(self.x, self.y[-1], z)
-
-        return ubc.flatten()
-
-    def get_exact_boundary_conditions_1d_test(self, z):
-        """Apply the initial condition to the boundaries."""
-        ubc = np.zeros((self.nx), dtype=complex)
-
-        # Impedance Boundary Conditions
-        ue = u_exact_neuman_1d(self.a)
-        ubc[0] -= 2 * self.beta_x * ue(self.x[0], z)
-        ubc[-1] -= 2 * self.beta_x * ue(self.x[-1], z)
-
-        return ubc.flatten()
  

@@ -24,12 +24,17 @@ class OpticalShape:
 class OpticalShape1D:
     """Represents an optical shape in the simulation in 1D."""
 
-    def __init__(self, centre, shape, refractive_index, side_length, depth,
-                 nx, nz, x, z, guassian_blur):
+    def __init__(self, centre, shape, refractive_index, 
+                 side_length, depth, guassian_blur,
+                 simulation_space):
         self.shape = shape
         self.refractive_index = refractive_index
-        self.nx = nx
-        self.nz = nz
+        nx = simulation_space.nx
+        nz = simulation_space.nz
+        x = simulation_space.x
+        if simulation_space.bc_type == "dirichlet":
+            x = x[1:-1]  # Exclude the boundary points
+        z = simulation_space.z
 
         # Convert the centre of the object to the discrete grid
         discrete_centre = (
@@ -39,10 +44,14 @@ class OpticalShape1D:
         self.cx, self.cz = discrete_centre
         self.centre = centre
 
+        # Check if the object is within the bounds of the simulation space
         assert centre[1] - depth/2 >= z[0], "Object out of bounds"
         assert centre[1] + depth/2 <= z[-1], "Object out of bounds"
+        assert len(
+            centre) == 2, "Centre must be a tuple of (x, z) coordinates."
+        assert simulation_space.xlims[0] <= centre[0] <= simulation_space.xlims[1], "Centre x-coordinate out of bounds."
+        assert simulation_space.zlims[0] <= centre[2] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
 
-        # TODO: Change to descrete side scale incase nx != ny
         # Convert the side_lengthof object face to discrete side
         self.discrete_side_length = int(
             np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
@@ -200,12 +209,18 @@ class OpticalShape2D:
     """Represents an optical shape in the simulation in 2D."""
 
     def __init__(self, centre, shape, refractive_index, side_length, depth,
-                 nx, ny, nz, x, y, z, guassian_blur):
+                 guassian_blur, simulation_space):
         self.shape = shape
         self.refractive_index = refractive_index
-        self.nx = nx
-        self.ny = ny
-        self.nz = nz
+        nx = simulation_space.nx
+        ny = simulation_space.ny
+        nz = simulation_space.nz
+        x = simulation_space.x
+        y = simulation_space.y
+        if simulation_space.bc_type == "dirichlet":
+            x = x[1:-1]  # Exclude the boundary points
+            y = y[1:-1]  # Exclude the boundary points
+        z = simulation_space.z
 
         # Convert the centre of the object to the discrete grid
         discrete_centre = (
@@ -216,8 +231,14 @@ class OpticalShape2D:
         self.cx, self.cy, self.cz = discrete_centre
         self.centre = centre
 
+        # Check if the object is within the bounds of the simulation space
         assert centre[2] - depth/2 >= z[0], "Object out of bounds"
         assert centre[2] + depth/2 <= z[-1], "Object out of bounds"
+        assert len(
+            centre) == 3, "Centre must be a tuple of (x, y, z) coordinates."
+        assert simulation_space.xlims[0] <= centre[0] <= simulation_space.xlims[1], "Centre x-coordinate out of bounds."
+        assert simulation_space.ylims[0] <= centre[1] <= simulation_space.ylims[1], "Centre y-coordinate out of bounds."
+        assert simulation_space.zlims[0] <= centre[2] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
 
         # Convert the side_lengthof object face to discrete side
         self.discrete_side_length = int(

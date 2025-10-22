@@ -4,7 +4,7 @@ from typing import Optional, List, Literal, Any
 
 from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.utils.utils import setup_log
-from thick_ptycho.thick_ptycho.simulation.ptycho_probe import Probes
+from thick_ptycho.thick_ptycho.simulation.ptycho_probe.ptycho_probe import Probes
 
 # # ---------------------------- Enums & Config ---------------------------- #
 
@@ -34,11 +34,12 @@ from thick_ptycho.thick_ptycho.simulation.ptycho_probe import Probes
 #     results_dir: str = ""
 import numpy as np
 import time
-from typing import Optional, List, Literal, Any, Dict
+from typing import Optional, List, Literal, Any, Dict, Union
 
-from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
+from thick_ptycho.thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
+from thick_ptycho.thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
 from thick_ptycho.utils.utils import setup_log
-from thick_ptycho.thick_ptycho.simulation.ptycho_probe import Probes
+from thick_ptycho.thick_ptycho.simulation.ptycho_probe.ptycho_probe import PtychoProbes
 
 
 class BaseForwardModel:
@@ -54,40 +55,35 @@ class BaseForwardModel:
 
     def __init__(
         self,
-        sample_space: SampleSpace,
+        simulation_space: Union[SimulationSpace1D, SimulationSpace2D],
+        ptycho_object: Union[PtychoObject1D, PtychoObject2D],
+        ptycho_probes: np.ndarray,
         solver_type: Literal["pwe_iterative", "pwe_full", "multislice"],
-        thin_sample: bool = True,
-        probe_angles_list: Optional[List[Any]] = None,
         results_dir: str = "",
         use_logging: bool = False,
         verbose: bool = True,
         log=None,
     ):
-        self.sample_space = sample_space
+        self.simulation_space = simulation_space
+        self.ptycho_object = ptycho_object
         self.solver_type = solver_type.lower()
-        self.thin_sample = thin_sample
-        self.nz = sample_space.nz
         self.verbose = verbose
-        self.num_probes = sample_space.num_probes
-        self.probe_angles_list = probe_angles_list or [0.0]
+
+        if results_dir is None:
+            results_dir = simulation_space.results_dir
 
         # Logger
         self._log = log or setup_log(results_dir, "solver_log.txt", use_logging, verbose)
 
         # Determine slice dimensions
-        if sample_space.dimension == 1:
-            nx = sample_space.sub_nx if thin_sample else sample_space.nx
-            self.slice_dimensions = (nx,)
-        elif sample_space.dimension == 2:
-            nx = sample_space.sub_nx if thin_sample else sample_space.nx
-            ny = sample_space.sub_ny if thin_sample else sample_space.ny
-            self.slice_dimensions = (nx, ny)
-        else:
-            raise ValueError("Unsupported sample space dimension")
+        self.thin_sample = simulation_space.thin_sample
+        self.slice_dimensions = simulation_space.slice_dimensions
+        self.nz = simulation_space.nz
 
         # Probe setup
-        self.probe_builder = Probes(sample_space, thin_sample, angles_list=self.probe_angles_list)
-        self.probes = self.probe_builder.build_probes()
+        self.probes = ptycho_probes
+        self.num_probes = simulation_space.num_probes
+        self.probe_angles_list = simulation_space.probe_angles_list
         self.num_angles = len(self.probe_angles_list)
 
     # ------------------------------------------------------------------
@@ -99,12 +95,18 @@ class BaseForwardModel:
         Main multi-angle, multi-probe solving loop.
         Subclasses must define `_solve_single_probe(angle_idx, probe_idx, n, **kwargs)`.
         """
+        # Initialize solution grid with initial condition
         u = self._create_solution_grid()
+
+        # Prepare Solver
+        self.prepare_solver(n=n, **kwargs)
+
+        # Loop over angles and probes
         for a_idx, angle in enumerate(self.probe_angles_list):
             for p_idx in range(self.num_probes):
                 start = time.time()
                 u[a_idx, p_idx, ...] = self._solve_single_probe(
-                    angle_idx=a_idx, probe_idx=p_idx, n=n, **kwargs
+                    probe=self.probes[a_idx, p_idx, ...], n=n, **kwargs
                 )
                 if self.verbose:
                     self._log(
@@ -113,9 +115,13 @@ class BaseForwardModel:
                     )
         return u
 
-    def _solve_single_probe(self, angle_idx: int, probe_idx: int, n=None):
+    def _solve_single_probe(self, angle_idx: int, probe_idx: int, n=None, **kwargs) -> np.ndarray:
         """Override in subclasses."""
         raise NotImplementedError
+    
+    def prepare_solver(self, n: Optional[np.ndarray] = None, **kwargs):
+        """Optional pre-solve setup (e.g., precomputations). Override in subclasses."""
+        pass
 
     def _create_solution_grid(self) -> np.ndarray:
         """Create an empty solution tensor."""
@@ -145,9 +151,9 @@ class BaseForwardModel:
         """
         u = self.solve(n=n, **kwargs)
         # Slice final z-plane for each angle & probe
-        if self.sample_space.dimension == 1:
+        if self.simulation_space.dimension == 1:
             return u[..., -1]
-        elif self.sample_space.dimension == 2:
+        elif self.simulation_space.dimension == 2:
             return u[..., -1]
         else:
             raise ValueError("Unsupported sample dimension for exit wave simulation")
@@ -178,10 +184,10 @@ class BaseForwardModel:
         -------
         intensities: np.ndarray
         """
-        exit_waves = exit_waves or self.simulate_exit_waves(n=n, **kwargs)
+        exit_waves = exit_waves or self.simulate_exit_waves(n=n)
 
         # Compute FFTs for all probes and angles
-        if self.sample_space.dimension == 1:
+        if self.simulation_space.dimension == 1:
             fft_waves = np.fft.fftshift(np.fft.fft(exit_waves, axis=-1))
         else:
             fft_waves = np.fft.fftshift(np.fft.fft2(exit_waves, axes=(-2, -1)))
@@ -204,7 +210,7 @@ class BaseForwardModel:
 # import scipy.sparse.linalg as spla
 
 # from .PWE.paraxial_wave_equation import LinearSystemSetup
-# from thick_ptycho.sample_space.sample_space import SampleSpace
+# from thick_ptycho.simulation_space.simulation_space import SampleSpace
 # from thick_ptycho.utils.utils import setup_log
 # from thick_ptycho.forward_model.probes import Probes
 
@@ -215,7 +221,7 @@ class BaseForwardModel:
 #     Handles various initial conditions, boundary conditions, and objects in free space.
 #     """
 
-#     def __init__(self, sample_space: SampleSpace,
+#     def __init__(self, simulation_space: SampleSpace,
 #                  full_system_solver: Optional[bool] = False,
 #                  thin_sample: Optional[bool] = True,
 #                  probe_angles_list: Optional[List[float]] = [0.0],
@@ -233,29 +239,29 @@ class BaseForwardModel:
 #             self._log = setup_log(results_dir,log_file_name="solver_log.txt",
 #                                use_logging=use_logging, verbose=verbose)
 
-#         self.sample_space = sample_space
-#         self.nz = sample_space.nz
-#         self.probe_dimensions = sample_space.probe_dimensions
+#         self.simulation_space = simulation_space
+#         self.nz = simulation_space.nz
+#         self.probe_dimensions = simulation_space.probe_dimensions
 #         self.thin_sample = thin_sample
 #         self.full_system = full_system_solver
 
 #         # Determine slice dimensions based on sample type and boundary conditions
-#         if self.sample_space.dimension == 2:
-#             nx = self.sample_space.sub_nx if self.thin_sample else self.sample_space.nx
-#             ny = self.sample_space.sub_ny if self.thin_sample else self.sample_space.ny
+#         if self.simulation_space.dimension == 2:
+#             nx = self.simulation_space.sub_nx if self.thin_sample else self.simulation_space.nx
+#             ny = self.simulation_space.sub_ny if self.thin_sample else self.simulation_space.ny
 #             self.slice_dimensions = (nx, ny)
-#         elif self.sample_space.dimension == 1:
-#             nx = self.sample_space.sub_nx if self.thin_sample else self.sample_space.nx
+#         elif self.simulation_space.dimension == 1:
+#             nx = self.simulation_space.sub_nx if self.thin_sample else self.simulation_space.nx
 #             self.slice_dimensions = (nx,)
 #         else:
-#             raise ValueError("Unsupported sample_space dimension")
+#             raise ValueError("Unsupported simulation_space dimension")
 
-#         # if self.sample_space.bc_type == "dirichlet":
+#         # if self.simulation_space.bc_type == "dirichlet":
 #         #     self.slice_dimensions_dirichlet = tuple(dim + 2 for dim in self.slice_dimensions)
 
 #         # Probe generator
 #         self.probe_angles_list = probe_angles_list
-#         self.probe_builder = Probes(self.sample_space, thin_sample=thin_sample,
+#         self.probe_builder = Probes(self.simulation_space, thin_sample=thin_sample,
 #                                     probe_angles_list=probe_angles_list) # (num_probes, nx)
 
 #         # Precompute probes for all scans × angles
@@ -263,7 +269,7 @@ class BaseForwardModel:
 #         self.num_probes = len(self.probes)
 
 
-#         self.linear_system = ForwardModelPWE(sample_space,
+#         self.linear_system = ForwardModelPWE(simulation_space,
 #                                                self.thin_sample,
 #                                                self.full_system)
 
@@ -318,7 +324,7 @@ class BaseForwardModel:
 
 #             # Time taken for each scan if verbose is True
 #             if verbose:
-#                 self._log(f"Time to solve scan {scan_index+1}/{self.sample_space.num_probes}: {end_time - start_time} seconds")
+#                 self._log(f"Time to solve scan {scan_index+1}/{self.simulation_space.num_probes}: {end_time - start_time} seconds")
             
 #             return sol
         
@@ -326,7 +332,7 @@ class BaseForwardModel:
 #         for angle_index, probe_angle in enumerate(self.probe_angles_list):
 #             if verbose and len(self.probe_angles_list) > 1:
 #                 self._log(f"Solving for probe angle {angle_index+1}/{len(self.probe_angles_list)}: {probe_angle} radians")
-#             for scan_index in range(self.sample_space.num_probes):
+#             for scan_index in range(self.simulation_space.num_probes):
 #                 u[angle_index,scan_index, ...] = solve_single_probe(scan_index, angle_index=angle_index)
 
 #         return u
@@ -338,7 +344,7 @@ class BaseForwardModel:
 #         A_lu_list = []
 #         B_mod_list = []
 
-#         object_slices = self.sample_space.create_sample_slices(
+#         object_slices = self.simulation_space.create_sample_slices(
 #                             self.thin_sample,
 #                             n=n).reshape(-1, self.nz - 1)
 
@@ -434,7 +440,7 @@ class BaseForwardModel:
 #         # Initialize solution grid
 #         solution = np.zeros((self.block_size, self.nz),
 #                             dtype=complex)
-#         probe_index = angle_index*self.sample_space.num_probes + scan_index
+#         probe_index = angle_index*self.simulation_space.num_probes + scan_index
 
 #         # Set initial condition
 #         if isinstance(initial_condition, int):
@@ -471,7 +477,7 @@ class BaseForwardModel:
 #         # For thin samples with spsolve
 #         else:
 #             object_slices = (
-#                     self.sample_space.create_sample_slices(
+#                     self.simulation_space.create_sample_slices(
 #                         self.thin_sample, n=n, scan_index=scan_index
 #                     )
 #                 ).reshape(-1, self.nz - 1)
@@ -522,7 +528,7 @@ class BaseForwardModel:
 #         """Create the solution grid based on the sample space and boundary 
 #         conditions."""
 #         return np.zeros(
-#             (len(self.probe_angles_list), self.sample_space.num_probes,
+#             (len(self.probe_angles_list), self.simulation_space.num_probes,
 #                 *self.slice_dimensions, self.nz),
 #             dtype=complex
 #         )
@@ -536,36 +542,36 @@ class BaseForwardModel:
 #     """
 
 #     def __init__(self,
-#                  sample_space,
+#                  simulation_space,
 #                  pad_factor: float = 1.0,
 #                  use_padding: bool = False,
 #                  dtype=np.complex64,
 #                  remove_global_phase: bool = True,
 #                  normalize_probes: bool = True):
 
-#         assert sample_space.dimension == 1, "MultiSliceForwardModel expects 1D SampleSpace."
+#         assert simulation_space.dimension == 1, "MultiSliceForwardModel expects 1D SampleSpace."
 
-#         self.sample_space = sample_space
-#         self.k = sample_space.k
+#         self.simulation_space = simulation_space
+#         self.k = simulation_space.k
 #         self.wavelength = 2 * np.pi / self.k
-#         self.nx = sample_space.nx
-#         self.nz = sample_space.nz
-#         self.dx = sample_space.dx
-#         self.dz = sample_space.dz
-#         self.n_medium = sample_space.n_medium
+#         self.nx = simulation_space.nx
+#         self.nz = simulation_space.nz
+#         self.dx = simulation_space.dx
+#         self.dz = simulation_space.dz
+#         self.n_medium = simulation_space.n_medium
 #         self.dtype = dtype
 #         self.remove_global_phase = remove_global_phase
 #         self.normalize_probes = normalize_probes
 
 #         # --- Object field
-#         self.n_field = sample_space.n_true  # (nx, nz)
+#         self.n_field = simulation_space.n_true  # (nx, nz)
 
 #         # --- Detector info
-#         self._detector_info = sample_space.detector_frame_info
-#         self._probe_half_width = sample_space.probe_dimensions[0] // 2
+#         self._detector_info = simulation_space.detector_frame_info
+#         self._probe_half_width = simulation_space.probe_dimensions[0] // 2
 
 #         # Probe generator
-#         self.probe_builder = Probes(self.sample_space, thin_sample=False)[0] # (num_probes, nx)
+#         self.probe_builder = Probes(self.simulation_space, thin_sample=False)[0] # (num_probes, nx)
 
 #         # Precompute probes for all scans × angles
 #         self.probes = self.probe_builder.build_probes()
