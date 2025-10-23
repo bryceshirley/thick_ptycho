@@ -32,10 +32,6 @@ class ReconstructorBase:
         Enable internal logging.
     verbose : bool, default=False
         Print progress messages to stdout.
-    use_gs_init : bool, default=False
-        Perform Gerchberg–Saxton initialization if data is intensity-only.
-    gs_iters : int, default=10
-        Number of GS iterations for phase initialization.
     log_file_name : str, optional
         Name of the log file. Defaults to "<classname>_log.txt".
     """
@@ -70,19 +66,6 @@ class ReconstructorBase:
             use_logging=use_logging,
             verbose=verbose,
         )
-
-        # Data validation
-        if data_is_intensity and np.iscomplexobj(self.data):
-            raise ValueError("Intensity data must be real-valued.")
-        if not data_is_intensity and not np.iscomplexobj(self.data):
-            raise ValueError("Complex exit wave data expected for data_is_intensity=False.")
-
-        # Optional GS initialization
-        if self.data_is_intensity and self.use_gs_init:
-            self._log(f"Performing Gerchberg–Saxton initialization for {self.gs_iters} iterations...")
-            self.data = self._gerchberg_saxton_init(self.data, self.gs_iters)
-            self.data_is_intensity = False
-            self._log("Gerchberg–Saxton initialization complete.")
 
     # -------------------------------------------------------------------------
     # Utility methods

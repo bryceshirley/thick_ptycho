@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.sparse.linalg as spla
-from scipy.ndimage import gaussian_filter1d
+
 import time
 from typing import Optional, List
 
@@ -43,8 +43,6 @@ class ReconstructorPWE(ReconstructorBase):
         simulation_space: simulation_space,
         ptycho_object: ptycho_object,
         ptycho_probes: np.ndarray,
-        data,
-        phase_retrieval: bool = False,
         results_dir=None,
         use_logging=True,
         verbose=False,
@@ -55,8 +53,6 @@ class ReconstructorPWE(ReconstructorBase):
             simulation_space=simulation_space,
             ptycho_object=ptycho_object,
             ptycho_probes=ptycho_probes,
-            data=data,
-            phase_retrieval=phase_retrieval,
             results_dir=results_dir,
             use_logging=use_logging,
             verbose=verbose,
@@ -84,6 +80,9 @@ class ReconstructorPWE(ReconstructorBase):
         self._results_dir = results_dir
         self._log("Initializing Least Squares Solver...")
         self.visualisation = Visualisation(simulation_space, results_dir=results_dir)
+        
+        self.data = None
+        self.phase_retrieval = False
 
 
     def compute_forward_model(self, nk, probes: Optional[np.ndarray] = None):
@@ -208,10 +207,11 @@ class ReconstructorPWE(ReconstructorBase):
 
         return u
 
-    def solve(
+    def reconstruct(
             self,
+            data: np.ndarray,
+            phase_retrieval: bool = False,
             n_initial=None,
-            known_phase=True,
             max_iters=10,
             tol=1e-8,
             plot_forward=False,
@@ -222,6 +222,9 @@ class ReconstructorPWE(ReconstructorBase):
             solve_probe=False,
             sparsity_lambda=0.0):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
+        # Store data and phase retrieval mode
+        self.data = data
+        self.phase_retrieval = phase_retrieval
 
         # Initialize the fixed step size
         if fixed_step_size is not None:
@@ -258,7 +261,7 @@ class ReconstructorPWE(ReconstructorBase):
             uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
 
             grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(uk, grad_Ak,known_phase=known_phase)
+                self.compute_grad_least_squares(uk, grad_Ak)
             )
 
             # Compute RMSE of the current refractive index estimate
