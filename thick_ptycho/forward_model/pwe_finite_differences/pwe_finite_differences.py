@@ -43,7 +43,7 @@ class PWEFiniteDifferences:
             self.nx, self.ny = self.slice_dimensions
 
         if not self.thin_sample and self.full_system:
-            self.A_slice, self.B_slice, self.b_slice = self.create_system_slice()
+            self.A_slice, self.B_slice, self.b_slice = self.generate_zstep_matrices()
 
         self.block_size = self.nx if self.simulation_space.dimension == 1 else self.nx * self.ny
 
@@ -76,7 +76,7 @@ class PWEFiniteDifferences:
             Sparse matrix of size ( (nz-1)*block_size , (nz-1)*block_size ).
         """
         if self.thin_sample or not self.full_system:
-            self.A_slice, self.B_slice, _ = self.create_system_slice(probe=probe)
+            self.A_slice, self.B_slice, _ = self.generate_zstep_matrices(probe=probe)
 
         A_homogeneous = (
             sp.kron(sp.eye(self.simulation_space.nz - 1, format="csr"), self.A_slice, format="csr")
@@ -98,7 +98,7 @@ class PWEFiniteDifferences:
             Vector of length (nz-1)*block_size.
         """
         if self.thin_sample or not self.full_system:
-            _, _, self.b_slice = self.create_system_slice(probe=probe)
+            _, _, self.b_slice = self.generate_zstep_matrices(probe=probe)
         return np.tile(self.b_slice, self.simulation_space.nz - 1)
 
     def setup_inhomogeneous_forward_model(self, n=None, grad: bool = False, scan_index: int = 0):
@@ -119,7 +119,7 @@ class PWEFiniteDifferences:
         scipy.sparse.dia_matrix
             Diagonal matrix with the object slices and a subdiagonal coupling.
         """
-        object_slices = self.simulation_space.create_sample_slices(
+        object_slices = self.simulation_space.create_object_contribution(
             self.thin_sample, n=n, grad=grad, scan_index=scan_index
         )
         return sp.diags(object_slices.T.flatten()) + sp.diags(
@@ -149,13 +149,13 @@ class PWEFiniteDifferences:
             b0 = self.b0[scan_index, :]
         else:
             if self.thin_sample:
-                _, self.B_slice, self.b_slice = self.create_system_slice(probe=probe)
+                _, self.B_slice, self.b_slice = self.generate_zstep_matrices(probe=probe)
             probe = probe.flatten()
             b0 = self.B_slice @ probe + self.b_slice
 
         return np.concatenate((b0, np.zeros(self.block_size * (self.simulation_space.nz - 2))))
 
-    def create_system_slice(self, probe: np.ndarray):
+    def generate_zstep_matrices(self, probe: np.ndarray):
         """
         Build per-scan boundary-condition matrices (no caching).
 

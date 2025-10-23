@@ -71,7 +71,7 @@ class BasePtychoObject(ABC):
         n_true = (loaded_n - np.mean(loaded_n)) / np.std(loaded_n) + 1
         self.n_true = self.simulation_space.n_medium - (real_perturbation * n_true) - (imaginary_perturbation * 1j * n_true)
 
-    def create_sample_slices(self,n=None, grad=False, scan_index=0):
+    def create_object_contribution(self,n=None, grad=False, scan_index=0):
         """
         Create the field of object slices in free space.
 
