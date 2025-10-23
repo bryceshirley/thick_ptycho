@@ -3,11 +3,10 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.thick_ptycho.forward_model.base_solver import BaseForwardModel
-from thick_ptycho.forward_model.pwe_finite_differences import PWEFiniteDifferences
+from thick_ptycho.thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
 
 
-class ForwardModelPWEIterative(BaseForwardModel):
+class ForwardModelPWEIterative(BaseForwardModelPWE):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
@@ -21,8 +20,6 @@ class ForwardModelPWEIterative(BaseForwardModel):
             verbose=verbose,
             log=log,
         )
-        self.pwe_finite_differences = PWEFiniteDifferences(simulation_space)
-        self.block_size = self.pwe_finite_differences.block_size
 
         # LU caches for different propagation modes
         self.lu_cache = {"forward": None, "adjoint": None, "reverse": None}
@@ -187,20 +184,3 @@ class ForwardModelPWEIterative(BaseForwardModel):
         if mode == "adjoint":
             u = np.flip(u, axis=1)
         return u
-
-    def get_gradient(self,nk: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the forward model with respect to the refractive index.
-
-        Parameters
-        ----------
-        nk : ndarray
-            Current estimate of the refractive index field.
-
-        Returns
-        -------
-        gradient : ndarray
-            Gradient of the forward model with respect to nk.
-        """
-        return self.pwe_finite_differences.setup_inhomogeneous_forward_model(
-             n=nk, grad=True)

@@ -15,6 +15,7 @@ from thick_ptycho.thick_ptycho.simulation.simulation_space import SimulationSpac
 from thick_ptycho.utils.utils import setup_log
 from thick_ptycho.thick_ptycho.simulation.ptycho_probe.ptycho_probe import PtychoProbes
 
+# TODO: Update Visualisation of data and add support for tomographic projects
 class BaseForwardModel:
     """
     Abstract base class for all forward model solvers (PWE, Multislice, etc.).

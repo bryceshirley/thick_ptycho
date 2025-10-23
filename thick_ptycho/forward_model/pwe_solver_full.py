@@ -3,11 +3,10 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.thick_ptycho.forward_model.base_solver import BaseForwardModel
-from thick_ptycho.forward_model.pwe_finite_differences import PWEFiniteDifferences
+from thick_ptycho.thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
 
 
-class ForwardModelPWEFull(BaseForwardModel):
+class ForwardModelPWEFull(BaseForwardModelPWE):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
@@ -21,8 +20,6 @@ class ForwardModelPWEFull(BaseForwardModel):
             verbose=verbose,
             log=log,
         )
-        self.pwe_finite_differences = PWEFiniteDifferences(simulation_space, full_system=True)
-        self.block_size = self.pwe_finite_differences.block_size
         self.use_pit = False  # Placeholder for PiT usage
 
         # Cached LU systems and RHS for different modes
@@ -151,23 +148,6 @@ class ForwardModelPWEFull(BaseForwardModel):
         initial = probe.reshape(self.block_size, 1)
         return np.concatenate([initial, u], axis=1)
     
-    def get_gradient(self,nk: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the forward model with respect to the refractive index.
-
-        Parameters
-        ----------
-        nk : ndarray
-            Current estimate of the refractive index field.
-
-        Returns
-        -------
-        gradient : ndarray
-            Gradient of the forward model with respect to nk.
-        """
-        return self.pwe_finite_differences.setup_inhomogeneous_forward_model(
-             n=nk, grad=True)
-
     # -------------------------------------------------------------------------
     # PiT Preconditioner (placeholder)
     # -------------------------------------------------------------------------
