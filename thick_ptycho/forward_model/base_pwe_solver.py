@@ -29,6 +29,8 @@ class BaseForwardModelPWE(BaseForwardModel):
     # ------------------------------------------------------------------
     def presolve_setup(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         """Precompute LU factorizations for a given propagation mode."""
+        assert mode in ["forward", "adjoint", "reverse"], \
+            f"Unsupported mode: {mode}"
         assert not self.simulation_space.thin_sample, \
             "presolve_setup does not support thin samples."
         self._get_or_construct_lu(n=n, mode=mode)

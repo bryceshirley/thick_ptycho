@@ -39,7 +39,7 @@ class ForwardModelMS(BaseForwardModel):
 
     def _propagate_between_slices(self, psi, mode="forward"):
         """Propagate the wavefield ψ between adjacent slices using ASM."""
-        H = self.H_forward if mode == "forward" else np.conj(self.H_forward)
+        H = self.H_forward if mode == "forward" or mode == "forward_rotated" else np.conj(self.H_forward)
         return np.fft.ifft(np.fft.fft(psi) * H)
     
     def _object_transmission_function(self, n_slice):
@@ -50,7 +50,7 @@ class ForwardModelMS(BaseForwardModel):
             self.simulation_space.dz # Using dz here is tecnically wrong. Slice thickness is difficult to recover.
         )
 
-    def _solve_single_probe(self, angle_idx, scan_idx,
+    def _solve_single_probe(self, proj_idx: int, angle_idx: int, scan_idx: int,
                             n=None, mode="forward", 
                             initial_condition: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """
@@ -76,8 +76,14 @@ class ForwardModelMS(BaseForwardModel):
         wavefield_through_slices : ndarray
             Complex-valued wavefield at each slice along z. Shape (nx, nz).
         """
+        if proj_idx == 1 and mode in {"forward", "adjoint"}:
+            mode = mode + "_rotated"
+        assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}, f"Invalid mode: {mode}"
         # Object refractive index distribution
         refractive_index = n if n is not None else self.simulation_space.n_true
+
+        if mode in {"forward_rotated", "adjoint_rotated"}:
+            refractive_index = self.rotate_n(refractive_index)
 
         # Select initial probe condition
         if initial_condition is not None:

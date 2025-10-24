@@ -12,7 +12,7 @@ from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.utils.utils import setup_log
 from thick_ptycho.utils.visualisations import Visualisation
 
-from .base import ReconstructorBase
+from .base_reconstructor import ReconstructorBase
 
 # Todo make pwe solvers allow for 90 degree rotations
 
@@ -57,11 +57,11 @@ class ReconstructorPWE(ReconstructorBase):
             use_logging=use_logging,
             verbose=verbose,
         )
-        # Store number of tomographic rotations
+        # Store number of tomographic projections
         if rotated_90:
-            self.num_rotations = 2
+            self.num_projections = 2
         else:
-            self.num_rotations = 1
+            self.num_projections = 1
 
         assert solver_type in {"full", "iterative"}, f"Invalid solver_type: {solver_type!r}"
         # Forward model selection
@@ -110,7 +110,7 @@ class ReconstructorPWE(ReconstructorBase):
         exit_wave_error = self.apply_exit_wave_constraint(uk)
 
 
-        for i in range(self.num_probes*self.num_probe_angles*self.num_rotations):
+        for i in range(self.num_probes*self.num_probe_angles*self.num_projections):
             error_backpropagation = self.forward_model._solve_single_probe(
                     rhs_block=exit_wave_error[i, :], mode='adjoint') 
             error_backpropagation = error_backpropagation[:, :-1].transpose().ravel()

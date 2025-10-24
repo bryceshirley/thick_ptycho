@@ -54,7 +54,7 @@ class ReconstructorBase:
         self.data = np.asarray(data)
         self.phase_retrieval = phase_retrieval
         self.verbose = verbose
-
+        self._results_dir = results_dir
         self.num_angles = self.simulation_space.num_angles
         self.num_probes = self.simulation_space.num_probes
 
@@ -66,6 +66,8 @@ class ReconstructorBase:
             use_logging=use_logging,
             verbose=verbose,
         )
+
+        self.block_size = self.simulation_space.block_size
 
     # -------------------------------------------------------------------------
     # Utility methods
@@ -97,22 +99,18 @@ class ReconstructorBase:
 
             if getattr(self, "_results_dir", None):
                 # Optional visualization of pre/post phase retrieval
-                self.visualisation.plot_single(
-                    exit_waves, view="phase_amp", time="final",
+                self.simulation_space.viewer.plot_two_panels(
+                    exit_waves, view="phase_amp",
                     filename="exit_phase_amp_old.png",
-                    title_left="Old Exit Wave Phase",
-                    title_right="Old Exit Wave Amplitude",
-                    xlabel_left="x", ylabel_left="Image #",
-                    xlabel_right="x", ylabel_right="Image #",
+                    title="Old Exit Wave",
+                    xlabel="x", ylabel="Image #"
                 )
 
-                self.visualisation.plot_single(
+                self.simulation_space.viewer.plot_two_panels(
                     emodel, view="phase_amp", time="final",
-                    filename="exit_phase_amp_updated.png",
-                    title_left="Updated Exit Wave Phase",
-                    title_right="Updated Exit Wave Amplitude",
-                    xlabel_left="x", ylabel_left="Image #",
-                    xlabel_right="x", ylabel_right="Image #",
+                    filename="exit_phase_amp_old.png",
+                    title="Old Exit Wave",
+                    xlabel="x", ylabel="Image #"
                 )
 
         else:  # Known Phase

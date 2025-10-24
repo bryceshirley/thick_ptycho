@@ -11,8 +11,11 @@ from dataclasses import dataclass
 
 from enum import Enum
 
-class BoundaryCondition(Enum):
-    """Supported boundary condition types for the simulation domain."""
+class BoundaryType(Enum):
+    """
+    Supported boundary condition types for the simulation domain.
+    Not required for Multislice Solver.
+    """
     DIRICHLET = "dirichlet"
     NEUMANN = "neumann"
     IMPEDANCE = "impedance"
@@ -56,8 +59,9 @@ class SimulationConfig:
         Number of scan positions in one dimension.
     step_size : float
         Step size between scan positions.
-    bc_type : BoundaryCondition
+    bc_type : BoundaryType
         Boundary condition type for the simulation domain.
+        Not required for Multislice Solver.
     probe_type : ProbeType
         Type of probe field to use.
     wave_number : float
@@ -68,6 +72,9 @@ class SimulationConfig:
         Focal length of the probe.
     probe_angle_list : List[float]
         List of probe tilt angle(s) in degrees.
+    tomographic_projection_90_degree : bool, optional
+        Whether to use 90-degree tomographic projection. 
+        Only possible for 2D simulations when nx == nz.
     thin_sample : bool, default=False
         Whether to use a thin-sample approximation.
     n_medium : float, default=1.0
@@ -84,12 +91,13 @@ class SimulationConfig:
     probe_dimensions: Tuple[int, ...]
     scan_points: Tuple
     step_size: float
-    bc_type: BoundaryCondition
+    bc_type: BoundaryType = None
     probe_type: ProbeType
     wave_number: float
     probe_diameter: Optional[float] = None
     probe_focus: Optional[float] = 0.0
     probe_angle_list: List[float] = [0.0]
+    tomographic_projection_90_degree: Optional[bool] = False
     thin_sample: bool = False
     n_medium: float = 1.0
     results_dir: Optional[str] = None

@@ -22,7 +22,8 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
         )
 
         # LU caches for different propagation modes
-        self.lu_cache = {"forward": None, "adjoint": None, "reverse": None}
+        self.lu_cache = {"forward": None, "adjoint": None, "reverse": None,
+                         "forward_rotated": None, "adjoint_rotated": None, "reverse_rotated": None}
         self._cached_n_id = None
 
     # ------------------------------------------------------------------
@@ -49,13 +50,18 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
         (A_lu_list, B_list, b)
             Precomputed LU factorizations, RHS matrices, and right-hand side vector.
         """
-        assert mode in {"forward", "adjoint", "reverse"}, f"Invalid mode: {mode}"
+        assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
         assert not self.simulation_space.thin_sample, "presolve_setup does not support thin samples."
+        if n is None:
+            n = self.ptycho_object.n_true
+        if mode in {"forward_rotated", "adjoint_rotated", "reverse_rotated"}:
+            n = self.rotate_n(n)
 
         # Reset LU cache if refractive index changed
         n_id = id(n)
         if self._cached_n_id != n_id:
-            self.lu_cache = {"forward": None, "adjoint": None, "reverse": None}
+            self.lu_cache = {"forward": None, "adjoint": None, "reverse": None,
+                             "forward_rotated": None, "adjoint_rotated": None, "reverse_rotated": None}
             self._cached_n_id = n_id
 
         if self.lu_cache[mode] is None:
@@ -79,7 +85,7 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
         iterative_lu : Tuple[[spla.SuperLU], [np.ndarray], [np.ndarray]]
             Tuple of lists of LU factorizations and modified B matrices for each slice and the RHS vector b.
         """
-        assert mode in {"forward", "adjoint", "reverse"}, f"Invalid mode: {mode}"
+        assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
 
         # Precompute C, A_mod, B_mod, LU factorizations
         A_lu_list, B_with_object_list = [], []
@@ -117,6 +123,7 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
     # Main probe solve
     # ------------------------------------------------------------------
     def _solve_single_probe(self,
+            proj_idx: int,
             angle_idx: int,
             scan_idx: int,
             n: Optional[np.ndarray] = None,
@@ -136,7 +143,7 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
             Index of the probe position.
         n : ndarray, optional
             Refractive index field. If None, uses self.ptycho_object.n_true.
-        mode : {'forward', 'adjoint', 'reverse'}
+        mode : {'forward', 'adjoint', 'reverse', 'forward_rotated', 'adjoint_rotated', 'reverse_rotated'}
             Propagation mode.
         rhs_block : ndarray, optional
             If provided, use this as the RHS block instead of the default only use
@@ -150,7 +157,9 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
             Wavefield propagated through all slices for the given probe.
             Shape: (block_size, nz)
         """
-        assert mode in {"forward", "adjoint", "reverse"}, f"Invalid mode: {mode}"
+        if proj_idx == 1 and mode in {"forward", "adjoint", "reverse"}:
+            mode = mode + "_rotated"
+        assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
 
         # Select initial probe condition
         if initial_condition is not None:

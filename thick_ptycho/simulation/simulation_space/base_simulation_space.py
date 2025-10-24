@@ -21,6 +21,7 @@ class BaseSimulationSpace(ABC):
             continuous_dimensions, discrete_dimensions, probe_dimensions,
             scan_points, step_size, bc_type, probe_type, wave_number,
             probe_diameter=None, probe_focus=None, probe_angle_list=None,
+            tomographic_projection_90_degree: bool = False,
             thin_sample: bool = False, n_medium=1.0, results_dir=None, 
             use_logging=True, verbose=False):
         """
@@ -38,6 +39,20 @@ class BaseSimulationSpace(ABC):
         # Dimensions Limits and sizes
         self.continuous_dimensions = continuous_dimensions
         self.discrete_dimensions = discrete_dimensions
+
+        # Determine number of tomographic projections
+        self.num_projections = 1
+
+        if tomographic_projection_90_degree:
+            # Check if all discrete dimensions are equal
+            if len(set(discrete_dimensions)) == 1:
+                self.num_projections = 2
+            else:
+                print(
+                    "Warning: 90° tomographic projection requires all discrete dimensions "
+                    "to be equal. Proceeding with num_projections=1."
+                )
+
 
         # Thin sample mode
         self.thin_sample = thin_sample
@@ -60,6 +75,7 @@ class BaseSimulationSpace(ABC):
         self.probe_angles_list = probe_angle_list if probe_angle_list is not None else [0.0]
         self.probe_focus = probe_focus
 
+
         # Boundary condition type (lowercase)
         self.bc_type = bc_type.lower()
 
@@ -75,9 +91,6 @@ class BaseSimulationSpace(ABC):
 
         # Initialize the refractive index field
         self.n_medium = complex(n_medium)  # Ensure n_medium is complex
-
-        # Total number of probes (scan_points squared)
-        self.num_probes = scan_points
 
         # Generate scan frame information
         self._scan_frame_info: List[ScanFrame] = []

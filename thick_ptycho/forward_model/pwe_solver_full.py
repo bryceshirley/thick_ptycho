@@ -23,7 +23,11 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         self.use_pit = False  # Placeholder for PiT usage
 
         # Cached LU systems and RHS for different modes
-        self.lu_cache = None
+        # Cache LU factorizations for rotated and non-rotated modes
+        self.lu_cache = {
+            "projection_0": None,
+            "projection_1": None,  # Rotated
+        }
         self.b_cache = None
         self._cached_n_id = None
 
@@ -34,29 +38,44 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         """
         Retrieve or construct LU factorization for given mode.
         Caches LU and RHS to avoid recomputation.
+        Parameters
+        ----------
+        n : ndarray, optional
+            Refractive index field. If None, uses self.ptycho_object.n_true.
+        mode : {'forward', 'adjoint','forward_rotated', 'adjoint_rotated'}
+            Propagation mode.
         """
-        assert mode in {"forward", "adjoint"}, f"Invalid mode: {mode!r}"
+        assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}, f"Invalid mode: {mode!r}"
+        if n is None:
+            n = self.ptycho_object.n_true
+
+        # Determine projection key and possibly rotate n
+        if mode in {"forward_rotated", "adjoint_rotated"}:
+            n = self.rotate_n(n)
+            projection_key = "projection_1"
+        else:
+            projection_key = "projection_0"
 
         # Reset LU cache if refractive index changed
         n_id = id(n)
         if self._cached_n_id != n_id:
             # Reinitialize caches if refractive index changed
-            self.lu_cache = None
+            self.lu_cache[projection_key] = None
             self.b_cache = None
             self._cached_n_id = n_id
 
         # Build if missing
-        if self.lu_cache is None: # Same for both modes
+        if self.lu_cache[projection_key] is None:  # Same for both modes
             A = self.pwe_finite_differences.return_forward_model_matrix(n=n)
             if not sp.isspmatrix_csc(A):
                 A = A.tocsc()
 
             lu = spla.splu(A)
 
-            self.lu_cache = lu
-        
+            self.lu_cache[projection_key] = lu
+
         # Build if missing
-        if self.b_cache is None: # Same for both modes
+        if self.b_cache is None:  # Same for both modes
             b_h = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
             self.b_cache = b_h
 
@@ -70,12 +89,12 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         ----------
         n : ndarray, optional
             Refractive index field. If None, uses default.
-        mode : {'forward', 'adjoint'}
+        mode : {'forward', 'adjoint','forward_rotated','adjoint_rotated'}
             Propagation mode.
         """
         assert not getattr(self, "thin_sample", False), \
             "Full-system solver does not support thin-sample approximation."
-        assert mode in {"forward", "adjoint"}, f"Invalid mode: {mode!r}"
+        assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, f"Invalid mode: {mode!r}"
         return self._get_or_construct_lu(n=n, mode=mode)
 
         
@@ -84,6 +103,7 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
     # -------------------------------------------------------------------------
     def _solve_single_probe(
         self,
+        proj_idx: int,
         angle_idx: int,
         scan_idx: int,
         n: Optional[np.ndarray] = None,
@@ -102,7 +122,7 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
             Probe position index.
         n : ndarray, optional
             Refractive index field.
-        mode : {'forward', 'adjoint'}
+        mode : {'forward', 'adjoint','forward_rotated','adjoint_rotated'}
             Propagation mode. Reverse is not supported.
         rhs_block : ndarray, optional
             Optional RHS vector for reusing precomputed blocks.
@@ -114,7 +134,10 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         u : ndarray
             Complex propagated field, shape (block_size, nz).
         """
-        assert mode in {"forward", "adjoint"}, \
+        if proj_idx == 1 and mode in {"forward", "adjoint"}:
+            mode = mode + "_rotated"
+
+        assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, \
             f"Invalid mode '{mode}'. Reverse propagation is unsupported in the full solver."
         
         # Select initial probe condition

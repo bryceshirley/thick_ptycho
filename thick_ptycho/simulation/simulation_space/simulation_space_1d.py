@@ -1,6 +1,9 @@
 
 from typing import List
+
+from thick_ptycho.thick_ptycho.utils.visualisations import Visualisation
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
+from thick_ptycho.utils.utils import setup_log
 import numpy as np
 
 
@@ -12,8 +15,10 @@ class SimulationSpace1D(BaseSimulationSpace):
         
         # Continuous sample space limits (x, z)
         self.xlims, self.zlims = self.continuous_dimensions
-
         self.nx, self.nz = self.discrete_dimensions
+
+        # Image dimension
+        self.dimension = 1
 
         # Define grid
         nx_with_bc = self.nx + 2 if self.bc_type == "dirichlet" else self.nx
@@ -30,6 +35,11 @@ class SimulationSpace1D(BaseSimulationSpace):
 
         # Generate scan frame information
         self._scan_frame_info: List[ScanFrame] = self._generate_scan_frames()
+
+        # Visualization utility
+        self.viewer = Visualisation(self, results_dir=self.results_dir)
+
+
 
     def summarize(self):
         """ 

@@ -1,6 +1,8 @@
 
 
 from typing import List
+
+from thick_ptycho.thick_ptycho.utils.visualisations import Visualisation2D
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
 from matplotlib import pyplot as plt
 import numpy as np
@@ -22,6 +24,9 @@ class SimulationSpace2D(BaseSimulationSpace):
         self.dy = self.y[1] - self.y[0]
         self.dz = self.z[1] - self.z[0]
 
+        # Image dimension
+        self.dimension = 2
+
         # Initialize the refractive index field
         self.n_true = np.ones((self.nx, self.ny, self.nz), dtype=complex)*self.n_medium
 
@@ -31,6 +36,8 @@ class SimulationSpace2D(BaseSimulationSpace):
         # Generate scan frame information
         self._detector_frame_info: List[ScanFrame] = self._generate_scan_frames()
 
+        # Visualization utility
+        self.viewer = Visualisation2D(self, results_dir=self.results_dir)
 
     def summarize(self):
         """ 
