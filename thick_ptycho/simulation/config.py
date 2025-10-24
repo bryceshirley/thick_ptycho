@@ -70,8 +70,8 @@ class SimulationConfig:
         Diameter of the probe aperture.
     probe_focus : float, optional
         Focal length of the probe.
-    probe_angle_list : List[float]
-        List of probe tilt angle(s) in degrees.
+    probe_angles : Tuple[float, ...]
+        Tuple of probe tilt angle(s) in degrees.
     tomographic_projection_90_degree : bool, optional
         Whether to use 90-degree tomographic projection. 
         Only possible for 2D simulations when nx == nz.
@@ -89,14 +89,14 @@ class SimulationConfig:
     continuous_dimensions: Tuple
     discrete_dimensions: Tuple[int, ...]
     probe_dimensions: Tuple[int, ...]
-    scan_points: Tuple
+    scan_points: int
     step_size: float
-    bc_type: BoundaryType = None
-    probe_type: ProbeType
     wave_number: float
+    bc_type: BoundaryType = BoundaryType.IMPEDANCE
+    probe_type: ProbeType = ProbeType.AIRY_DISK
     probe_diameter: Optional[float] = None
     probe_focus: Optional[float] = 0.0
-    probe_angle_list: List[float] = [0.0]
+    probe_angles: Tuple[float, ...] = (0.0,)
     tomographic_projection_90_degree: Optional[bool] = False
     thin_sample: bool = False
     n_medium: float = 1.0

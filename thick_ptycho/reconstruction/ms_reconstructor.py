@@ -1,12 +1,8 @@
 import numpy as np
-from typing import Optional, List
-from thick_ptycho.forward_model.multislice import ForwardModelMS
-from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
-from thick_ptycho.utils.utils import setup_log
 
 
-from thick_ptycho.thick_ptycho.reconstruction.base_reconstructor import ReconstructorBase
-from thick_ptycho.forward_model.multislice import ForwardModelMS
+from thick_ptycho.reconstruction.base_reconstructor import ReconstructorBase
+from thick_ptycho.forward_model.ms_solver import ForwardModelMS
 
 
 class ReconstructorMS(ReconstructorBase):

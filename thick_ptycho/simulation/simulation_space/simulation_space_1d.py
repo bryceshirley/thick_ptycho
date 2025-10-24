@@ -1,7 +1,7 @@
 
 from typing import List
 
-from thick_ptycho.thick_ptycho.utils.visualisations import Visualisation
+from thick_ptycho.utils.visualisations import Visualisation
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
 from thick_ptycho.utils.utils import setup_log
 import numpy as np

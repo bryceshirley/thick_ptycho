@@ -2,8 +2,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thick_ptycho.thick_ptycho.simulation.ptycho_object import SampleSpace
-from thick_ptycho.thick_ptycho.forward_model.base_solver import ForwardModel
+from thick_ptycho.simulation.ptycho_object import SampleSpace
+from thick_ptycho.forward_model.base_solver import ForwardModel
 
 def u_nm(a, n):
     """Returns the exact solution for a given n in 1D."""

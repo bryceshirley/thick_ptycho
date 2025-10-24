@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
+from thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
 
 
 class ForwardModelPWEFull(BaseForwardModelPWE):
@@ -33,6 +33,9 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
 
         # Precompute B0 term if applicable
         self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
+
+        # Solver type (for logging purposes)
+        self.solver_type = "Block PWE Full Solver"
 
     def _get_or_construct_lu(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         """

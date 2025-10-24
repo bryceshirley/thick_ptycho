@@ -1,5 +1,14 @@
-# thick_ptycho/reconstruction/__init__.py
-from .pwe_reconstructor import LeastSquaresReconstructorPWE
-from .ms_reconstructor import ReconstructorMS
+"""
+Reconstruction algorithms for ptychographic phase retrieval.
+"""
 
-__all__ = ["LeastSquaresReconstructorPWE", "ReconstructorMS"]
+from .base_reconstructor import ReconstructorBase
+from .ms_reconstructor import ReconstructorMS
+from .pwe_reconstructor import ReconstructorPWE
+
+__all__ = [
+    "ReconstructorBase",
+    "ReconstructorMS",
+    "ReconstructorPWE",
+]
+

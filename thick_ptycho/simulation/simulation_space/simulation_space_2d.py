@@ -2,7 +2,7 @@
 
 from typing import List
 
-from thick_ptycho.thick_ptycho.utils.visualisations import Visualisation2D
+from thick_ptycho.utils.visualisations import Visualisation2D
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
 from matplotlib import pyplot as plt
 import numpy as np
@@ -106,18 +106,13 @@ class SimulationSpace2D(BaseSimulationSpace):
         plt.legend()
         plt.grid()
         plt.show()
-    
-    def _generate_scan_frames(self) -> List[Dict[str, Any]]:
+
+    def _generate_scan_frames(self) -> List[ScanFrame]:
         """
         Generate detector frames along a serpentine scan path.
 
         Returns:
-            List[Dict[str, Any]]: List of dictionaries with detector frame data.
-            Each dictionary in the list corresponds to a scan.
-            'probe_centre_continuous': probe_centre_continuous,
-            'probe_centre_discrete': probe_centre_discrete,
-            'sub_sample_slices': sample_slices,
-            'sub_dimensions': (sub_x, sub_y)
+            List[ScanFrame]: List of ScanFrame objects with detector frame data.
         """
         # Total distance between probe centres
         total_step = (self.scan_points - 1) * self.step_size

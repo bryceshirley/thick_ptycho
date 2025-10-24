@@ -27,6 +27,17 @@ class OpticalShape1D:
     def __init__(self, centre, shape, refractive_index, 
                  side_length, depth, guassian_blur,
                  simulation_space):
+        # Convert from normalized (0–1) to absolute spatial units
+        x_start, x_end = simulation_space.continuous_dimensions[0]
+        z_start, z_end = simulation_space.continuous_dimensions[1]
+
+        scale_x, scale_z = x_end - x_start, z_end - z_start
+
+        side_length *= scale_x
+        depth *= scale_z
+        centre = (centre[0] * scale_x, centre[1] * scale_z)
+
+
         self.shape = shape
         self.refractive_index = refractive_index
         nx = simulation_space.nx
@@ -50,7 +61,7 @@ class OpticalShape1D:
         assert len(
             centre) == 2, "Centre must be a tuple of (x, z) coordinates."
         assert simulation_space.xlims[0] <= centre[0] <= simulation_space.xlims[1], "Centre x-coordinate out of bounds."
-        assert simulation_space.zlims[0] <= centre[2] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
+        assert simulation_space.zlims[0] <= centre[1] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
 
         # Convert the side_lengthof object face to discrete side
         self.discrete_side_length = int(
@@ -64,6 +75,8 @@ class OpticalShape1D:
 
         self.dz = z[1] - z[0]
         self.dx = x[1] - x[0]
+        self.nx = nx
+        self.nz = nz
 
         self.guassian_blur = guassian_blur
 
@@ -210,6 +223,24 @@ class OpticalShape2D:
 
     def __init__(self, centre, shape, refractive_index, side_length, depth,
                  guassian_blur, simulation_space):
+        # Convert from normalized (0–1) to absolute spatial units
+        x_start, x_end = simulation_space.continuous_dimensions[0]
+        y_start, y_end = simulation_space.continuous_dimensions[1]
+        z_start, z_end = simulation_space.continuous_dimensions[2]
+
+        scale_x = x_end - x_start
+        scale_y = y_end - y_start
+        scale_z = z_end - z_start
+
+        side_length *= scale_x
+        depth *= scale_z
+        centre = (
+            centre[0] * scale_x,
+            centre[1] * scale_y,
+            centre[2] * scale_z,
+        )
+
+
         self.shape = shape
         self.refractive_index = refractive_index
         nx = simulation_space.nx

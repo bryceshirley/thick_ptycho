@@ -68,8 +68,13 @@ class Visualisation:
 
         im0 = axs[0].imshow(data1, cmap="viridis", origin="lower")
         im1 = axs[1].imshow(data2, cmap="viridis", origin="lower")
-        fig.colorbar(im0, ax=axs[0], extent=extent)
-        fig.colorbar(im1, ax=axs[1], extent=extent)
+
+        fig.colorbar(im0, ax=axs[0])
+        fig.colorbar(im1, ax=axs[1])
+
+        if extent is not None:
+            im0.set_extent(extent)
+            im1.set_extent(extent)
 
         axs[0].set_title(title1)
         axs[1].set_title(title2)

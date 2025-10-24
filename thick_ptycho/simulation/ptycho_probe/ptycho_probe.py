@@ -46,11 +46,11 @@ class PtychoProbes:
 
     def __init__(self, simulation_space):
         self.simulation_space = simulation_space
-        self.angles_list = simulation_space.probe_angles_list
+        self.angles = simulation_space.probe_angles
         self.thin_sample = simulation_space.thin_sample
         self.disk_edge_blur = 0.5  # matches previous behavior (_disk_blur)
-        self.probe_angles_list = list(self.angles_list)
-        self.num_angles = len(self.probe_angles_list)
+        self.probe_angles = list(self.angles)
+        self.num_angles = len(self.probe_angles)
 
     # ---------------------------- public ---------------------------------
 
@@ -66,11 +66,11 @@ class PtychoProbes:
               2D: (num_angles, num_probes, nx, ny)
         """
         if self.simulation_space.dimension == 1:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.nx), dtype=complex)
+            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.nx), dtype=complex)
         else:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.nx, self.ny), dtype=complex)
+            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.nx, self.simulation_space.ny), dtype=complex)
 
-        for a_idx, angle in enumerate(self.probe_angles_list):
+        for a_idx, angle in enumerate(self.probe_angles):
             for s_idx in range(self.simulation_space.num_probes):
                 probes[a_idx, s_idx, ...] = self.make_single_probe(
                     scan=s_idx,
@@ -382,20 +382,20 @@ class PtychoProbes:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
             if self.thin_sample:
-                x = self.simulation_space.detector_frame_info[scan]["sub_dimensions"][0]
+                x = self.simulation_space.scan_frame_info[scan]["sub_dimensions"][0]
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.thin_sample:
-            x, y = self.simulation_space.detector_frame_info[scan]["sub_dimensions"]
+            x, y = self.simulation_space.scan_frame_info[scan]["sub_dimensions"]
         else:
             x, y = self.simulation_space.x, self.simulation_space.y
         return np.meshgrid(x, y, indexing="ij")
 
     def _get_center(self, scan: int) -> Union[float, Tuple[float, float]]:
         """Return probe center (cx) in 1D or (cx, cy) in 2D."""
-        info = self.simulation_space.detector_frame_info[scan]["probe_centre_continuous"]
+        info = self.simulation_space.scan_frame_info[scan]["probe_centre_continuous"]
         return info if self.simulation_space.dimension == 2 else float(info)
 
     def _normalize_angles(

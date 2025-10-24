@@ -26,7 +26,7 @@ class BasePtychoObject(ABC):
         """Generate total refractive index field."""
         for obj in self.objects:
             self.n_true += obj.get_refractive_index_field()
-        return self.n_true
+        # return self.n_true
     
     def add_object(self, shape: str, refractive_index: complex, side_length: float, 
                    centre: tuple, depth: float, gaussian_blur=None):

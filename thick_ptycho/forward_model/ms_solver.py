@@ -1,6 +1,6 @@
 from typing import Optional
 import numpy as np
-from thick_ptycho.thick_ptycho.forward_model.base_solver import BaseForwardModel
+from thick_ptycho.forward_model.base_solver import BaseForwardModel
 
 
 class ForwardModelMS(BaseForwardModel):
@@ -22,6 +22,9 @@ class ForwardModelMS(BaseForwardModel):
 
        # Precompute angular spectrum kernels for forward/backward propagation
         self._initialize_propagation_kernels()
+
+        # Solver type (for logging purposes)
+        self.solver_type = "Multislice Solver"
 
     def _initialize_propagation_kernels(self, remove_global_phase=True):
         """Precompute the forward angular spectrum kernel (H_forward)."""

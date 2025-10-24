@@ -21,7 +21,7 @@ def create_simulation_space(config: SimulationConfig):
         wave_number=config.wave_number,
         probe_diameter=config.probe_diameter,
         probe_focus=config.probe_focus,
-        probe_angle_list=config.probe_angle_list,
+        probe_angles=config.probe_angles,
         tomographic_projection_90_degree=config.tomographic_projection_90_degree,
         thin_sample=config.thin_sample,
         n_medium=config.n_medium,

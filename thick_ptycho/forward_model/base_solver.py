@@ -4,7 +4,7 @@ from typing import Optional, List, Literal, Any
 from matplotlib import pyplot as plt
 import os
 
-from thick_ptycho.thick_ptycho.utils.visualisations import Visualisation
+
 from thick_ptycho.utils.utils import setup_log
 
 
@@ -12,8 +12,8 @@ import numpy as np
 import time
 from typing import Optional, List, Literal, Any, Dict, Union
 
-from thick_ptycho.thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
-from thick_ptycho.thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
+from thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
+from thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
 from thick_ptycho.utils.utils import setup_log
 
 # TODO: Update Visualisation of data and add support for tomographic projects
@@ -64,9 +64,6 @@ class BaseForwardModel:
 
         # Solver type (for logging purposes)
         self.solver_type = "BaseForwardModel"
-
-        # Visualization utility
-        self.visualisation = Visualisation(self.simulation_space, results_dir=self.results_dir)
 
     # ------------------------------------------------------------------
     # Common solving interface

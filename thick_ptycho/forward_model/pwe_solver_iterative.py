@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
+from thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
 
 
 class ForwardModelPWEIterative(BaseForwardModelPWE):
@@ -25,6 +25,9 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
         self.lu_cache = {"forward": None, "adjoint": None, "reverse": None,
                          "forward_rotated": None, "adjoint_rotated": None, "reverse_rotated": None}
         self._cached_n_id = None
+
+        # Solver type (for logging purposes)
+        self.solver_type = "Iterative PWE Full Solver"
 
     # ------------------------------------------------------------------
     # LU setup

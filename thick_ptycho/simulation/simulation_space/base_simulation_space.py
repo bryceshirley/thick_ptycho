@@ -20,7 +20,7 @@ class BaseSimulationSpace(ABC):
             self,
             continuous_dimensions, discrete_dimensions, probe_dimensions,
             scan_points, step_size, bc_type, probe_type, wave_number,
-            probe_diameter=None, probe_focus=None, probe_angle_list=None,
+            probe_diameter=None, probe_focus=None, probe_angles=None,
             tomographic_projection_90_degree: bool = False,
             thin_sample: bool = False, n_medium=1.0, results_dir=None, 
             use_logging=True, verbose=False):
@@ -60,6 +60,9 @@ class BaseSimulationSpace(ABC):
         # Setup logging
         self._log = setup_log(results_dir, log_file_name="simulation_space_log.txt",
                                use_logging=use_logging, verbose=verbose)
+        self.results_dir = results_dir
+
+        self.verbose = verbose
         
         # Probe shape (pixels)
         self.probe_dimensions = probe_dimensions
@@ -72,7 +75,7 @@ class BaseSimulationSpace(ABC):
 
         # Probe Type
         self.probe_type = probe_type
-        self.probe_angles_list = probe_angle_list if probe_angle_list is not None else [0.0]
+        self.probe_angles = probe_angles if probe_angles is not None else (0.0,)
         self.probe_focus = probe_focus
 
 
@@ -84,7 +87,11 @@ class BaseSimulationSpace(ABC):
             self.probe_diameter = probe_dimensions[0]
         else:
             self.probe_diameter = probe_diameter
-        self.probe_diameter_continuous = self.probe_diameter * self.dx
+        x_start, x_end = continuous_dimensions[0]
+        nx = discrete_dimensions[0]
+        dx = (x_end - x_start) / nx
+        self.probe_diameter_continuous = self.probe_diameter * dx
+
         # Wavenumber
         self.k = wave_number
         self.wavelength = 2 * np.pi / self.k
