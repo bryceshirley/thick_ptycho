@@ -7,7 +7,7 @@ class ForwardModelMS(BaseForwardModel):
     """Angular spectrum multislice forward/backward propagation."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
-                 results_dir="", use_logging=False, verbose=True, log=None):
+                 results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
             ptycho_object,
@@ -21,14 +21,14 @@ class ForwardModelMS(BaseForwardModel):
         assert simulation_space.dimension == 1, "ForwardModelMS only supports 1D samples."
 
        # Precompute angular spectrum kernels for forward/backward propagation
-        self._initialize_propagation_kernels()
+        self.initialize_propagation_kernels()
 
         # Solver type (for logging purposes)
         self.solver_type = "Multislice Solver"
 
-    def _initialize_propagation_kernels(self, remove_global_phase=True):
+    def initialize_propagation_kernels(self, remove_global_phase=True):
         """Precompute the forward angular spectrum kernel (H_forward)."""
-        fx = np.fft.fftfreq(self.simulation_space.nx, d=self.dx)
+        fx = np.fft.fftfreq(self.simulation_space.nx, d=self.simulation_space.dx)
         kz = np.sqrt(np.clip(
             self.simulation_space.k**2 - (2 * np.pi * fx)**2, 0, None
         ))

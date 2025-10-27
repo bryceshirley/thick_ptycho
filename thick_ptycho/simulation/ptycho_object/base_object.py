@@ -85,7 +85,7 @@ class BasePtychoObject(ABC):
             If True, compute gradient coefficient (linear in n).
             If False, compute propagation coefficient (quadratic in n).
         scan_index : int, optional
-            Index for sub-sampling info in detector_frame_info.
+            Index for sub-sampling info in scan_frame_info.
 
         Returns
         -------
@@ -100,17 +100,17 @@ class BasePtychoObject(ABC):
 
         # Restrict to thin sample region if requested
         if self.simulation_space.thin_sample:
-            sub_limits = self.simulation_space.detector_frame_info[scan_index]['sub_limits']
+            sub_limits = self.simulation_space.scan_frame_info[scan_index].sub_limits_discrete
             n = self.get_sub_sample(n, sub_limits)
 
         # Compute coefficient
         if grad:
-            coefficient = (self.k / 1j) * n
+            coefficient = (self.simulation_space.k / 1j) * n
         else:
-            coefficient = (self.k / 2j) * (n**2 - 1)
+            coefficient = (self.simulation_space.k / 2j) * (n**2 - 1)
 
         # Compute all half time-step slices along the z-axis
-        object_slices = (self.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+        object_slices = (self.simulation_space.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
 
         return object_slices
 

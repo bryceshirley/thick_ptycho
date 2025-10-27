@@ -23,7 +23,7 @@ class Visualisation:
             os.makedirs(self.results_dir, exist_ok=True)
 
     @staticmethod
-    def phase(arr, tol=5e-12):
+    def phase(arr, tol=5e-4):
         ph = np.angle(arr)
         mag = np.abs(arr)
         return np.where(mag < tol, 0.0, ph)
@@ -50,7 +50,7 @@ class Visualisation:
 
     def plot_two_panels(self, data, view="phase_amp",title="",
                         xlabel=None, ylabel=None,
-                        filename=None, extent=None):
+                        filename=None, extent=None, aspect='auto'):
         """Return figure and axes for phase/amp or real/imag view.
         Parameters
         ----------
@@ -68,6 +68,9 @@ class Visualisation:
 
         im0 = axs[0].imshow(data1, cmap="viridis", origin="lower")
         im1 = axs[1].imshow(data2, cmap="viridis", origin="lower")
+
+        axs[0].set_aspect(aspect)
+        axs[1].set_aspect(aspect)
 
         fig.colorbar(im0, ax=axs[0])
         fig.colorbar(im1, ax=axs[1])
@@ -88,6 +91,35 @@ class Visualisation:
         if filename:
             self._save_if_needed(fig, filename)
         return fig, axs
+
+    def plot_single_panel(self, data, title="",
+                          xlabel=None, ylabel=None,
+                          filename=None, extent=None, aspect='auto'):
+        """Return figure and axes for single panel plot.
+        """
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im0 = ax.imshow(np.abs(data), cmap="viridis", origin="lower")
+        ax.set_aspect(aspect)
+        fig.colorbar(im0, ax=ax)
+        if extent is not None:
+            im0.set_extent(extent)
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        fig.tight_layout()
+        if filename:
+            self._save_if_needed(fig, filename)
+        return fig, ax
+
+    def plot_residual(self, residuals, title="Residual History", loglog=True, filename=None):
+        """Plot residual history over iterations.
+        Paramaters
+        ----------
+        """
+        fig, ax = plt.subplots(figsize=(6, 5))
+        data1, _, title1, _ = self._view_and_title(data, view, title)   
+        im0 = ax.imshow(data1, cmap="viridis", origin="lower")
+          
 
     def plot_residual(self, residuals, title="Residual History", loglog=True, filename=None):
         """Plot residual history over iterations.

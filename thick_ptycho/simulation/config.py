@@ -53,8 +53,8 @@ class SimulationConfig:
         Coordinate arrays defining the simulation domain.
     discrete_dimensions : tuple of int
         Number of discrete grid points in each spatial dimension.
-    probe_dimensions : tuple of int
-        Dimensions of the probe region.
+    probe_dimensions : int
+        Dimensions of the probe region pixels.
     scan_points : int
         Number of scan positions in one dimension.
     step_size : float
@@ -66,7 +66,7 @@ class SimulationConfig:
         Type of probe field to use.
     wave_number : float
         Optical wavenumber (2π / λ).
-    probe_diameter : float, optional
+    probe_diameter_scale : float, optional
         Diameter of the probe aperture.
     probe_focus : float, optional
         Focal length of the probe.
@@ -88,13 +88,13 @@ class SimulationConfig:
     """
     continuous_dimensions: Tuple
     discrete_dimensions: Tuple[int, ...]
-    probe_dimensions: Tuple[int, ...]
+    probe_dimensions: int
     scan_points: int
     step_size: float
     wave_number: float
     bc_type: BoundaryType = BoundaryType.IMPEDANCE
     probe_type: ProbeType = ProbeType.AIRY_DISK
-    probe_diameter: Optional[float] = None
+    probe_diameter_scale: Optional[float] = None
     probe_focus: Optional[float] = 0.0
     probe_angles: Tuple[float, ...] = (0.0,)
     tomographic_projection_90_degree: Optional[bool] = False

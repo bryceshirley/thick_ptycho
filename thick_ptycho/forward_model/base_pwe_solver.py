@@ -21,7 +21,7 @@ class BaseForwardModelPWE(BaseForwardModel):
             verbose=verbose,
             log=log,
         )
-        self.pwe_finite_differences = PWEFiniteDifferences(simulation_space)
+        self.pwe_finite_differences = PWEFiniteDifferences(simulation_space, ptycho_object)
         self.block_size = self.pwe_finite_differences.block_size
 
     # ------------------------------------------------------------------

@@ -11,74 +11,94 @@ class OpticalShape:
     """
     Interface class to create either 1D or 2D initial conditions.
     """
-    def __new__(cls, centre, *args, **kwargs):
-        dimension = len(centre) - 1
+    def __new__(cls, centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space):
+        dimension = len(centre_scale) - 1
         if dimension == 1:
-            return OpticalShape1D(centre, *args, **kwargs)
+            return OpticalShape1D(centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space)
         elif dimension == 2:
-            return OpticalShape2D(centre, *args, **kwargs)
+            return OpticalShape2D(centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space)
         else:
             raise ValueError("Unsupported dimension: {}".format(dimension))
 
-
-class OpticalShape1D:
-    """Represents an optical shape in the simulation in 1D."""
-
-    def __init__(self, centre, shape, refractive_index, 
-                 side_length, depth, guassian_blur,
+class OpticalShapeBase:
+    """Represents an optical shape in the simulation."""
+    def __init__(self, centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
                  simulation_space):
-        # Convert from normalized (0–1) to absolute spatial units
-        x_start, x_end = simulation_space.continuous_dimensions[0]
-        z_start, z_end = simulation_space.continuous_dimensions[1]
+        for c in centre_scale:
+            assert c <1.0 and c >0.0, "Centre scales must be between 0 and 1"
+        assert side_length_scale <1.0 and side_length_scale >0.0, "Side length scales must be between 0 and 1"
+        assert depth_scale <1.0 and depth_scale >0.0, "Depth scales must be between 0 and 1"
 
-        scale_x, scale_z = x_end - x_start, z_end - z_start
-
-        side_length *= scale_x
-        depth *= scale_z
-        centre = (centre[0] * scale_x, centre[1] * scale_z)
-
-
+        # Shape properties
         self.shape = shape
         self.refractive_index = refractive_index
-        nx = simulation_space.nx
-        nz = simulation_space.nz
-        x = simulation_space.x
-        if simulation_space.bc_type == "dirichlet":
-            x = x[1:-1]  # Exclude the boundary points
-        z = simulation_space.z
-
-        # Convert the centre of the object to the discrete grid
-        discrete_centre = (
-            int(np.ceil(((centre[0] - x[0]) / (x[-1] - x[0])) * nx)),
-            int(np.ceil(((centre[1] - z[0]) / (z[-1] - z[0])) * nz))
-        )
-        self.cx, self.cz = discrete_centre
-        self.centre = centre
-
-        # Check if the object is within the bounds of the simulation space
-        assert centre[1] - depth/2 >= z[0], "Object out of bounds"
-        assert centre[1] + depth/2 <= z[-1], "Object out of bounds"
-        assert len(
-            centre) == 2, "Centre must be a tuple of (x, z) coordinates."
-        assert simulation_space.xlims[0] <= centre[0] <= simulation_space.xlims[1], "Centre x-coordinate out of bounds."
-        assert simulation_space.zlims[0] <= centre[1] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
-
-        # Convert the side_lengthof object face to discrete side
-        self.discrete_side_length = int(
-            np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
-        self.side_length = side_length
-
-        # Convert the depth of object face to discrete depth
-        self.discrete_depth = int(
-            np.ceil(((depth - z[0]) / (z[-1] - z[0])) * nz / 2) * 2)
-        self.depth = depth
-
-        self.dz = z[1] - z[0]
-        self.dx = x[1] - x[0]
-        self.nx = nx
-        self.nz = nz
-
         self.guassian_blur = guassian_blur
+
+        # Simulation Space properties
+        self.nx = simulation_space.nx
+        self.nz = simulation_space.nz
+        self.x = simulation_space.x
+        self.z = simulation_space.z
+
+        # Simulation Space Bounds
+        x_start, x_end = simulation_space.continuous_dimensions[0]
+        z_start, z_end = simulation_space.continuous_dimensions[1]
+        range_x = abs(x_end - x_start)
+        range_z = abs(z_end - z_start)
+
+        # Convert from normalized (0–1) to absolute spatial units
+        side_length_continuous = side_length_scale * range_x
+        depth_continuous = depth_scale * range_z
+        self.centre_continuous = []
+
+        # Convert from normalized (0–1) to absolute discrete units
+        self.discrete_side_length = int(side_length_scale*self.nx)
+        self.discrete_depth = int(depth_scale*self.nz)
+        self.discrete_centre = []
+
+        # Calculate continuous and discrete centre positions
+        for i, con_dim in  enumerate(simulation_space.continuous_dimensions):
+            start, end = con_dim
+            range_dim = abs(end - start)
+            self.centre_continuous.append(start + centre_scale[i] * range_dim)
+
+            self.discrete_centre.append(int(np.ceil(((self.centre_continuous[i] - start) / (end - start)) * simulation_space.discrete_dimensions[i])))
+
+        # Bounds check of continuous object extents against the used grid extents
+        self.half_w = 0.5 * side_length_continuous
+        self.half_d = 0.5 * depth_continuous
+        assert (self.centre_continuous[-1] - self.half_d) >= self.z[0], "Object out of bounds"
+        assert (self.centre_continuous[-1] + self.half_d) <= self.z[-1], "Object out of bounds"
+        assert (self.centre_continuous[0] - self.half_w) >= self.x[0], "Object out of bounds"
+        assert (self.centre_continuous[0] + self.half_w) <= self.x[-1], "Object out of bounds"
+
+
+    def get_refractive_index_field(self):
+        """Return the field of the object."""
+        pass
+
+    def _get_field(self):
+        """Return the field of a object."""
+        pass
+
+
+class OpticalShape1D(OpticalShapeBase):
+    """Represents an optical shape in the simulation in 1D."""
+
+    def __init__(self, centre_scale, shape, refractive_index, 
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space):
+        super().__init__(centre_scale, shape, refractive_index,
+                         side_length_scale, depth_scale, guassian_blur,
+                         simulation_space)
+        self.cx, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
         """Return the field of the object."""
@@ -218,70 +238,23 @@ class OpticalShape1D:
         return points
 
 
-class OpticalShape2D:
+class OpticalShape2D(OpticalShapeBase):
     """Represents an optical shape in the simulation in 2D."""
 
-    def __init__(self, centre, shape, refractive_index, side_length, depth,
-                 guassian_blur, simulation_space):
-        # Convert from normalized (0–1) to absolute spatial units
-        x_start, x_end = simulation_space.continuous_dimensions[0]
-        y_start, y_end = simulation_space.continuous_dimensions[1]
-        z_start, z_end = simulation_space.continuous_dimensions[2]
-
-        scale_x = x_end - x_start
-        scale_y = y_end - y_start
-        scale_z = z_end - z_start
-
-        side_length *= scale_x
-        depth *= scale_z
-        centre = (
-            centre[0] * scale_x,
-            centre[1] * scale_y,
-            centre[2] * scale_z,
-        )
-
-
-        self.shape = shape
-        self.refractive_index = refractive_index
-        nx = simulation_space.nx
-        ny = simulation_space.ny
-        nz = simulation_space.nz
-        x = simulation_space.x
-        y = simulation_space.y
-        if simulation_space.bc_type == "dirichlet":
-            x = x[1:-1]  # Exclude the boundary points
-            y = y[1:-1]  # Exclude the boundary points
-        z = simulation_space.z
-
-        # Convert the centre of the object to the discrete grid
-        discrete_centre = (
-            int(np.ceil(((centre[0] - x[0]) / (x[-1] - x[0])) * nx)),
-            int(np.ceil(((centre[1] - y[0]) / (y[-1] - y[0])) * ny)),
-            int(np.ceil(((centre[2] - z[0]) / (z[-1] - z[0])) * nz))
-        )
-        self.cx, self.cy, self.cz = discrete_centre
-        self.centre = centre
-
-        # Check if the object is within the bounds of the simulation space
-        assert centre[2] - depth/2 >= z[0], "Object out of bounds"
-        assert centre[2] + depth/2 <= z[-1], "Object out of bounds"
-        assert len(
-            centre) == 3, "Centre must be a tuple of (x, y, z) coordinates."
-        assert simulation_space.xlims[0] <= centre[0] <= simulation_space.xlims[1], "Centre x-coordinate out of bounds."
-        assert simulation_space.ylims[0] <= centre[1] <= simulation_space.ylims[1], "Centre y-coordinate out of bounds."
-        assert simulation_space.zlims[0] <= centre[2] <= simulation_space.zlims[1], "Centre z-coordinate out of bounds."
-
-        # Convert the side_lengthof object face to discrete side
-        self.discrete_side_length = int(
-            np.ceil((side_length - x[0]) / (x[-1] - x[0]) * nx))
-        self.side_length = side_length
-
-        # Convert the depth of object face to discrete depth
-        self.discrete_depth = int(
-            np.ceil(((depth - z[0]) / (z[-1] - z[0])) * nz / 2) * 2)
-        self.depth = depth
-
-        self.guassian_blur = guassian_blur
+    def __init__(self, centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space):
+        super().__init__(centre_scale, shape, refractive_index,
+                         side_length_scale, depth_scale, guassian_blur,
+                         simulation_space)
+        # Simulation Space properties
+        self.ny = simulation_space.ny
+        self.y = simulation_space.y
+        
+        # Bounds check of continuous object extents against the used grid extents
+        assert (self.centre_continuous[1] - self.half_w) >= self.y[0], "Object out of bounds"
+        assert (self.centre_continuous[1] + self.half_w) <= self.y[-1], "Object out of bounds"
+        self.cx, self.cy, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
         """Return the field of the object."""

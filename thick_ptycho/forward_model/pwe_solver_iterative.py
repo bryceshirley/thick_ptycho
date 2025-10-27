@@ -10,7 +10,7 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
-                 results_dir="", use_logging=False, verbose=True, log=None):
+                 results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
             ptycho_object,

@@ -51,7 +51,7 @@ class BaseForwardModel:
 
         # Determine slice dimensions
         self.thin_sample = simulation_space.thin_sample
-        self.slice_dimensions = simulation_space.slice_dimensions
+        self.effective_dimensions = simulation_space.effective_dimensions
         self.nz = simulation_space.nz
 
         # Probe setup
@@ -59,8 +59,8 @@ class BaseForwardModel:
         self.num_probes = simulation_space.num_probes
         self.num_projections = simulation_space.num_projections
         assert self.num_projections <= 2, "Only supports up to 2 projections."
-        self.probe_angles_list = simulation_space.probe_angles_list
-        self.num_angles = len(self.probe_angles_list)
+        self.probe_angles = simulation_space.probe_angles
+        self.num_angles = len(self.probe_angles)
 
         # Solver type (for logging purposes)
         self.solver_type = "BaseForwardModel"
@@ -75,13 +75,30 @@ class BaseForwardModel:
         """
         Main multi-angle, multi-probe solving loop.
         Subclasses must define `_solve_single_probe(angle_idx, probe_idx, n, **kwargs)`.
+
+        Parameters
+        ----------
+        n : ndarray, optional
+            Refractive index distribution on the (x[,y], z) grid.
+        mode : {'forward', 'adjoint','reverse','forward_rotated','adjoint_rotated'}
+            Propagation mode.
+        rhs_block : ndarray, optional
+            Optional RHS vector for reusing precomputed blocks.
+        initial_condition : ndarray, optional
+            Initial probe condition to use instead of default.
+        
+        Returns
+        -------
+        u : ndarray
+            Complex propagated field, shape
+            (num_projections, num_angles, num_probes, nx[,ny], nz).
         """
         # Initialize solution grid with initial condition
         u = self._create_solution_grid()
 
         # Loop over angles and probes
         for proj_idx in range(self.num_projections):
-            for angle_idx, angle in enumerate(self.probe_angles_list):
+            for angle_idx, angle in enumerate(self.probe_angles):
                 for scan_idx in range(self.num_probes):
                     start = time.time()
 
@@ -108,7 +125,7 @@ class BaseForwardModel:
     def _create_solution_grid(self) -> np.ndarray:
         """Create an empty solution tensor."""
         return np.zeros(
-            (self.num_projections, self.num_angles, self.num_probes, *self.slice_dimensions, self.nz),
+            (self.num_projections, self.num_angles, self.num_probes, *self.effective_dimensions, self.nz),
             dtype=complex,
         )
     
@@ -121,7 +138,7 @@ class BaseForwardModel:
     # Synthetic data generation utilities
     # ------------------------------------------------------------------
 
-    def get_exit_waves(self, u: Optional[np.ndarray] = None, save_plots: bool = False) -> np.ndarray:
+    def get_exit_waves(self, u: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Simulate exit waves for all probes and angles.
 
@@ -129,33 +146,21 @@ class BaseForwardModel:
         ----------
         u : np.ndarray, optional
             Precomputed field inside the sample. If None, will be computed via `solve()`.
-        save_plots : bool, default False
-            Whether to save exit wave plots.
 
         Returns
         -------
         exit_waves : np.ndarray
             Exit wave field at detector plane (z = nz - 1)
-            Shape: (num_angles, num_probes, *slice_dimensions)
+            Shape: (num_angles, num_probes, *effective_dimensions)
         """
-        # Slice final z-plane for each angle & probe
-        if self.simulation_space.dimension == 1:
-            exit_waves = u[..., -1]
-        elif self.simulation_space.dimension == 2:
-            exit_waves = u[..., -1]
-        else:
-            raise ValueError("Unsupported sample dimension for exit wave simulation")
-        
-        if save_plots:
-            self.save_exit_wave_plots(exit_waves)
-        return exit_waves
+        return u[..., -1]
+
 
     def get_farfield_intensities(
         self,
         u: Optional[np.ndarray] = None,
         exit_waves: Optional[np.ndarray] = None,
         poisson_noise: Optional[bool] = True,
-        save_plots: bool = False,
     ) -> np.ndarray:
         """
         Simulate noisy far-field diffraction intensities.
@@ -165,19 +170,14 @@ class BaseForwardModel:
         u : np.ndarray, optional
             Precomputed field inside the sample. If None, will be computed via `solve()`.
         exit_waves : np.ndarray, optional
-            Precomputed exit waves. If None, will be computed via `simulate_exit_waves()`.
-        noise_model : str, default "poisson"
-            Type of noise: "poisson", "gaussian", "mixed", or None.
-        snr_db : float, optional
-            Signal-to-noise ratio (for Gaussian noise only).
-        normalize : bool, default True
-            Normalize intensity patterns to unit mean.
-
+            Precomputed exit waves. If None, will be computed via `get_exit_waves()`.
+        poisson_noise : bool, default True
+            If True, add Poisson noise to the intensities.
         Returns
         -------
         intensities: np.ndarray
         """
-        exit_waves = self.get_exit_waves(u=u, save_plots=save_plots) if exit_waves is None else exit_waves
+        exit_waves = self.get_exit_waves(u=u) if exit_waves is None else exit_waves
 
         # Compute FFTs for all probes and angles
         if self.simulation_space.dimension == 1:
@@ -190,7 +190,4 @@ class BaseForwardModel:
         # Add noise
         if poisson_noise:
             intensities = np.random.poisson(intensities)
-        
-        if save_plots:
-            self.save_intensity_plot(intensities)
         return intensities

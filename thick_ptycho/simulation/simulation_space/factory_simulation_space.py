@@ -19,7 +19,7 @@ def create_simulation_space(config: SimulationConfig):
         bc_type=config.bc_type.value,
         probe_type=config.probe_type.value,
         wave_number=config.wave_number,
-        probe_diameter=config.probe_diameter,
+        probe_diameter_scale=config.probe_diameter_scale,
         probe_focus=config.probe_focus,
         probe_angles=config.probe_angles,
         tomographic_projection_90_degree=config.tomographic_projection_90_degree,

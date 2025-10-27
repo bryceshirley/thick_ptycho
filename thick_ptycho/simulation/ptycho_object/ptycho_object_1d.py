@@ -14,8 +14,8 @@ class PtychoObject1D(BasePtychoObject):
 
     def get_sub_sample(self,n,sub_limits):
         """Retrieve the object slices for propagation."""
-        x_min = sub_limits
+        x_min,x_max = sub_limits
         return n[
-            x_min:x_min + self.simulation_space.probe_dimensions[0],
+            x_min:x_max,
             :
         ]

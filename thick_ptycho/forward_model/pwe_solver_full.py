@@ -10,7 +10,7 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
-                 results_dir="", use_logging=False, verbose=True, log=None):
+                 results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
             ptycho_object,
@@ -32,6 +32,7 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         self._cached_n_id = None
 
         # Precompute B0 term if applicable
+        self.pwe_finite_differences.full_system = True
         self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
 
         # Solver type (for logging purposes)
@@ -158,16 +159,22 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         else:
             probe_contribution = self.pwe_finite_differences.probe_contribution(
                 scan_index=scan_idx,
-                angle_index=angle_idx,
-                probe=probe,
+                probe=probe
             )
             b = b_homogeneous + probe_contribution
 
+        # Determine projection key and possibly rotate n
+        if mode in {"forward_rotated", "adjoint_rotated"}:
+            projection_key = "projection_1"
+        else:
+            projection_key = "projection_0"
+
+
         # Solve the global system
         if mode == "adjoint":
-            u = lu.solve(b, trans="H")
+            u = lu[projection_key].solve(b, trans="H")
         else:
-            u = lu.solve(b)
+            u = lu[projection_key].solve(b)
 
         # Reshape and concatenate with initial condition
         u = u.reshape(self.nz - 1, self.block_size).T

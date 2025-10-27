@@ -7,7 +7,7 @@ class BoundaryConditions:
     Handles boundary conditions and sets up the system matrices.
     """
 
-    def __init__(self, simulation_space, probe):
+    def __init__(self, simulation_space, probe=None):
         self.simulation_space = simulation_space
         self.probe = probe
         self.bc_type = simulation_space.bc_type
@@ -17,10 +17,10 @@ class BoundaryConditions:
         self.a = 1j / (2 * self.k)
 
         if simulation_space.dimension == 2:
-            self.nx, self.ny = simulation_space.slice_dimensions
+            self.nx, self.ny = simulation_space.effective_dimensions
             self.dy = simulation_space.dy
         else:
-            self.nx = simulation_space.slice_dimensions[0]
+            self.nx = simulation_space.effective_dimensions[0]
         self.dx = simulation_space.dx
 
         r_x = (0.5 * simulation_space.dz / self.dx**2)
@@ -66,6 +66,9 @@ class BoundaryConditions:
     def get_initial_boundary_conditions_1d_system(self):
         """RHS contributions (zero for Neumann & Impedance under this formulation)."""
         ubc = np.zeros(self.nx, dtype=complex)
+
+        if self.probe is None:
+            return ubc.flatten()
         if self.bc_type == "dirichlet":
             ubc[1]  += 2 * self.mu_x * self.probe[0]
             ubc[-2] += 2 * self.mu_x * self.probe[-1]
@@ -80,6 +83,8 @@ class BoundaryConditions:
         """Apply the initial condition to the boundaries."""
         ubc = np.zeros((self.nx, self.ny), dtype=complex)
 
+        if self.probe is None:
+            return ubc.flatten()
         # Dirichlet Boundary Conditions
         if self.bc_type == "dirichlet":
             ubc[1, :] += 2 * self.mu_x * self.probe[0, :]  # Top boundary

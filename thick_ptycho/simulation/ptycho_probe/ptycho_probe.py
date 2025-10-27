@@ -31,11 +31,13 @@ class PtychoProbes:
         - dx[, dy] : float (pixel size)
         - k : float (wavenumber)
         - probe_diameter_continuous : float
-        - detector_frame_info[scan] : dict with
-            * "sub_dimensions": (x,) in 1D or (x, y) in 2D when thin_sample=True
+        - scan_frame_info[scan] : dict with
             * "probe_centre_continuous": float in 1D, (cx, cy) in 2D
+            * "probe_centre_discrete": int in 1D, (cx, cy) in 2D
+            * "sub_limits_continuous": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
+            * "sub_limits_discrete": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
     thin_sample : bool
-        If True, use sub-sampled grids from `detector_frame_info`.
+        If True, use sub-sampled grids from `scan_frame_info`.
 
     Attributes
     ----------
@@ -66,16 +68,14 @@ class PtychoProbes:
               2D: (num_angles, num_probes, nx, ny)
         """
         if self.simulation_space.dimension == 1:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.nx), dtype=complex)
+            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.effective_nx), dtype=complex)
         else:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.nx, self.simulation_space.ny), dtype=complex)
+            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.effective_nx, self.simulation_space.effective_ny), dtype=complex)
 
         for a_idx, angle in enumerate(self.probe_angles):
             for s_idx in range(self.simulation_space.num_probes):
                 probes[a_idx, s_idx, ...] = self.make_single_probe(
                     scan=s_idx,
-                    probe_type=self.simulation_space.probe_type,
-                    probe_focus=self.simulation_space.probe_focus,
                     probe_angle=angle,
                 )
         return probes
@@ -93,7 +93,7 @@ class PtychoProbes:
         Parameters
         ----------
         scan : int
-            Index into `simulation_space.detector_frame_info`.
+            Index into `simulation_space.scan_frame_info`.
         probe_type : str, optional
             Name of the base probe profile. If None, uses
             `simulation_space.probe_type`. Supported:
@@ -126,7 +126,7 @@ class PtychoProbes:
 
         # Base amplitude/profile
         radius = self.simulation_space.probe_diameter_continuous / 2.0
-        field = self._build_profile(probe_type, coord, center, radius)
+        field = self._build_profile(probe_type, coord, center, max(radius, 1e-12))
 
         # Phase terms
         k = self.simulation_space.k
@@ -238,7 +238,7 @@ class PtychoProbes:
             return self._constant(coord)
 
         if probe_type == "gaussian":
-            return self._gaussian(coord, center, sd=max(radius / 2.0, 1e-12))
+            return self._gaussian(coord, center, sd=(radius)/3) # at 3*sd a gaussian is ~0.01
 
         if probe_type == "sinusoidal":
             return self._sinusoidal(coord)
@@ -328,18 +328,18 @@ class PtychoProbes:
         if self.simulation_space.dimension == 1:
             (x,) = coord
             r = np.abs(x - center)
-            s = np.pi * r / max(radius, 1e-12)
+            scaled_r = np.pi * r / radius
             amp = np.ones_like(r)
-            m = s != 0
-            amp[m] = (2 * jv(1, s[m]) / s[m]) ** 2
+            mask = scaled_r != 0
+            amp[mask] = (2 * jv(1, scaled_r[mask]) / scaled_r[mask]) ** 2
             return amp.astype(complex)
         x, y = coord
         cx, cy = center
         r = np.hypot(x - cx, y - cy)
-        s = np.pi * r / max(radius, 1e-12)
+        scaled_r = np.pi * r / radius
         amp = np.ones_like(r)
-        m = s != 0
-        amp[m] = (2 * jv(1, s[m]) / s[m]) ** 2
+        mask = scaled_r != 0
+        amp[mask] = (2 * jv(1, scaled_r[mask]) / scaled_r[mask]) ** 2
         return amp.astype(complex)
 
     def _disk(self, coord, center, radius):
@@ -382,20 +382,26 @@ class PtychoProbes:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
             if self.thin_sample:
-                x = self.simulation_space.scan_frame_info[scan]["sub_dimensions"][0]
+                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
+                x_min, x_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous
+                x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.thin_sample:
-            x, y = self.simulation_space.scan_frame_info[scan]["sub_dimensions"]
+            #x, y = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
+            x_coord_min, x_coord_max, y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
+            x_min, x_max, y_min, y_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous
+            x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
+            y = np.linspace(y_min, y_max, y_coord_max - y_coord_min)
         else:
             x, y = self.simulation_space.x, self.simulation_space.y
         return np.meshgrid(x, y, indexing="ij")
 
     def _get_center(self, scan: int) -> Union[float, Tuple[float, float]]:
         """Return probe center (cx) in 1D or (cx, cy) in 2D."""
-        info = self.simulation_space.scan_frame_info[scan]["probe_centre_continuous"]
+        info = self.simulation_space.scan_frame_info[scan].probe_centre_continuous
         return info if self.simulation_space.dimension == 2 else float(info)
 
     def _normalize_angles(
