@@ -20,41 +20,58 @@ class ForwardModelMS(BaseForwardModel):
 
         assert simulation_space.dimension == 1, "ForwardModelMS only supports 1D samples."
 
-       # Precompute angular spectrum kernels for forward/backward propagation
-        self.initialize_propagation_kernels()
-
         # Solver type (for logging purposes)
         self.solver_type = "Multislice Solver"
 
-    def initialize_propagation_kernels(self, remove_global_phase=True):
-        """Precompute the forward angular spectrum kernel (H_forward)."""
-        fx = np.fft.fftfreq(self.simulation_space.nx, d=self.simulation_space.dx)
-        kz = np.sqrt(np.clip(
-            self.simulation_space.k**2 - (2 * np.pi * fx)**2, 0, None
-        ))
+        self.k = self.simulation_space.k  # Wave number
+        self.dx = self.simulation_space.dx  # Pixel size in x
+        self.nx = self.simulation_space.nx  # Number of pixels in x
+        self.nz = self.simulation_space.nz  # Number of slices in z
+        self.dz = self.simulation_space.dz  # Distance between slices
+        self.n_medium = self.simulation_space.n_medium  # Refractive index of surrounding medium
 
-        self.H_forward = np.exp(1j * kz * self.simulation_space.dz)
+        # Precompute angular spectrum kernels for forward/backward propagation
+        self._kernel_cache = {}
+
+    def _get_propagation_kernels(self, dz: float, nx_eff: Optional[int] = None, remove_global_phase=True) -> np.ndarray:
+        """Precompute the forward angular spectrum kernel (H_forward)."""
+        nx = self.nx if nx_eff is None else nx_eff
+        dz = self.dz if dz is None else dz
+        key = (dz, nx_eff)
+        if key in self._kernel_cache:
+            return self._kernel_cache[key]
+
+        fx = np.fft.fftfreq(nx, d=self.dx)
+        kx = 2 * np.pi * fx # Spatial frequency in x
+        inside = (self.k ** 2 - kx ** 2)
+        kz = np.sqrt(np.clip(inside, 0.0, None))
+
+        H = np.exp(1j * kz * dz)
 
         # Remove global phase factor for stability if requested
         if remove_global_phase:
-            self.H_forward *= np.exp(-1j * self.simulation_space.k *
-                                     self.simulation_space.dz)
+            H *= np.exp(-1j * self.k * dz)
 
-    def _propagate_between_slices(self, psi, mode="forward"):
-        """Propagate the wavefield ψ between adjacent slices using ASM."""
-        H = self.H_forward if mode == "forward" or mode == "forward_rotated" else np.conj(self.H_forward)
-        return np.fft.ifft(np.fft.fft(psi) * H)
+        self._kernel_cache[key] = H.astype(np.complex64)
+        return self._kernel_cache[key]
     
+    def _propagate(self, psi, dz):
+        """Propagate the wavefield between adjacent slices using ASM."""
+        Psi = np.fft.fft(psi)
+        Psi *= self._get_propagation_kernels(dz, psi.size)
+        return np.fft.ifft(Psi)
+    
+    def _backpropagate(self, psi, dz):
+        """Inverse propagation (negative dz)."""
+        return self._propagate(psi, -dz)
+    
+
     def _object_transmission_function(self, n_slice):
         """Compute the object transmission function for a given slice."""
-        return np.exp(
-            1j * self.simulation_space.k *
-            (n_slice - self.simulation_space.n_medium) *
-            self.simulation_space.dz # Using dz here is tecnically wrong. Slice thickness is difficult to recover.
-        )
+        return np.exp(1j * self.k * (n_slice - self.n_medium) * self.dz)
 
-    def _solve_single_probe(self, proj_idx: int, angle_idx: int, scan_idx: int,
-                            n=None, mode="forward", 
+    def _solve_single_probe(self, proj_idx: int = 0, angle_idx: int = 0, scan_idx: int = 0,
+                            n: Optional[np.ndarray] = None, mode="forward",
                             initial_condition: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """
         Perform forward (or backward) propagation through multiple slices
@@ -79,14 +96,13 @@ class ForwardModelMS(BaseForwardModel):
         wavefield_through_slices : ndarray
             Complex-valued wavefield at each slice along z. Shape (nx, nz).
         """
-        if proj_idx == 1 and mode in {"forward", "adjoint"}:
-            mode = mode + "_rotated"
-        assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}, f"Invalid mode: {mode}"
+        assert mode in {"forward", "backward"}, f"Invalid mode: {mode}"
         # Object refractive index distribution
-        refractive_index = n if n is not None else self.simulation_space.n_true
+        if n is None:
+            n = self.ptycho_object.n_true
 
-        if mode in {"forward_rotated", "adjoint_rotated"}:
-            refractive_index = self.rotate_n(refractive_index)
+        if proj_idx == 1:
+            n = self.rotate_n(n)
 
         # Select initial probe condition
         if initial_condition is not None:
@@ -96,23 +112,23 @@ class ForwardModelMS(BaseForwardModel):
 
         # Initial probe field at the entrance plane
         psi_incident = probe.copy()
-        u = np.empty((self.simulation_space.nx, self.simulation_space.nz), dtype=complex)
-        u[:, 0] = psi_incident
+        u = np.empty((self.nx, self.nz), dtype=complex)
+        u[:, 0] = psi_incident.copy()
 
         # Forward propagation through slices
-        for z in range(self.simulation_space.nz - 1):
+        for z in range(self.nz - 1):
             # Transmission through current slice
             # Reference:
             #   F. Wittwer, J. Hagemann, D. Brückner, S. Flenner, and C. G. Schroer,
             #   "Phase retrieval framework for direct reconstruction of the projected refractive index
             #   applied to ptychography and holography," *Optica*, vol. 9, no. 3, pp. 288–297, 2022.
             #   DOI: https://doi.org/10.1364/OPTICA.447021
-            O_z = self._object_transmission_function(n_slice=refractive_index[:, z])
+            O_z = self._object_transmission_function(n_slice=n[:, z])
 
             # Compute exit wave and propagate to next slice
             psi_exit = psi_incident * O_z
 
             # Propagate to next slice
-            psi_incident = self._propagate_between_slices(psi_exit, mode=mode)
-            u[:, z + 1] = psi_incident
+            psi_incident = self._propagate(psi_exit, self.dz)
+            u[:, z + 1] = psi_incident.copy()
         return u

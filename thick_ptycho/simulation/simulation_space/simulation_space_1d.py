@@ -3,7 +3,6 @@ from typing import List
 
 from thick_ptycho.utils.visualisations import Visualisation
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
-from thick_ptycho.utils.utils import setup_log
 import numpy as np
 
 
@@ -18,6 +17,7 @@ class SimulationSpace1D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         self.xlims, self.zlims = self.continuous_dimensions
         self.nx, self.nz = self.discrete_dimensions
+        self.block_size = self.nx
         self.dimension = 1
 
         # self.nz = self.discrete_dimensions[1]
@@ -43,23 +43,13 @@ class SimulationSpace1D(BaseSimulationSpace):
         self.dx = self.x[1] - self.x[0]
 
         # ------------------------------------------------------------------
-        # 3. Field initialization
-        # ------------------------------------------------------------------
-        self.n_true = np.full((self.nx, self.nz), self.n_medium, dtype=complex)
-
-        # # ------------------------------------------------------------------
-        # # 4. Validate parameters
-        # # ------------------------------------------------------------------
-        # self.edge_margin = self.validate_parameters()
-
-        # ------------------------------------------------------------------
-        # 5. Scan setup
+        # 3. Scan setup
         # ------------------------------------------------------------------
         self.num_probes = self.scan_points
         self._scan_frame_info = self._generate_scan_frames()
 
         # ------------------------------------------------------------------
-        # 6. Visualization utility
+        # 4. Visualization utility
         # ------------------------------------------------------------------
         self.viewer = Visualisation(self, results_dir=self.results_dir)
 

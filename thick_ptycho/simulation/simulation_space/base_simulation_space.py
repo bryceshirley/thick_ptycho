@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import os
 from typing import List, Tuple, Union, Optional
 import numpy as np
 
@@ -158,6 +159,13 @@ class BaseSimulationSpace(ABC):
     # ----------------------------------------------------------------------
     # Helper methods
     # ----------------------------------------------------------------------
+
+    def join_results_dir(self, filename: str) -> str:
+        """Join filename with results directory."""
+                
+        if self.results_dir is None:
+            raise ValueError("results_dir is not set.")
+        return os.path.join(self.results_dir, filename)
 
     def _validate_dimensions(
         self,

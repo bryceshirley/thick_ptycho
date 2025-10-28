@@ -1,7 +1,9 @@
 import numpy as np
 from typing import Optional
-from thick_ptycho.simulation import ptycho_object, simulation_space
+# from thick_ptycho.simulation import ptycho_object, simulation_space
 from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.simulation.ptycho_object import create_ptycho_object
+from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 
 
 class ReconstructorBase:
@@ -37,9 +39,7 @@ class ReconstructorBase:
 
     def __init__(
         self,
-        simulation_space: simulation_space,
-        ptycho_object: ptycho_object,
-        ptycho_probes: np.ndarray,
+        simulation_space,
         data,
         phase_retrieval: bool = False,
         results_dir=None,
@@ -48,14 +48,17 @@ class ReconstructorBase:
         **kwargs,
     ):
         self.simulation_space = simulation_space
-        self.ptycho_object = ptycho_object
-        self.ptycho_probes = ptycho_probes
+        self.ptycho_object = create_ptycho_object(simulation_space)
+        self.ptycho_probes = create_ptycho_probes(simulation_space)
         self.data = np.asarray(data)
         self.phase_retrieval = phase_retrieval
         self.verbose = verbose
         self._results_dir = results_dir
+
         self.num_angles = self.simulation_space.num_angles
         self.num_probes = self.simulation_space.num_probes
+        self.num_projections = self.simulation_space.num_projections
+        self.total_scans = self.num_angles * self.num_probes * self.num_projections
 
         # Logging setup
         log_name = f"{self.__class__.__name__.lower()}_log.txt"
@@ -67,6 +70,8 @@ class ReconstructorBase:
         )
 
         self.block_size = self.simulation_space.block_size
+        self.nx = simulation_space.nx
+        self.nz = simulation_space.nz
 
     # -------------------------------------------------------------------------
     # Utility methods
@@ -79,7 +84,7 @@ class ReconstructorBase:
         Parameters
         ----------
         uk : np.ndarray
-            Current solution vector, shape (num_probes * num_angles*rotation_angles, nx * (nz - 1)).
+            Current solution vector, shape (total_scans, nx * (nz - 1)).
         known_phase : bool, optional
             If True, compares directly to the true exit wave.
             If False, performs a phase retrieval constraint update.
@@ -89,12 +94,13 @@ class ReconstructorBase:
         np.ndarray
             The complex-valued exit wave error, same shape as uk.
         """
-        exit_wave_error = np.zeros_like(uk, dtype=complex)
-        exit_waves = uk[:, -self.block_size:]
+        #exit_waves = uk[:, -self.block_size:]
+        exit_waves = self.convert_to_tensor_form(uk)[...,-1]
+        exit_wave_error = np.zeros_like(exit_waves, dtype=complex)
 
         if self.phase_retrieval:
             emodel = self._apply_phase_retrieval_constraint(exit_waves)
-            exit_wave_error[:, -self.block_size:] = exit_waves - emodel
+            exit_wave_error = exit_waves - emodel
 
             if getattr(self, "_results_dir", None):
                 # Optional visualization of pre/post phase retrieval
@@ -113,9 +119,47 @@ class ReconstructorBase:
                 )
 
         else:  # Known Phase
-            exit_wave_error[:, -self.block_size:] = exit_waves - self.data
+            exit_wave_error = exit_waves - self.convert_to_tensor_form(self.data)
 
         return exit_wave_error
+    
+    def convert_to_tensor_form(self,u):
+        """
+        Reverse the block flattening process.
+
+        Parameters:
+        u (ndarray): Flattened array of shape (num_angles, num_probes, block_size * (nz - 1))
+
+        Returns:
+        ndarray: Unflattened array of shape (num_angles, num_probes, block_size, nz - 1)
+        """
+        # Step 1: Reshape to (num_probes, nz - 1, block_size)
+        reshaped = u.reshape(self.num_projections,self.num_angles, self.num_probes, self.nz-1, self.block_size)
+
+        # Step 2: Transpose to (num_probes, num_probes, nx, nz - 1)
+        return reshaped.transpose(0, 1, 2, 4, 3)
+
+    def convert_to_vector_form(self, u):
+        """
+        Convert the input array to block form.
+
+        Parameters:
+        u (ndarray): Input array to be converted. shape: (projection_number, num_angles, num_probes, nx, nz)
+
+        Returns:
+        ndarray: Block-formatted array. (total_scans, nx*nz)
+        """
+        # 2. Remove initial condition
+        u = u[:, :, :, :, 1:]  # shape: (projection_number, num_angles, num_probes, block_size, nz - 1)
+
+        # 3. Transpose axes
+        u = u.transpose(0, 1, 2, 4, 3) # shape: (projection_number, num_angles, num_probes, nz - 1, block_size)
+
+        # 4. Flatten last two dims
+        # shape: (total_scans, block_size * (nz - 1))
+        u = u.reshape(self.total_scans, -1)
+
+        return u
 
 
     def _apply_phase_retrieval_constraint(self, exit_waves: np.ndarray) -> np.ndarray:

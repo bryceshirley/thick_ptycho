@@ -36,61 +36,49 @@ class ReconstructorPWE(ReconstructorBase):
 
     def __init__(
         self,
-        simulation_space: simulation_space,
-        ptycho_object: ptycho_object,
-        ptycho_probes: np.ndarray,
+        simulation_space,
+        data,
+        phase_retrieval=True,
         results_dir=None,
-        use_logging=True,
+        use_logging=False,
         verbose=False,
-        solver_type: str = "iterative",
-        rotated_90: bool = False,
+        solver_type="iterative",
     ):
         super().__init__(
             simulation_space=simulation_space,
-            ptycho_object=ptycho_object,
-            ptycho_probes=ptycho_probes,
+            data=data,
+            phase_retrieval=phase_retrieval,
             results_dir=results_dir,
             use_logging=use_logging,
             verbose=verbose,
+            log_file_name="multislice_reconstruction_log.txt",
         )
         # Store number of tomographic projections
-        if rotated_90:
-            self.num_projections = 2
-        else:
-            self.num_projections = 1
 
         assert solver_type in {"full", "iterative"}, f"Invalid solver_type: {solver_type!r}"
         # Forward model selection
         SolverClass = ForwardModelPWEFull if solver_type == "full" else ForwardModelPWEIterative
-        self.forward_model = SolverClass(simulation_space, ptycho_object, ptycho_probes,rotated_90=rotated_90,
-                                        results_dir=results_dir,
-                                        use_logging=use_logging,
-                                        verbose=verbose)
-        # Set block size (number of pixels in the exit wave)
-        self.block_size = self.forward_model.block_size
+        self.forward_model = SolverClass(simulation_space, 
+                                         self.ptycho_object,
+                                         self.ptycho_probes,
+                                        results_dir=results_dir)
 
-
-        # ---- logging/verbosity setup ----
-        self._log = setup_log(results_dir,log_file_name="reconstruction_log.txt",
-                               use_logging=use_logging, verbose=verbose)
         self._results_dir = results_dir
         self._log("Initializing Least Squares Solver...")
-        
-        self.data = None
-        self.phase_retrieval = False
+
 
 
     def compute_forward_model(self, nk, probes: Optional[np.ndarray] = None):
         """Compute the forward model for the current object and gradient."""
 
         # Prepare the solver with the current refractive index
-        self.forward_model.prepare_solver(n=nk)
-        self.forward_model.prepare_solver(n=nk, mode='adjoint')
+        self.forward_model.presolve_setup(n=nk)
+        self.forward_model.presolve_setup(n=nk, mode='adjoint')
 
         # Compute Gradient of Ak wrt n
         grad_Ak = - self.forward_model.get_gradient(n=nk)
 
-        uk = self.convert_to_block_form(self.forward_model.solve(
+        uk = self.convert_to_vector_form(self.forward_model.solve(
             n=nk,
             initial_condition=probes))
 
@@ -104,16 +92,18 @@ class ReconstructorPWE(ReconstructorBase):
         # Compute exit wave error
         exit_wave_error = self.apply_exit_wave_constraint(uk)
 
-
         for proj_idx in range(self.num_projections):
             for angle_idx in range(self.num_angles):
                 for scan_idx in range(self.num_probes):
-                    idx = proj_idx * (self.num_angles * self.num_probes) + angle_idx * self.num_probes + scan_idx
+
                     error_backpropagation = self.forward_model._solve_single_probe(
                         proj_idx=proj_idx, angle_idx=angle_idx, scan_idx=scan_idx,
-                        rhs_block=exit_wave_error[idx, :], mode='adjoint') 
+                        rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx, :], 
+                        mode='adjoint')
+    
                     error_backpropagation = error_backpropagation[:, :-1].transpose().ravel()
 
+                    idx = proj_idx * (self.num_angles * self.num_probes) + angle_idx * self.num_probes + scan_idx
                     g_base = (grad_A @ uk[idx, :])
                     grad_real -= (g_base.conj() * error_backpropagation).real
                     grad_imag -= ((1j * g_base).conj() * error_backpropagation).real
@@ -171,64 +161,15 @@ class ReconstructorPWE(ReconstructorBase):
         betak = min(betak_fr, max(betak_pr, 0))
         return betak
 
-    def convert_from_block_form(self,u):
-        """
-        Reverse the block flattening process.
-
-        Parameters:
-        u (ndarray): Flattened array of shape (num_angles, num_probes, block_size * (nz - 1))
-
-        Returns:
-        ndarray: Unflattened array of shape (num_angles, num_probes, block_size, nz - 1)
-        """
-        # Step 1: Reshape to (num_probes, nz - 1, block_size)
-        reshaped = u.reshape(self.num_angles, self.num_probes, self.nz-1, self.block_size)
-
-        # Step 2: Transpose to (num_probes, num_probes, nx, nz - 1)
-        return reshaped.transpose(0, 1, 3, 2)
-
-    def convert_to_block_form(self, u):
-        """
-        Convert the input array to block form.
-
-        Parameters:
-        u (ndarray): Input array to be converted. shape: (ang_number, num_probes, nx, nz)
-
-        Returns:
-        ndarray: Block-formatted array. (ang_number*num_probes, nx*nz)
-        """
-        # 2. Remove initial condition
-        dims = u.shape
-        num_angles,num_probes = dims[0], dims[1]
-        u = u[:, :, :, 1:]  # shape: (num_angles, num_probes, block_size, nz - 1)
-
-        # 3. Transpose axes
-        u = u.transpose(0, 1, 3, 2) # shape: (ang_number, num_probes, nz - 1, block_size)
-
-        # 4. Flatten last two dims
-        # shape: (num_angles*num_probes, block_size * (nz - 1))
-        u = u.reshape(num_angles*num_probes, -1)
-
-        return u
-
     def reconstruct(
             self,
-            data: np.ndarray,
-            phase_retrieval: bool = False,
-            n_initial=None,
             max_iters=10,
             tol=1e-8,
-            plot_forward=False,
-            plot_gradient=False,
-            plot_reverse=False,
+            n_initial=None,
             fixed_step_size=None,
-            verbose=True,
             solve_probe=False,
             sparsity_lambda=0.0):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization."""
-        # Store data and phase retrieval mode
-        self.data = data
-        self.phase_retrieval = phase_retrieval
 
         # Initialize the fixed step size
         if fixed_step_size is not None:
@@ -238,18 +179,19 @@ class ReconstructorPWE(ReconstructorBase):
         if n_initial is not None:
             n0 = n_initial
         else:
-            n0 = np.ones((self.block_size, self.nz), dtype=complex)*self.simulation_space.n_medium
+            n0 = np.ones((self.block_size, self.simulation_space.nz), dtype=complex)*self.simulation_space.n_medium
 
-        if plot_forward:
-            self._log("True Forward Solution")
-            utrue_unblocked = self.convert_from_block_form(self.u_true)
-            self.simulation_space.viewer.plot_two_panels(utrue_unblocked[0], view="phase_amp")
-            self.simulation_space.viewer.plot_two_panels(utrue_unblocked[int(self.num_angles/2)], view="phase_amp")
-            self.simulation_space.viewer.plot_two_panels(utrue_unblocked[-1], view="phase_amp")
+        # if plot_forward:
+        #     self._log("True Forward Solution")
+        #     utrue_unblocked = self.convert_to_tensor_form(self.u_true)
+        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[0], view="phase_amp")
+        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[int(self.num_angles/2)], view="phase_amp")
+        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[-1], view="phase_amp")
 
         # Initialize residual
         residual = []
         nk = n0
+        gradient_update = np.zeros((self.nx, self.nz), dtype=complex)
 
         # Define probe
         if solve_probe:
@@ -279,7 +221,7 @@ class ReconstructorPWE(ReconstructorBase):
                 break
 
             # Output the current iteration information
-            if verbose:
+            if self.verbose:
                 self._log(f"Iteration {i + 1}/{max_iters}")
                 self._log(f"    RMSE: {residual[i]}")
 
@@ -303,17 +245,15 @@ class ReconstructorPWE(ReconstructorBase):
             # Compute Product of step size and direction
             alphakdk_re = (alphak_re * dk_re).reshape((self.nz - 1, self.nx)).T
             alphakdk_im = (alphak_im * dk_im).reshape((self.nz - 1, self.nx)).T
-
-            gradient_update = np.zeros((self.nx, self.nz), dtype=complex)
             gradient_update[:, 1:] = alphakdk_re + 1j * alphakdk_im
 
-            # Get min and max values from the true sample space for color scaling
-            if plot_gradient:
-                self.simulation_space.viewer.plot_two_panels(
-                    gradient_update, view="phase_amp",
-                    filename=f"gradient_update.png",
-                    title=f"gradient_update",
-                )
+            # # Get min and max values from the true sample space for color scaling
+            # if plot_gradient:
+            #     self.simulation_space.viewer.plot_two_panels(
+            #         gradient_update, view="phase_amp",
+            #         filename=f"gradient_update.png",
+            #         title=f"gradient_update",
+            #     )
 
             # Update the current estimate of the refractive index of the object
             nk += gradient_update
@@ -345,19 +285,19 @@ class ReconstructorPWE(ReconstructorBase):
             # Compute source by solving the reverse problem
             if solve_probe:
                 gamma = 0.5 
-                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes(nk, plot_reverse)
+                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes(nk)
                 probesk_old = probesk.copy()
             
             time_end = time.time()
-            if verbose:
+            if self.verbose:
                 self._log(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
 
-            self.simulation_space.viewer.plot_two_panels(
-                nk, title=f"Reconstructed Sample Space")
+            # self.simulation_space.viewer.plot_two_panels(
+            #     nk, title=f"Reconstructed Sample Space")
     
 
-        return nk, self.convert_from_block_form(uk), residual
+        return nk, self.convert_to_tensor_form(uk), residual
 
     def solve_for_probes(self, n, plot_reverse: Optional[bool] = False):
         """
@@ -374,7 +314,7 @@ class ReconstructorPWE(ReconstructorBase):
             self.simulation_space.viewer.plot_two_panels(uk_reverse[int(self.num_angles/2)], view="phase_amp")
     
         # Convert to block form
-        uk_reverse = self.convert_to_block_form(uk_reverse)
+        uk_reverse = self.convert_to_vector_form(uk_reverse)
 
         # Select probes
         return uk_reverse[:, -self.block_size:]

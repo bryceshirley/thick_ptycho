@@ -40,19 +40,19 @@ class BaseForwardModelPWE(BaseForwardModel):
         """Override in subclasses."""
         raise NotImplementedError
 
-    def get_gradient(self,nk: np.ndarray) -> np.ndarray:
+    def get_gradient(self,n: np.ndarray) -> np.ndarray:
         """
         Compute the gradient of the forward model with respect to the refractive index.
 
         Parameters
         ----------
-        nk : ndarray
+        n : ndarray
             Current estimate of the refractive index field.
 
         Returns
         -------
         gradient : ndarray
-            Gradient of the forward model with respect to nk.
+            Gradient of the forward model with respect to n.
         """
         return self.pwe_finite_differences.setup_inhomogeneous_forward_model(
-             n=nk, grad=True)
+             n=n, grad=True)

@@ -18,6 +18,7 @@ class SimulationSpace2D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         self.xlims, self.ylims, self.zlims = self.continuous_dimensions
         self.nx, self.ny, self.nz = self.discrete_dimensions
+        self.block_size = self.nx * self.ny
         self.dimension = 2
 
         # Effective resolution
@@ -39,23 +40,18 @@ class SimulationSpace2D(BaseSimulationSpace):
         self.dz = self.z[1] - self.z[0]
 
         # ------------------------------------------------------------------
-        # 3. Field initialization
-        # ------------------------------------------------------------------
-        self.n_true = np.full((self.nx, self.ny, self.nz), self.n_medium, dtype=complex)
-
-        # ------------------------------------------------------------------
-        # 4. Validate parameters
+        # 3. Validate parameters
         # ------------------------------------------------------------------
         self.edge_margin = self.validate_parameters()
 
         # ------------------------------------------------------------------
-        # 5. Scan setup
+        # 4. Scan setup
         # ------------------------------------------------------------------
         self.num_probes = self.scan_points**2
         self._scan_frame_info = self._generate_scan_frames()
 
         # ------------------------------------------------------------------
-        # 6. Visualization utility
+        # 5. Visualization utility
         # ------------------------------------------------------------------
         self.viewer = Visualisation2D(self, results_dir=self.results_dir)
 

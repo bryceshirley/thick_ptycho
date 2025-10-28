@@ -22,6 +22,7 @@ dependencies = [
     "scikit-image (>=0.24,<0.25)",
     "astropy (>=7.1.0,<8.0.0)",
     "ffmpeg-python (>=0.2.0,<0.3.0)",
+    "opencv-python (>=4.12.0.88,<5.0.0.0)",
 ]
 
 

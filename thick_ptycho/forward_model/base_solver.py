@@ -181,9 +181,9 @@ class BaseForwardModel:
 
         # Compute FFTs for all probes and angles
         if self.simulation_space.dimension == 1:
-            fft_waves = np.fft.fftshift(np.fft.fft(exit_waves, axis=-1))
+            fft_waves = np.fft.fft(exit_waves)
         else:
-            fft_waves = np.fft.fftshift(np.fft.fft2(exit_waves, axes=(-2, -1)))
+            fft_waves = np.fft.fft2(exit_waves, axes=(-2, -1))
 
         intensities = np.abs(fft_waves) ** 2
 

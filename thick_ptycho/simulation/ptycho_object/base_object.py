@@ -3,9 +3,13 @@ Base class for PtychoObject1D and PtychoObject2D defining common logic.
 """
 
 from abc import ABC, abstractmethod
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from .shapes import OpticalShape
+import tifffile as tiff
+from PIL import Image
+
 
 class BasePtychoObject(ABC):
     """
@@ -27,8 +31,20 @@ class BasePtychoObject(ABC):
         for obj in self.objects:
             self.n_true += obj.get_refractive_index_field()
         # return self.n_true
-    
-    def add_object(self, shape: str, refractive_index: complex, side_length: float, 
+
+    # Method to save n_true to npz file
+    def save_n_true(self, filename: str):
+        """
+        Save the refractive index field to a .npy file.
+
+        Parameters:
+        filename (str): Path to the output .npy file.
+        """
+        file_path = self.simulation_space.join_results_dir(filename)
+        self.simulation_space._log(f"Saving refractive index field to {file_path}")
+        np.save(file_path, self.n_true)
+
+    def add_object(self, shape: str, refractive_index: complex, side_length: float,
                    centre: tuple, depth: float, gaussian_blur=None):
         """
         Add an optical object to the simulation.
