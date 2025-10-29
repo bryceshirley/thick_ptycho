@@ -110,15 +110,6 @@ class Visualisation:
         if filename:
             self._save_if_needed(fig, filename)
         return fig, ax
-
-    def plot_residual(self, residuals, title="Residual History", loglog=True, filename=None):
-        """Plot residual history over iterations.
-        Paramaters
-        ----------
-        """
-        fig, ax = plt.subplots(figsize=(6, 5))
-        data1, _, title1, _ = self._view_and_title(data, view, title)   
-        im0 = ax.imshow(data1, cmap="viridis", origin="lower")
           
 
     def plot_residual(self, residuals, title="Residual History", loglog=True, filename=None):

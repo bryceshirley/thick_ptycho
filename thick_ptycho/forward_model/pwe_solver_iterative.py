@@ -126,13 +126,14 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
     # Main probe solve
     # ------------------------------------------------------------------
     def _solve_single_probe(self,
-            proj_idx: int,
-            angle_idx: int,
-            scan_idx: int,
+            # proj_idx: int,
+            # angle_idx: int,
+            scan_idx: int=0,
+            probe: Optional[np.ndarray] = None,
             n: Optional[np.ndarray] = None,
             mode: str = "forward",
             rhs_block: Optional[np.ndarray] = None,
-            initial_condition: Optional[np.ndarray] = None
+            # initial_condition: Optional[np.ndarray] = None
             ) -> np.ndarray:
         """
         Perform forward (or backward) propagation through `time-steps` in z.
@@ -160,21 +161,23 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
             Wavefield propagated through all slices for the given probe.
             Shape: (block_size, nz)
         """
-        if proj_idx == 1 and mode in {"forward", "adjoint", "reverse"}:
-            mode = mode + "_rotated"
+        # if proj_idx == 1 and mode in {"forward", "adjoint", "reverse"}:
+        #     mode = mode + "_rotated"
         assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
 
-        # Select initial probe condition
-        if initial_condition is not None:
-            probe = initial_condition[angle_idx, scan_idx, :]
-        else:
-            probe = self.probes[angle_idx, scan_idx, :]
+        # # Select initial probe condition
+        # if probe is None
+        #     probe = initial_condition[angle_idx, scan_idx, :]
+        # else:
+        #     probe = self.probes[angle_idx, scan_idx, :]
+        if probe is None:
+            probe = np.zeros((self.block_size,), dtype=complex)
             
         u = np.zeros((self.block_size, self.nz), dtype=complex)
         u[:, 0] = probe.flatten()
 
-        if rhs_block is not None:
-            rhs_block = rhs_block.reshape(self.nz - 1, self.block_size).T
+        # if rhs_block is not None:
+        #     rhs_block = rhs_block.reshape(self.nz - 1, self.block_size).T
 
         # ------------------------------------------------------
         # Select or construct LUs (always via construct_iterative_lu)
@@ -195,4 +198,28 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
 
         if mode == "adjoint":
             u = np.flip(u, axis=1)
+        return u
+    
+    def _solve_probes_batch(self, probes, n=None, mode="forward", rhs_block=None):
+        P = probes.shape[0]   # now P = num_angles * num_probes
+        u = np.zeros((P, self.block_size, self.nz), dtype=complex)
+        u[:, :, 0] = probes
+
+        A_lu_list, B_list, b_global = self._get_or_construct_lu(n=n, mode=mode)
+
+        if rhs_block is not None:
+            rhs_block = rhs_block.reshape(P, self.block_size, self.nz - 1)
+
+        for j in range(1, self.nz):
+            b = rhs_block[:, :, -j] if (rhs_block is not None and mode == "adjoint") \
+                                    else rhs_block[:, :, j-1] if rhs_block is not None \
+                                    else b_global
+
+            rhs = (B_list[j-1] @ u[:, :, j-1].T).T + b
+
+            u[:, :, j] = A_lu_list[j-1].solve(rhs.T).T
+
+        if mode == "adjoint":
+            u = np.flip(u, axis=2)
+
         return u

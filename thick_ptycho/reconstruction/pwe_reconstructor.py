@@ -80,33 +80,62 @@ class ReconstructorPWE(ReconstructorBase):
 
         uk = self.convert_to_vector_form(self.forward_model.solve(
             n=nk,
-            initial_condition=probes))
+            probes=probes))
+
 
         return uk, grad_Ak
-
-    def compute_grad_least_squares(self, uk, grad_A):
+    
+    def compute_grad_least_squares(self, exit_wave_error, uk, grad_A):
         """Compute the gradient of least squares problem."""
-        grad_real = np.zeros(self.nx * (self.nz - 1), dtype=float)
-        grad_imag = np.zeros(self.nx * (self.nz - 1), dtype=float)
 
-        # Compute exit wave error
-        exit_wave_error = self.apply_exit_wave_constraint(uk)
+        # For speed: avoid recomputing sub-block size & flatten operation repeatedly
+        projection_size = self.nx * (self.nz - 1)
 
+        grad_real = np.zeros(projection_size, dtype=float)
+        grad_imag = np.zeros(projection_size, dtype=float)
+
+        # exit_wave_error = np.zeros_like(self.convert_to_tensor_form(uk), dtype=complex)
+        # exit_waves = uk[:, -self.block_size:]
+        # exit_wave_error[..., :, -1] = exit_waves - self.data
+        # self.simulation_space.viewer.plot_two_panels(
+        #             exit_wave_error.squeeze()[...,-1], view="phase_amp",
+        #             filename="exit_error.png",
+        #             title="Old Exit Wave",
+        #             xlabel="x", ylabel="Image #"
+        #         )
+        
+        idx = 0
         for proj_idx in range(self.num_projections):
+            temp_mode = "adjoint_rotated" if proj_idx == 1 else "adjoint"
+    
             for angle_idx in range(self.num_angles):
                 for scan_idx in range(self.num_probes):
 
-                    error_backpropagation = self.forward_model._solve_single_probe(
-                        proj_idx=proj_idx, angle_idx=angle_idx, scan_idx=scan_idx,
-                        rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx, :], 
-                        mode='adjoint')
-    
-                    error_backpropagation = error_backpropagation[:, :-1].transpose().ravel()
+                    # 1) Solve adjoint model
+                    backprop = self.forward_model._solve_single_probe(
+                    scan_idx=scan_idx,
+                    probe=None,
+                    rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx],
+                    mode=temp_mode
+                    )
+                    # self.simulation_space.viewer.plot_two_panels(
+                    # backprop, view="phase_amp",
+                    # filename="exit_phase_amp_old.png",
+                    # title="Old Exit Wave Image #{}".format(scan_idx),
+                    # xlabel="z", ylabel="x")
 
-                    idx = proj_idx * (self.num_angles * self.num_probes) + angle_idx * self.num_probes + scan_idx
-                    g_base = (grad_A @ uk[idx, :])
-                    grad_real -= (g_base.conj() * error_backpropagation).real
-                    grad_imag -= ((1j * g_base).conj() * error_backpropagation).real
+                    # 2) Flatten the spatial field block
+                    backprop = backprop[:, :-1].T.ravel()
+
+                    
+                    # 3) Compute contribution of current frame
+                    g_base = (grad_A @ uk[idx])
+
+                    # 4) Accumulate gradient (real and imaginary parts separately)
+                    grad_real -= (g_base.conj() * backprop).real
+                    grad_imag -= ((1j * g_base).conj() * backprop).real
+
+                    idx += 1
 
         return grad_real, grad_imag
 
@@ -125,25 +154,40 @@ class ReconstructorPWE(ReconstructorBase):
         float: The computed denominator value.
         """
         denominator = 0.0
+        projection_size = self.nx * (self.nz - 1)
 
+        idx = 0
         for proj_idx in range(self.num_projections):
+            temp_mode = "forward_rotated" if proj_idx == 1 else "forward"
+
             for angle_idx in range(self.num_angles):
                 for scan_idx in range(self.num_probes):
-                    idx = proj_idx * (self.num_angles * self.num_probes) + angle_idx * self.num_probes + scan_idx
-                    # Compute the perturbation for each probe
-                    perturbation = grad_A @ u[idx, :]
 
-                    # Solve for delta_u
+                    # 1) Perturbation term: (grad_A @ u[idx])
+                    perturb = grad_A @ u[idx]
+
+                    # 2) Retrieve probe field once per loop
+                    probe = self.ptycho_probes[angle_idx, scan_idx]
+
+                    # 3) Solve forward model for delta_u
                     delta_u = self.forward_model._solve_single_probe(
-                        proj_idx=proj_idx, angle_idx=angle_idx, scan_idx=scan_idx,
-                        rhs_block=perturbation)
-                    delta_u = delta_u[:, 1:].transpose().flatten()
+                        scan_idx=scan_idx,
+                        probe=probe,
+                        rhs_block=perturb.reshape(self.nz - 1, self.nx).T,
+                        mode=temp_mode
+                    )
 
-                    # Only use last block_size elements (final slice)
+                    # (nz, nx) field → drop the first z-plane → flatten
+                    delta_u = delta_u[:, 1:].T.ravel()
+
+                    # 4) Only use last block_size elements
                     delta_p_i = - delta_u[-self.block_size:] @ d[-self.block_size:]
 
-                    # Accumulate squared norm
+
+                    # 5) accumulate squared contribution
                     denominator += np.linalg.norm(delta_p_i)**2
+
+                    idx += 1
 
         # Compute the numerator
         numerator = np.vdot(d, grad_E)
@@ -165,6 +209,7 @@ class ReconstructorPWE(ReconstructorBase):
             self,
             max_iters=10,
             tol=1e-8,
+            # plot_gradient=True,
             n_initial=None,
             fixed_step_size=None,
             solve_probe=False,
@@ -206,14 +251,8 @@ class ReconstructorPWE(ReconstructorBase):
             # Compute the Forward Model
             uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
 
-            grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(uk, grad_Ak)
-            )
-
-            # Compute RMSE of the current refractive index estimate
-            error = self.true_exit_waves - uk[:, -self.block_size:]
-            rel_rmse = np.sqrt(np.mean(np.abs(error) ** 2))
-
+            exit_wave_error = self.apply_exit_wave_constraint(uk)
+            rel_rmse = np.sqrt(np.mean(np.abs(exit_wave_error[...,-1]) ** 2))
             residual.append(rel_rmse)
             # Check for convergence
             if residual[i] < tol:
@@ -224,6 +263,11 @@ class ReconstructorPWE(ReconstructorBase):
             if self.verbose:
                 self._log(f"Iteration {i + 1}/{max_iters}")
                 self._log(f"    RMSE: {residual[i]}")
+
+            # Compute the gradient of the least squares problem
+            grad_least_squares_real, grad_least_squares_imag = (
+                self.compute_grad_least_squares(exit_wave_error, uk, grad_Ak)
+            )
 
             # Set direction for first iteration Conjugate Gradient
             if i == 0:
@@ -307,7 +351,7 @@ class ReconstructorPWE(ReconstructorBase):
         self.forward_model.prepare_solver(n=n, mode='reverse')
 
         uk_reverse = self.forward_model.solve(n=n,mode='reverse',
-                initial_condition=self.data)
+                probes=self.data)
             
         if plot_reverse:
             self._log("    Reverse Solution for Reconstructed Object")

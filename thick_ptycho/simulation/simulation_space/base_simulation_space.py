@@ -38,7 +38,7 @@ class BaseSimulationSpace(ABC):
         wave_number: float,
         probe_diameter_scale: Optional[float] = None,
         probe_focus: Optional[float] = None,
-        probe_angles: Optional[Tuple[float, ...]] = None,
+        probe_angles: Optional[Tuple[float, ...]] = (0.0,),
         tomographic_projection_90_degree: bool = False,
         thin_sample: bool = False,
         n_medium: Union[float, complex] = 1.0,
@@ -106,7 +106,7 @@ class BaseSimulationSpace(ABC):
         self.probe_dimensions = probe_dimensions
         self.probe_type = probe_type
         self.probe_focus = probe_focus
-        self.probe_angles = probe_angles or (0.0,)
+        self.probe_angles = probe_angles
         self.num_angles = len(self.probe_angles)
 
         self._setup_probe_diameter(probe_diameter_scale)
@@ -154,6 +154,8 @@ class BaseSimulationSpace(ABC):
         # ------------------------------------------------------------------
         self.bc_type = bc_type.lower()
         self._scan_frame_info: List[ScanFrame] = []
+
+        self.total_scans = self.num_angles * self.scan_points * self.num_projections
 
 
     # ----------------------------------------------------------------------

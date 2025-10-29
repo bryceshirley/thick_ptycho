@@ -71,7 +71,7 @@ class BaseForwardModel:
 
     def solve(self, n: Optional[np.ndarray] = None, mode: str = "forward",
               rhs_block: Optional[np.ndarray] = None,
-              initial_condition: Optional[np.ndarray] = None) -> np.ndarray:
+              probes: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Main multi-angle, multi-probe solving loop.
         Subclasses must define `_solve_single_probe(angle_idx, probe_idx, n, **kwargs)`.
@@ -80,7 +80,7 @@ class BaseForwardModel:
         ----------
         n : ndarray, optional
             Refractive index distribution on the (x[,y], z) grid.
-        mode : {'forward', 'adjoint','reverse','forward_rotated','adjoint_rotated'}
+        mode : {'forward', 'adjoint','reverse'}
             Propagation mode.
         rhs_block : ndarray, optional
             Optional RHS vector for reusing precomputed blocks.
@@ -93,20 +93,28 @@ class BaseForwardModel:
             Complex propagated field, shape
             (num_projections, num_angles, num_probes, nx[,ny], nz).
         """
+        assert mode in {"forward", "adjoint","reverse"}, f"Invalid mode: {mode!r}"  
         # Initialize solution grid with initial condition
         u = self._create_solution_grid()
 
+        if probes is None:
+            probes = self.probes
+
         # Loop over angles and probes
         for proj_idx in range(self.num_projections):
+            temp_mode = mode + "_rotated" if proj_idx == 1 else mode
+    
             for angle_idx, angle in enumerate(self.probe_angles):
                 for scan_idx in range(self.num_probes):
-                    start = time.time()
+                    if self.verbose:
+                        start = time.time()
 
                     # Solve for single probe
                     u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
-                        proj_idx=proj_idx, angle_idx=angle_idx, scan_idx=scan_idx,
-                        n=n, mode=mode, rhs_block=rhs_block,
-                        initial_condition=initial_condition,
+                        scan_idx=scan_idx,
+                        n=n, mode=temp_mode, 
+                        rhs_block=rhs_block,
+                        probe=probes[angle_idx, scan_idx, :],
                     )
 
                     # Log time taken for each probe if verbose is True
@@ -116,6 +124,47 @@ class BaseForwardModel:
                             f"at angle {angle} in {time.time() - start:.2f}s"
                         )
         return u
+
+    
+    def solve_batch(self, n=None, mode="forward", rhs_block=None, probes=None):
+        """
+        Batch solving interface (for future use).
+        """
+        assert mode in {"forward", "adjoint", "reverse"}
+
+        u = self._create_solution_grid()
+        probes = probes if probes is not None else self.probes
+        B = self.num_angles * self.num_probes  # total probes in batch
+
+        for proj_idx in range(self.num_projections):
+            temp_mode = mode + "_rotated" if proj_idx == 1 else mode
+
+            if self.verbose:
+                start = time.time()
+
+            # Flatten probe batch: (num_angles, num_probes, block_size) → (B, block_size)
+            probe_batch = probes.reshape(B, self.block_size)
+
+            # Batch solve
+            result = self._solve_probes_batch(
+                probes=probe_batch,
+                n=n,
+                mode=temp_mode,
+                rhs_block=rhs_block,
+            )  # result shape: (B, block_size, nz)
+
+            # Unflatten: (B, block_size, nz) → (num_angles, num_probes, block_size, nz)
+            u[proj_idx, ...] = result.reshape(self.num_angles, self.num_probes, self.block_size, self.nz)
+
+            if self.verbose:
+                self._log(
+                    f"[{self.solver_type}] solved {B} probes (angles × scans) "
+                    f"in {time.time() - start:.2f}s"
+                )
+
+        return u
+
+    
 
     def _solve_single_probe(self, angle_idx: int, probe_idx: int,
                              n=None, mode: str = "forward", initial: np.ndarray = None) -> np.ndarray:
@@ -153,7 +202,8 @@ class BaseForwardModel:
             Exit wave field at detector plane (z = nz - 1)
             Shape: (num_angles, num_probes, *effective_dimensions)
         """
-        return u[..., -1]
+        return u[..., -1].reshape((self.simulation_space.total_scans, 
+                       self.simulation_space.block_size))
 
 
     def get_farfield_intensities(
@@ -190,4 +240,5 @@ class BaseForwardModel:
         # Add noise
         if poisson_noise:
             intensities = np.random.poisson(intensities)
-        return intensities
+        return intensities.reshape((self.simulation_space.total_scans, 
+                       self.simulation_space.block_size))

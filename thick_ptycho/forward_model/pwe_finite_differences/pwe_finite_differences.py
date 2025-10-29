@@ -128,7 +128,7 @@ class PWEFiniteDifferences:
 
     def probe_contribution(
         self,
-        probe: np.ndarray,
+        probe: Optional[np.ndarray] = None,
         scan_index: int = 0,
     ):
         """
@@ -150,8 +150,11 @@ class PWEFiniteDifferences:
         else:
             if self.thin_sample:
                 _, self.B_step, self.b_step = self.generate_zstep_matrices(probe=probe)
-            probe = probe.flatten()
-            b0 = self.B_step @ probe + self.b_step
+            if probe is None:
+                b0 = self.b_step
+            else:
+                probe = probe.flatten()
+                b0 = self.B_step @ probe + self.b_step
 
         return np.concatenate((b0, np.zeros(self.block_size * (self.simulation_space.nz - 2))))
 

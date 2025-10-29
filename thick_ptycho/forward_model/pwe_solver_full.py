@@ -107,13 +107,12 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
     # -------------------------------------------------------------------------
     def _solve_single_probe(
         self,
-        proj_idx: int,
-        angle_idx: int,
-        scan_idx: int,
+        scan_idx: int=0,
+        probe: Optional[np.ndarray] = None,
         n: Optional[np.ndarray] = None,
         mode: str = "forward",
         rhs_block: Optional[np.ndarray] = None,
-        initial_condition: Optional[np.ndarray] = None
+        # initial_condition: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Solve for a single probe's field using the full block-tridiagonal system.
@@ -138,17 +137,17 @@ class ForwardModelPWEFull(BaseForwardModelPWE):
         u : ndarray
             Complex propagated field, shape (block_size, nz).
         """
-        if proj_idx == 1 and mode in {"forward", "adjoint"}:
-            mode = mode + "_rotated"
 
         assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, \
             f"Invalid mode '{mode}'. Reverse propagation is unsupported in the full solver."
         
-        # Select initial probe condition
-        if initial_condition is not None:
-            probe = initial_condition[angle_idx, scan_idx, :]
-        else:
-            probe = self.probes[angle_idx, scan_idx, :]
+        # # Select initial probe condition
+        # if initial_condition is not None:
+        #     probe = initial_condition[angle_idx, scan_idx, :]
+        # else:
+        #     probe = self.probes[angle_idx, scan_idx, :]
+        if probe is None:
+            probe = np.zeros((self.block_size,), dtype=complex)
 
         # Retrieve or construct LU and homogeneous RHS
         lu, b_homogeneous = self._get_or_construct_lu(n=n, mode=mode)

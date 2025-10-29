@@ -18,8 +18,8 @@ class ReconstructorMS(ReconstructorBase):
         data,
         phase_retrieval=True,
         results_dir=None,
-        use_logging=True,
-        verbose=False,
+        use_logging=False,
+        verbose=True,
     ):
         super().__init__(
             simulation_space=simulation_space,
@@ -73,39 +73,23 @@ class ReconstructorMS(ReconstructorBase):
         n_est = self.n_medium * np.ones((self.simulation_space.nx, self.nz), dtype=complex)
         loss_history = []
 
+        probes = self.ptycho_probes[0, :]  # shape (num_probes, nx)
+
         for it in range(max_iters):
             loss_total = 0.0
 
             for p in range(self.num_probes):
                 # Forward propagate probe p through current object estimate
-                psi_slices = self.ms._solve_single_probe(n=n_est, scan_idx=p)  # shape (nx, nz)
-                # self.simulation_space.viewer.plot_two_panels(psi_slices,
-                #                         view="phase_amp", 
-                #                         title="Wavefield Solution Multislice",
-                #                         xlabel="z (m)",
-                #                         ylabel="x (m)")
+                psi_slices = self.ms._solve_single_probe(n=n_est, scan_idx=p,
+                                                         probe=probes[p])  # shape (nx, nz)
+                # Compute loss at detector plane
+                Psi_det = np.fft.fft(psi_slices[:, -1])
+                target_amp = np.sqrt(self.data[p, :])
+                loss_total += np.sum((np.abs(Psi_det) - np.abs(target_amp))**2) / (np.sum(np.abs(target_amp)**2) + 1e-12)
+                
+                 # Inverse FFT → corrected field at detector plane
+                psi_corr = self._apply_modulus_constraint(psi_slices[:, -1], self.data[p, :])
     
-                # Measured field (Fourier domain)
-                Psi_det = np.fft.fft(psi_slices[:, -1], axis=-1)
-                #print("max |Psi_det|:", np.max(np.abs(Psi_det)))
-                # plt.plot(self.simulation_space.x, np.abs(Psi_det), label=f'probe {p}')
-                # plt.show()
-
-                amp_meas = np.sqrt(self.data[p, :])
-                #print("max amp_meas:", np.max(amp_meas))
-
-                # Enforce measured modulus constraint
-                Psi_corr = self._apply_modulus_constraint(Psi_det, amp_meas)
-                # Inverse FFT → corrected field at detector plane
-                psi_corr = np.fft.ifft(Psi_corr)
-
-                # Compute reconstruction loss (mean squared amplitude error)
-                loss_total += np.mean((np.abs(Psi_det) - amp_meas) ** 2)
-                #print(f"Probe {p}: Loss = {np.mean((np.abs(Psi_det) - amp_meas) ** 2):.3e}")
-
-                # Inverse FFT → corrected field at detector plane
-                psi_corr = np.fft.ifft(Psi_corr)
-
                 # Backpropagate corrections slice-by-slice
                 psi_back = psi_corr
                 for z in reversed(range(self.nz - 1)):
@@ -113,24 +97,21 @@ class ReconstructorMS(ReconstructorBase):
                     psi_back = self.ms._backpropagate(psi_back, self.dz)
 
                     # Compute current slice transmission
-                    O_z = np.exp(1j * self.k * (n_est[:, z] - self.n_medium) * self.dz)
+                    O_z = self.ms._object_transmission_function(n_est[:, z])
                     psi_back *= np.conj(O_z)
 
                     # Residual at slice plane
                     dpsi_z = psi_back - psi_slices[:, z]
 
-                    # >>> Sensitivity for n at this slice <<<
-                    Sz = 1j * self.k * self.dz * O_z * psi_slices[:, z]   # <-- crucial
-
                     # Update object (small step; do NOT decay too fast)
-                    n_est[:, z] = self._update_object(n_est[:, z], Sz, dpsi_z, alpha_obj/(it+1))
+                    n_est[:, z] = self._update_object_n(n_est[:, z], psi_slices[:, z], dpsi_z, alpha_obj/(it+1))
 
                     # # (Optional) update stored slice field to keep consistency / damping
                     psi_slices[:, z] = psi_slices[:, z] + 0.25 * dpsi_z  # mild relaxation
 
             loss_history.append(loss_total / self.num_probes)
             if self.verbose:
-                self._log(f"[Iter {it+1:03d}] Mean Loss = {loss_total/self.num_probes:.3e}")
+                self._log(f"[Iter {it+1:03d}] Mean Loss = {loss_total/self.num_probes:}")
 
         return n_est, loss_history
 
@@ -138,64 +119,53 @@ class ReconstructorMS(ReconstructorBase):
     # Internal numerical routines
     # -------------------------------------------------------------------------
 
-    def _apply_modulus_constraint(self, Psi, meas_amp):
-        amp = np.abs(Psi)
-        Psi_target = meas_amp * (Psi / amp)
-        return  Psi_target
+    def _apply_modulus_constraint(self, Psi, detector_data):
+        if self.phase_retrieval:
+            # Forward FFT
+            fmodel = np.fft.fft(Psi, axis=-1)
+
+            # Avoid division by zero
+            magnitude = np.abs(fmodel)
+            magnitude[magnitude == 0] = 1.0
+            phase = fmodel / magnitude
+
+            # Select measured amplitude data
+            target_amplitude = np.sqrt(detector_data)
+
+            # Replace amplitude while keeping phase (vectorized)
+            fmodel_updated = target_amplitude * phase
+
+            # Inverse FFT to get updated exit waves
+            emodel = np.fft.ifft(fmodel_updated, axis=-1)
+
+            return emodel
+        else:
+            return Psi - detector_data
 
 
-    def _update_object(self, Sz, dpsi, alpha, eps=1e-8):
-        # PIE-style normalized gradient step using sensitivity Sz
-        denom = np.max(np.abs(Sz)**2) + eps
-        return self.nz + alpha * np.conj(Sz) / denom * dpsi
+    # def _update_object(f, g, dpsi, alpha, eps=1e-12):
+    #     # Standard 3PIE object update: normalized by |Sz|^2 locally
+    #     denom = np.maximum(np.max(np.abs(g) ** 2), eps)
+    #     return f + alpha * (np.conj(g) * dpsi) / denom
+    def _update_object_n(self, n_slice, psi_i, dpsi, alpha_obj, eps=1e-12):
+        """
+        Update refractive index slice directly (3PIE update in n-space).
+        Based on O = exp(i k (n - n_med) dz) and U-update rule in O-space.
+        """
 
+        # Gradient term (Maiden 2012 Eq. 3 numerators)
+        grad = np.conj(psi_i) * dpsi     # same structure as O-update
 
+        # Global normalization (stability recommended in paper)
+        scale = np.max(np.abs(psi_i)**2) + eps
 
+        # Refractive index update derived from: dO = i k dz O * dn
+        dOz = (alpha_obj ) * (grad / scale)
 
-# def reconstruct(self, data, epochs=10, alpha_obj=1.0, verbose=True):
-#         """
-#         Multi-probe multislice reconstruction using 3PIE updates.
-#         """
-#         n_est = self.n_medium*np.ones_like(self.n_field)
-#         loss_history = []
+        # Apply update
+        n_slice = n_slice + dOz/ (1j * self.k * self.dz)
 
-#         for it in range(epochs):
-#             loss_total = 0
-#             for p in range(self.num_probes):
-#                 psi_slices = self.forward(n_est, probe_idx=p)[0]  # (nx, nz)
-
-#                 Psi_det  = np.fft.fft(psi_slices[:, -1])
-#                 amp_meas = np.sqrt(data[p])
-#                 Psi_corr = self._apply_modulus_constraint(Psi_det, amp_meas, gamma=1.0)
-#                 psi_corr = np.fft.ifft(Psi_corr)
-
-#                 loss_total += np.mean((np.abs(Psi_det) - amp_meas)**2)
-
-#                 # Backpropagate correction
-#                 psi_back = psi_corr
-#                 for z in reversed(range(self.nz - 1)):
-#                     # Adj. propagation then adj. multiply (your code here is correct)
-#                     psi_back = self._backpropagate(psi_back, self.dz)
-#                     Tz = np.exp(1j * self.k * (n_est[:, z] - self.n_medium) * self.dz)
-#                     psi_back *= np.conj(Tz)
-
-#                     # Residual at slice plane
-#                     dpsi_z = psi_back - psi_slices[:, z]
-
-#                     # >>> Sensitivity for n at this slice <<<
-#                     Sz = 1j * self.k * self.dz * Tz * psi_slices[:, z]   # <-- crucial
-
-#                     # Update object (small step; do NOT decay too fast)
-#                     n_est[:, z] = self._update_object(n_est[:, z], Sz, dpsi_z, alpha_obj/(it+1))
-
-#                     # (Optional) update stored slice field to keep consistency / damping
-#                     psi_slices[:, z] = psi_slices[:, z] + 0.25 * dpsi_z  # mild relaxation
-
-#             loss_history.append(loss_total / self.num_probes)
-#             if verbose:
-#                 print(f"[Iter {it+1:03d}]  Mean Loss = {loss_total/self.num_probes:.3e}")
-
-#         return n_est, loss_history
+        return n_slice
 
 
 

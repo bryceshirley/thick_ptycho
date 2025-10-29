@@ -70,9 +70,9 @@ class ForwardModelMS(BaseForwardModel):
         """Compute the object transmission function for a given slice."""
         return np.exp(1j * self.k * (n_slice - self.n_medium) * self.dz)
 
-    def _solve_single_probe(self, proj_idx: int = 0, angle_idx: int = 0, scan_idx: int = 0,
+    def _solve_single_probe(self, scan_idx: int = 0,
                             n: Optional[np.ndarray] = None, mode="forward",
-                            initial_condition: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
+                            probe: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """
         Perform forward (or backward) propagation through multiple slices
         for a single probe position, following Eq. (2) in Maiden et al. (2012).
@@ -85,7 +85,7 @@ class ForwardModelMS(BaseForwardModel):
             Index of the probe position.
         n : ndarray, optional
             Refractive index distribution. If None, uses self.simulation_space.n_true.
-        mode : {'forward', 'reverse'}, optional
+        mode : {'forward', 'reverse', 'forward_rotated', 'reverse_rotated'}, optional
             If 'reverse', performs backward propagation (adjoint operation).
             If 'forward', performs forward propagation.
         **kwargs : dict, optional
@@ -96,19 +96,18 @@ class ForwardModelMS(BaseForwardModel):
         wavefield_through_slices : ndarray
             Complex-valued wavefield at each slice along z. Shape (nx, nz).
         """
-        assert mode in {"forward", "backward"}, f"Invalid mode: {mode}"
+        assert mode in {"forward", "backward", "forward_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
+
+        if mode in {"forward_rotated", "reverse_rotated"}:
+            n = self.rotate_n(n)
+
         # Object refractive index distribution
         if n is None:
             n = self.ptycho_object.n_true
 
-        if proj_idx == 1:
-            n = self.rotate_n(n)
-
         # Select initial probe condition
-        if initial_condition is not None:
-            probe = initial_condition[angle_idx, scan_idx, :]
-        else:
-            probe = self.probes[angle_idx, scan_idx, :]
+        if probe is None:
+            probe = np.zeros((self.nx,), dtype=complex)
 
         # Initial probe field at the entrance plane
         psi_incident = probe.copy()

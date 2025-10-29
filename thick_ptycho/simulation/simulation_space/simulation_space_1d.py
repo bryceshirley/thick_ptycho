@@ -154,9 +154,9 @@ class SimulationSpace1D(BaseSimulationSpace):
         total_distance = (self.scan_points - 1) * self.step_size + probe_width
         edge_margin = int((nx - total_distance) // 2)
 
-        print("Theoretical scan dimensions:")
-        print(f"  Total scan distance: {total_distance}")
-        print(f"  Edge margin: {edge_margin}")
+        # print("Theoretical scan dimensions:")
+        # print(f"  Total scan distance: {total_distance}")
+        # print(f"  Edge margin: {edge_margin}")
 
         # --- Corrected start and stop for linspace ---
         start = edge_margin + half_probe
@@ -164,12 +164,12 @@ class SimulationSpace1D(BaseSimulationSpace):
 
         centres_x = np.floor(np.linspace(start, stop, self.scan_points)).astype(int)
 
-        print(f"  Start index: {start}")
-        print(f"  Stop index: {stop}")
-        print(f"  Final centre: {centres_x[-1]}")
-        print(f"  Probe half-width: {half_probe}")
-        print(f"  Last + half-width: {centres_x[-1] + half_probe}")
-        print(f"  Grid length: {len(self.x)}")
+        # print(f"  Start index: {start}")
+        # print(f"  Stop index: {stop}")
+        # print(f"  Final centre: {centres_x[-1]}")
+        # print(f"  Probe half-width: {half_probe}")
+        # print(f"  Last + half-width: {centres_x[-1] + half_probe}")
+        # print(f"  Grid length: {len(self.x)}")
 
         # --- Assert the probes fit inside the grid ---
         assert centres_x[0] - half_probe >= 0, "First probe out of bounds."

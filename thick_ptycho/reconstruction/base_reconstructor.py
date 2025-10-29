@@ -51,6 +51,7 @@ class ReconstructorBase:
         self.ptycho_object = create_ptycho_object(simulation_space)
         self.ptycho_probes = create_ptycho_probes(simulation_space)
         self.data = np.asarray(data)
+        #assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
         self.phase_retrieval = phase_retrieval
         self.verbose = verbose
         self._results_dir = results_dir
@@ -95,12 +96,17 @@ class ReconstructorBase:
             The complex-valued exit wave error, same shape as uk.
         """
         #exit_waves = uk[:, -self.block_size:]
-        exit_waves = self.convert_to_tensor_form(uk)[...,-1]
-        exit_wave_error = np.zeros_like(exit_waves, dtype=complex)
+        exit_wave_error = np.zeros_like(self.convert_to_tensor_form(uk), dtype=complex)
+        exit_waves = self.convert_to_tensor_form(uk)[...,-1].reshape(self.total_scans, 
+                                                                     self.block_size)
 
         if self.phase_retrieval:
             emodel = self._apply_phase_retrieval_constraint(exit_waves)
-            exit_wave_error = exit_waves - emodel
+            exit_wave_error[..., :, -1] = (exit_waves - emodel).reshape(self.num_projections,
+                                                                           self.num_angles,
+                                                                           self.num_probes,
+                                                                             self.block_size)
+
 
             if getattr(self, "_results_dir", None):
                 # Optional visualization of pre/post phase retrieval
@@ -111,15 +117,11 @@ class ReconstructorBase:
                     xlabel="x", ylabel="Image #"
                 )
 
-                self.simulation_space.viewer.plot_two_panels(
-                    emodel, view="phase_amp", time="final",
-                    filename="exit_phase_amp_old.png",
-                    title="Old Exit Wave",
-                    xlabel="x", ylabel="Image #"
-                )
-
         else:  # Known Phase
-            exit_wave_error = exit_waves - self.convert_to_tensor_form(self.data)
+            exit_wave_error[..., :, -1] = (exit_waves - self.data).reshape(self.num_projections,
+                                                                           self.num_angles,
+                                                                           self.num_probes,
+                                                                             self.block_size)
 
         return exit_wave_error
     
