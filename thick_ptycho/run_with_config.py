@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Tuple
 from thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.reconstruction.pwe_reconstructor import LeastSquaresSolver
 from thick_ptycho.utils.visualisations import Visualisation
-from thick_ptycho.utils.utils import load_config, get_git_commit_hash, results_dir_name
+from thick_ptycho.thick_ptycho.utils.io import load_config, get_git_commit_hash, results_dir_name
 
 
 # -----------------------

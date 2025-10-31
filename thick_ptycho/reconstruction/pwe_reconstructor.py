@@ -8,7 +8,7 @@ from thick_ptycho.forward_model.pwe_solver_iterative import ForwardModelPWEItera
 from thick_ptycho.thick_ptycho.forward_model.pwe_solver_full_pint import ForwardModelPWEFull
 from thick_ptycho.simulation import simulation_space
 from thick_ptycho.simulation import ptycho_object
-from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.thick_ptycho.utils.io import setup_log
 
 from .base_reconstructor import ReconstructorBase
 

@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import os
 
 
-from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.thick_ptycho.utils.io import setup_log
 
 
 import numpy as np
@@ -14,7 +14,7 @@ from typing import Optional, List, Literal, Any, Dict, Union
 
 from thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
 from thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
-from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.thick_ptycho.utils.io import setup_log
 
 # TODO: Update Visualisation of data and add support for tomographic projects
 class BaseForwardModel:

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional
 # from thick_ptycho.simulation import ptycho_object, simulation_space
-from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.thick_ptycho.utils.io import setup_log
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 

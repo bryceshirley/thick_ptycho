@@ -5,7 +5,7 @@ import os
 from typing import List, Tuple, Union, Optional
 import numpy as np
 
-from thick_ptycho.utils.utils import setup_log
+from thick_ptycho.thick_ptycho.utils.io import setup_log
 
 
 @dataclass
