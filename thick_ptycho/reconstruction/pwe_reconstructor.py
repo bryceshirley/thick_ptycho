@@ -5,7 +5,7 @@ import time
 from typing import Optional, List
 
 from thick_ptycho.forward_model.pwe_solver_iterative import ForwardModelPWEIterative
-from thick_ptycho.forward_model.pwe_solver_full import ForwardModelPWEFull
+from thick_ptycho.thick_ptycho.forward_model.pwe_solver_full_pint import ForwardModelPWEFull
 from thick_ptycho.simulation import simulation_space
 from thick_ptycho.simulation import ptycho_object
 from thick_ptycho.utils.utils import setup_log

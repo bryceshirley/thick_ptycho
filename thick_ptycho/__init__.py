@@ -9,7 +9,7 @@ __version__ = "0.1.0"
 
 from .simulation.config import SimulationConfig, BoundaryType, ProbeType
 from .simulation import ptycho_object, ptycho_probe, simulation_space
-from .forward_model import base_solver, ms_solver, pwe_solver_full, pwe_solver_iterative
+from .forward_model import base_solver, ms_solver, pwe_solver_full_pint, pwe_solver_iterative
 from .reconstruction import base_reconstructor, ms_reconstructor, pwe_reconstructor
 from . import utils
 
@@ -21,7 +21,7 @@ __all__ = [
     "ptycho_probe",
     "simulation_space",
     "ms_solver",
-    "pwe_solver_full",
+    "pwe_solver_full_pint",
     "pwe_solver_iterative",
     "ms_reconstructor",
     "pwe_reconstructor",
