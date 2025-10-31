@@ -143,7 +143,7 @@ class BasePtychoObject(ABC):
 
         Returns
         -------
-        object_slices : ndarray
+        object_steps : ndarray
             Complex-valued slices between adjacent z-layers.
             Shape is same as n except the last axis (z) is reduced by 1.
         """
@@ -164,11 +164,11 @@ class BasePtychoObject(ABC):
             coefficient = (self.simulation_space.k / 2j) * (n**2 - 1)
 
         # Compute all half time-step slices along the z-axis
-        object_slices = (self.simulation_space.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+        object_steps = (self.simulation_space.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
 
-        return object_slices
+        return object_steps
 
-    # def plot_refractive_index(self, z_slice: int = None):
+    # def plot_refractive_index(self, z_step: int = None):
     #     """
     #     Visualize the refractive index field.
     #     For 1D: plots n(x)
@@ -189,11 +189,11 @@ class BasePtychoObject(ABC):
 
     #     elif len(self.n_true.shape) == 3:
     #         # 2D: shape (nx, ny, nz)
-    #         if z_slice is None:
-    #             z_slice = self.n_true.shape[2] // 2
+    #         if z_step is None:
+    #             z_step = self.n_true.shape[2] // 2
     #         plt.figure(figsize=(5, 5))
-    #         plt.imshow(n_real[:, :, z_slice], cmap='viridis', origin='lower')
-    #         plt.title(f"2D Refractive Index Field (z={z_slice})")
+    #         plt.imshow(n_real[:, :, z_step], cmap='viridis', origin='lower')
+    #         plt.title(f"2D Refractive Index Field (z={z_step})")
     #         plt.colorbar(label="Re(n)")
     #         plt.xlabel("x")
     #         plt.ylabel("y")

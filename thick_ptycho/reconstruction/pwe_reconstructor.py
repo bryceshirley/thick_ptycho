@@ -93,16 +93,6 @@ class ReconstructorPWE(ReconstructorBase):
 
         grad_real = np.zeros(projection_size, dtype=float)
         grad_imag = np.zeros(projection_size, dtype=float)
-
-        # exit_wave_error = np.zeros_like(self.convert_to_tensor_form(uk), dtype=complex)
-        # exit_waves = uk[:, -self.block_size:]
-        # exit_wave_error[..., :, -1] = exit_waves - self.data
-        # self.simulation_space.viewer.plot_two_panels(
-        #             exit_wave_error.squeeze()[...,-1], view="phase_amp",
-        #             filename="exit_error.png",
-        #             title="Old Exit Wave",
-        #             xlabel="x", ylabel="Image #"
-        #         )
         
         idx = 0
         for proj_idx in range(self.num_projections):
@@ -118,11 +108,6 @@ class ReconstructorPWE(ReconstructorBase):
                     rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx],
                     mode=temp_mode
                     )
-                    # self.simulation_space.viewer.plot_two_panels(
-                    # backprop, view="phase_amp",
-                    # filename="exit_phase_amp_old.png",
-                    # title="Old Exit Wave Image #{}".format(scan_idx),
-                    # xlabel="z", ylabel="x")
 
                     # 2) Flatten the spatial field block
                     backprop = backprop[:, :-1].T.ravel()
@@ -209,7 +194,6 @@ class ReconstructorPWE(ReconstructorBase):
             self,
             max_iters=10,
             tol=1e-8,
-            # plot_gradient=True,
             n_initial=None,
             fixed_step_size=None,
             solve_probe=False,
@@ -225,13 +209,6 @@ class ReconstructorPWE(ReconstructorBase):
             n0 = n_initial
         else:
             n0 = np.ones((self.block_size, self.simulation_space.nz), dtype=complex)*self.simulation_space.n_medium
-
-        # if plot_forward:
-        #     self._log("True Forward Solution")
-        #     utrue_unblocked = self.convert_to_tensor_form(self.u_true)
-        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[0], view="phase_amp")
-        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[int(self.num_angles/2)], view="phase_amp")
-        #     self.simulation_space.viewer.plot_two_panels(utrue_unblocked[-1], view="phase_amp")
 
         # Initialize residual
         residual = []
@@ -291,14 +268,6 @@ class ReconstructorPWE(ReconstructorBase):
             alphakdk_im = (alphak_im * dk_im).reshape((self.nz - 1, self.nx)).T
             gradient_update[:, 1:] = alphakdk_re + 1j * alphakdk_im
 
-            # # Get min and max values from the true sample space for color scaling
-            # if plot_gradient:
-            #     self.simulation_space.viewer.plot_two_panels(
-            #         gradient_update, view="phase_amp",
-            #         filename=f"gradient_update.png",
-            #         title=f"gradient_update",
-            #     )
-
             # Update the current estimate of the refractive index of the object
             nk += gradient_update
 
@@ -336,10 +305,6 @@ class ReconstructorPWE(ReconstructorBase):
             if self.verbose:
                 self._log(
                     f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
-
-            # self.simulation_space.viewer.plot_two_panels(
-            #     nk, title=f"Reconstructed Sample Space")
-    
 
         return nk, self.convert_to_tensor_form(uk), residual
 
