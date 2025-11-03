@@ -6,7 +6,7 @@ import scipy.sparse.linalg as spla
 from .boundary_conditions import BoundaryConditions
 
 
-class PWEFiniteDifferences:
+class PWEForwardModel:
     """
     Paraxial wave finite-difference forward model linear system setup.
 

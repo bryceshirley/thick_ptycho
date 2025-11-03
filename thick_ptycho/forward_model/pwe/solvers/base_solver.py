@@ -3,11 +3,11 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.forward_model.base_solver import BaseForwardModel
+from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 from thick_ptycho.thick_ptycho.forward_model.pwe.operators import PWEFiniteDifferences
 
 
-class BaseForwardModelPWE(BaseForwardModel):
+class BasePWESolver(BaseForwardModelSolver):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,

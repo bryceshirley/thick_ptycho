@@ -7,9 +7,9 @@ from typing import Optional
 import time
 
 
-from thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
+from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 
-class ForwardModelPWEFullLU(BaseForwardModelPWE):
+class PWEFullLUSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,

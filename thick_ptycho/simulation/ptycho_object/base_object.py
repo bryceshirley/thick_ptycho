@@ -167,34 +167,3 @@ class BasePtychoObject(ABC):
         object_steps = (self.simulation_space.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
 
         return object_steps
-
-    # def plot_refractive_index(self, z_step: int = None):
-    #     """
-    #     Visualize the refractive index field.
-    #     For 1D: plots n(x)
-    #     For 2D: plots n(x, y) at a given z-slice.
-    #     """
-    #     n_real = np.real(self.n_true)
-
-    #     if len(self.n_true.shape) == 2:
-    #         # 1D: shape (nx, nz)
-    #         plt.figure(figsize=(6, 3))
-    #         plt.imshow(n_real.T, extent=[*self.simulation_space.xlims, *self.simulation_space.zlims],
-    #                    aspect='auto', origin='lower', cmap='viridis')
-    #         plt.colorbar(label="Re(n)")
-    #         plt.title("1D Refractive Index Field (x-z plane)")
-    #         plt.xlabel("x")
-    #         plt.ylabel("z")
-    #         plt.show()
-
-    #     elif len(self.n_true.shape) == 3:
-    #         # 2D: shape (nx, ny, nz)
-    #         if z_step is None:
-    #             z_step = self.n_true.shape[2] // 2
-    #         plt.figure(figsize=(5, 5))
-    #         plt.imshow(n_real[:, :, z_step], cmap='viridis', origin='lower')
-    #         plt.title(f"2D Refractive Index Field (z={z_step})")
-    #         plt.colorbar(label="Re(n)")
-    #         plt.xlabel("x")
-    #         plt.ylabel("y")
-    #         plt.show()
