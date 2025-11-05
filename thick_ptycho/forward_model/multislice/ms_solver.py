@@ -1,9 +1,9 @@
 from typing import Optional
 import numpy as np
-from thick_ptycho.forward_model.base_solver import BaseForwardModel
+from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 
 
-class ForwardModelMS(BaseForwardModel):
+class MSForwardModelSolver(BaseForwardModelSolver):
     """Angular spectrum multislice forward/backward propagation."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
@@ -52,7 +52,7 @@ class ForwardModelMS(BaseForwardModel):
         if remove_global_phase:
             H *= np.exp(-1j * self.k * dz)
 
-        self._kernel_cache[key] = H.astype(np.complex64)
+        self._kernel_cache[key] = H.astype(np.complex128)
         return self._kernel_cache[key]
     
     def _propagate(self, psi, dz):
@@ -61,9 +61,15 @@ class ForwardModelMS(BaseForwardModel):
         Psi *= self._get_propagation_kernels(dz, psi.size)
         return np.fft.ifft(Psi)
     
+    # def _backpropagate(self, psi, dz):
+    #     """Inverse propagation (negative dz)."""
+    #     return self._propagate(psi, -dz)
     def _backpropagate(self, psi, dz):
-        """Inverse propagation (negative dz)."""
-        return self._propagate(psi, -dz)
+        Psi = np.fft.fft(psi)
+        H = self._get_propagation_kernels(dz, psi.size)
+        Psi *= np.conj(H)     # adjoint of forward operator with same dz
+        return np.fft.ifft(Psi)
+
     
 
     def _object_transmission_function(self, n_slice):
@@ -71,7 +77,9 @@ class ForwardModelMS(BaseForwardModel):
         return np.exp(1j * self.k * (n_slice - self.n_medium) * self.dz)
 
     def _solve_single_probe(self, scan_idx: int = 0,
-                            n: Optional[np.ndarray] = None, mode="forward",
+                            n: Optional[np.ndarray] = None,
+                            obj: Optional[np.ndarray] = None,
+                            mode="forward",
                             probe: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """
         Perform forward (or backward) propagation through multiple slices
@@ -122,10 +130,13 @@ class ForwardModelMS(BaseForwardModel):
             #   "Phase retrieval framework for direct reconstruction of the projected refractive index
             #   applied to ptychography and holography," *Optica*, vol. 9, no. 3, pp. 288–297, 2022.
             #   DOI: https://doi.org/10.1364/OPTICA.447021
-            O_z = self._object_transmission_function(n_slice=n[:, z])
-
+            if obj is None:
+                obj_slice = self._object_transmission_function(n_slice=n[:, z])
+            else:
+                obj_slice = obj[:, z]
+            
             # Compute exit wave and propagate to next slice
-            psi_exit = psi_incident * O_z
+            psi_exit = psi_incident * obj_slice
 
             # Propagate to next slice
             psi_incident = self._propagate(psi_exit, self.dz)

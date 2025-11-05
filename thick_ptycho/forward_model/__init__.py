@@ -3,18 +3,21 @@ Forward models for thick-sample ptychography simulations.
 Includes plane-wave expansion (PWE) and multi-slice solvers.
 """
 
-from .base.base_solver import BaseForwardModel
-from .pwe.solvers.base_solver import BaseForwardModelPWE
-from .multislice.ms_solver import ForwardModelMS
-from .pwe.solvers.full_pint import ForwardModelPWEFullPinT
-from .pwe.solvers.full_lu import ForwardModelPWEFullLU
-from .pwe.solvers.iterative_lu import ForwardModelPWEIterative
+from .pwe.solvers.base_solver import BasePWESolver
+from .multislice.ms_solver import MSForwardModelSolver
+from .pwe.solvers.iterative_lu import PWEIterativeLUSolver
+from .pwe.solvers.full_pint import PWEFullPinTSolver
+from .pwe.solvers.full_lu import PWEFullLUSolver
+from .pwe.operators.finite_differences.forward_model import PWEForwardModel
+from .pwe.solvers.full_pit_petsc import PWEFullPinTSolverPETSc
 
 __all__ = [
-    "BaseForwardModel",
-    "BaseForwardModelPWE",
-    "ForwardModelMS",
-    "ForwardModelPWEFullLU",
-    "ForwardModelPWEFullPinT",
-    "ForwardModelPWEIterative",
+    "BasePWESolver",
+    "MSForwardModelSolver",
+    "PWEIterativeLUSolver",
+    "PWEFullPinTSolver",
+    "PWEFullLUSolver",
+    "PWEForwardModel",
+    "MSForwardModelSolver",
+    "PWEFullPinTSolverPETSc",
 ]

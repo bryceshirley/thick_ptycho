@@ -23,6 +23,8 @@ dependencies = [
     "astropy (>=7.1.0,<8.0.0)",
     "ffmpeg-python (>=0.2.0,<0.3.0)",
     "opencv-python (>=4.12.0.88,<5.0.0.0)",
+    "petsc4py (>=3.24.1,<4.0.0)",
+    "mpi4py (>=4.1.1,<5.0.0)",
 ]
 
 

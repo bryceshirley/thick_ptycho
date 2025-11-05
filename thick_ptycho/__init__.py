@@ -7,12 +7,12 @@ utilities for thick-sample ptychographic imaging.
 
 __version__ = "0.1.0"
 
-from .forward_model.multislice import ms_solver
+from .forward_model.multislice.ms_solver import MSForwardModelSolver
 from .simulation.config import SimulationConfig, BoundaryType, ProbeType
 from .simulation import ptycho_object, ptycho_probe, simulation_space
-from .forward_model import base_solver, pwe_solver_full_pint, pwe_solver_iterative
+from .forward_model import BasePWESolver, PWEIterativeLUSolver, PWEFullPinTSolver
 from .reconstruction import base_reconstructor, ms_reconstructor, pwe_reconstructor
-from . import utils
+from .utils import *
 
 __all__ = [
     "SimulationConfig",
@@ -21,9 +21,9 @@ __all__ = [
     "ptycho_object",
     "ptycho_probe",
     "simulation_space",
-    "ms_solver",
-    "pwe_solver_full_pint",
-    "pwe_solver_iterative",
+    "MSForwardModelSolver",
+    "PWEFullPinTSolver",
+    "PWEIterativeLUSolver",
     "ms_reconstructor",
     "pwe_reconstructor",
     "utils",

@@ -17,7 +17,6 @@ class SimulationSpace1D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         self.xlims, self.zlims = self.continuous_dimensions
         self.nx, self.nz = self.discrete_dimensions
-        self.block_size = self.nx
         self.dimension = 1
 
         # self.nz = self.discrete_dimensions[1]
@@ -34,6 +33,7 @@ class SimulationSpace1D(BaseSimulationSpace):
         self.effective_nx = (
             self.probe_dimensions[0] if self.thin_sample else self.nx
         )
+        self.block_size = self.effective_nx
 
         # ------------------------------------------------------------------
         # 2. Spatial grid setup

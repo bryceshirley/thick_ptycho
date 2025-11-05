@@ -1,1 +1,1 @@
-from base_solver import BaseForwardModelSolver
+from .base_solver import BaseForwardModelSolver

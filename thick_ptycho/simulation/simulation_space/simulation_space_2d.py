@@ -28,6 +28,7 @@ class SimulationSpace2D(BaseSimulationSpace):
         self.effective_ny = (
             self.probe_dimensions[1] if self.thin_sample else self.ny
         )
+        self.block_size = self.effective_nx * self.effective_ny
 
         # ------------------------------------------------------------------
         # 2. Spatial grid setup

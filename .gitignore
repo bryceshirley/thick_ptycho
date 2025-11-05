@@ -61,6 +61,8 @@
 
 ## Numpy files
 */results/
+*/notebooks
+*/petsc/
 
 ## Python cache
 **/__pycache__

@@ -19,6 +19,7 @@ class BoundaryType(Enum):
     DIRICHLET = "dirichlet"
     NEUMANN = "neumann"
     IMPEDANCE = "impedance"
+    IMPEDANCE2 = "impedance2"
 
     @classmethod
     def list(cls):

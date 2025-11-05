@@ -32,13 +32,17 @@ class BoundaryConditions:
         else:
             self.mu_y = 0
 
-        if simulation_space.bc_type == "impedance":  # Impedance
+        if simulation_space.bc_type == "impedance":
             self.beta_x = self.mu_x * 2 * 1j * self.k * self.dx
+            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 2 else 0
 
-            if simulation_space.dimension == 2:
-                self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy
-            else:
-                self.beta_y = 0
+        elif simulation_space.bc_type == "impedance2":
+            # include the 1st-order part too
+            self.beta_x = self.mu_x * 2 * 1j * self.k * self.dx
+            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 2 else 0
+            # 2nd-order coefficient (tangential curvature)
+            self.gamma = - 1 / (2j * self.k)
+
 
     def get_initial_boundary_conditions_system(self):
         if self.simulation_space.dimension == 1:
@@ -110,11 +114,11 @@ class BoundaryConditions:
             offsets=[-1, 0, 1], shape=(self.nx, self.nx), dtype=complex
         ).tolil()  # Convert once to LIL for efficient row assignment
 
-        if self.bc_type == "dirchlet":
-            K[0, :] = 0
-            K[0, 0] = 1
-            K[-1, :] = 0
-            K[-1, -1] = 1
+        # if self.bc_type == "dirichlet":
+        #     K[0, :] = 0
+        #     K[0, 0] = 1
+        #     K[-1, :] = 0
+        #     K[-1, -1] = 1
 
         return K.tocsr()  # Convert back to CSR for efficient arithmetic
 
@@ -136,21 +140,36 @@ class BoundaryConditions:
         K[-1, -1] += self.beta_x
         return K.tocsr()
     
+    def _apply_1D_impedance2(self, K):
+        K = K.tolil()
+
+        gamma = -1 / (2j * self.k)
+
+        K[0, 0] += self.beta_x + gamma / (self.dz**2)
+        K[0, 1] += -gamma / (self.dz**2)
+
+        K[-1, -1] += self.beta_x + gamma / (self.dz**2)
+        K[-1, -2] += -gamma / (self.dz**2)
+
+        return K.tocsr()
+
+
+
+
     def get_matrices_1d_system(self):
-        """Set up matrices based on the boundary condition type."""
         Kx = self._create_1D_dirichlet()
 
-        if self.bc_type in ["neumann", "impedance"]:  # Neumann or Impedance
+        if self.bc_type in ["neumann", "impedance", "impedance2"]:
             Kx = self._apply_1D_neumann(Kx)
-
-        if self.bc_type == "impedance":  # Impedance
+        if self.bc_type == "impedance":
             Kx = self._apply_1D_impedance(Kx)
+        elif self.bc_type == "impedance2":
+            Kx = self._apply_1D_impedance2(Kx)
 
         Ix = sp.eye(self.nx)
-        Ax = Ix - Kx
-        Bx = Ix + Kx
-        
+        Ax, Bx = Ix - Kx, Ix + Kx
         return Ax.tocsr(), Bx.tocsr()
+
     
     # --- 2D builders ----
     def _create_2D_dirichlet(self, Ax, Bx):
@@ -179,21 +198,59 @@ class BoundaryConditions:
         return Axy.tocsr(), Bxy.tocsr()
 
     def _apply_2D_impedance(self, Axy, Bxy):
-        """Modify matrices Axy, Bxy for 2D Impedance boundary conditions."""
+        # x is the fast index in kron(Iy, Ax)
+        Axy = Axy.tolil(); Bxy = Bxy.tolil()
+
+        # --- y-boundaries (first/last block of size nx): add ±beta_y on diag
+        Sy = sp.diags(([1] + [0]*(self.ny-2) + [1]), 0, shape=(self.ny, self.ny))
         Ix = sp.eye(self.nx)
-        Axy = Axy.tolil()
-        Bxy = Bxy.tolil()
-        Axy[:self.nx, :self.nx] -= self.beta_y * Ix
-        Axy[-self.nx:, -self.nx:] -= self.beta_y * Ix
-        Bxy[:self.nx, :self.nx] += self.beta_y * Ix
-        Bxy[-self.nx:, -self.nx:] += self.beta_y * Ix
+        Dy = sp.kron(Sy, Ix)  # picks y=0 and y=ny-1 rows/cols
+
+        Axy -= self.beta_y * Dy
+        Bxy += self.beta_y * Dy
+
+        # --- x-boundaries (columns x=0 and x=nx-1 across all y)
+        sel_x = np.zeros(self.nx); sel_x[0] = 1; sel_x[-1] = 1
+        Sx = sp.diags(sel_x, 0, shape=(self.nx, self.nx))
+        Ix = Sx  # reuse name
+        DyI = sp.kron(sp.eye(self.ny), Sx)
+
+        Axy -= self.beta_x * DyI
+        Bxy += self.beta_x * DyI
+
         return Axy.tocsr(), Bxy.tocsr()
+
+    
+    def _apply_2D_impedance2(self, Axy, Bxy):
+        # start from first-order Robin on all boundaries
+        Axy, Bxy = self._apply_2D_impedance(Axy, Bxy)
+
+        Axy = Axy.tolil()
+
+        # Tangential Laplacians
+        Lx = sp.diags([1, -2, 1], [-1, 0, 1], shape=(self.nx, self.nx)) / (self.dx**2)
+        Ly = sp.diags([1, -2, 1], [-1, 0, 1], shape=(self.ny, self.ny)) / (self.dy**2)
+
+        # Selectors for boundaries
+        Sy = sp.diags(([1] + [0]*(self.ny-2) + [1]), 0, shape=(self.ny, self.ny))   # y=0, y=ny-1
+        sel_x = np.zeros(self.nx); sel_x[0] = 1; sel_x[-1] = 1
+        Sx = sp.diags(sel_x, 0, shape=(self.nx, self.nx))                             # x=0, x=nx-1
+
+        # y-boundaries → tangential is x: add gamma * (Sy ⊗ Lx)
+        Axy += self.gamma * sp.kron(Sy, Lx)
+
+        # x-boundaries → tangential is y: add gamma * (Ly ⊗ Sx)
+        Axy += self.gamma * sp.kron(Ly, Sx)
+
+        return Axy.tocsr(), Bxy.tocsr()
+
+
     
     def get_matrices_2d_system(self):
         """Set up matrices based on the boundary condition type."""
         Ax, Bx = self.get_matrices_1d_system()
 
-        # Apply Dirchlet boundary conditions
+        # Apply dirichlet boundary conditions
         Axy, Bxy = self._create_2D_dirichlet(Ax, Bx)
 
         if self.bc_type == "dirichlet":
@@ -208,6 +265,9 @@ class BoundaryConditions:
 
         if self.bc_type == "impedance":
             return Axy, Bxy
+        
+        elif self.bc_type == "impedance2":
+            return self._apply_2D_impedance2(Axy, Bxy)
         else:
             raise ValueError(
                 "Invalid boundary condition type. Please choose from dirichlet, neumann or dirichlet.")

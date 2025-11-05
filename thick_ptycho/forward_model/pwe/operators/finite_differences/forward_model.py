@@ -156,7 +156,7 @@ class PWEForwardModel:
                 probe = probe.flatten()
                 b0 = self.B_step @ probe + self.b_step
 
-        return np.concatenate((b0, np.zeros(self.block_size * (self.simulation_space.nz - 2))))
+        return np.concatenate((b0, np.zeros(self.block_size * (self.simulation_space.nz - 2), )))
 
     def generate_zstep_matrices(self, probe: Optional[np.ndarray] = None) -> Tuple[sp.csr_matrix, sp.csr_matrix, np.ndarray]:
         """

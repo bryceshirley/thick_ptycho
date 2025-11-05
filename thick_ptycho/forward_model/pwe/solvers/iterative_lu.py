@@ -3,10 +3,10 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
-from thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
+from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 
 
-class ForwardModelPWEIterative(BaseForwardModelPWE):
+class PWEIterativeLUSolver(BasePWESolver):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
@@ -54,7 +54,7 @@ class ForwardModelPWEIterative(BaseForwardModelPWE):
             Precomputed LU factorizations, RHS matrices, and right-hand side vector.
         """
         assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
-        assert not self.simulation_space.thin_sample, "presolve_setup does not support thin samples."
+        #assert not self.simulation_space.thin_sample, "presolve_setup does not support thin samples."
         if n is None:
             n = self.ptycho_object.n_true
         if mode in {"forward_rotated", "adjoint_rotated", "reverse_rotated"}:

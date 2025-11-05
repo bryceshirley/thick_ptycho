@@ -9,11 +9,11 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from scipy.sparse.linalg import splu, LinearOperator
 
-from thick_ptycho.forward_model.base_pwe_solver import BaseForwardModelPWE
-from ._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
+from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
+from thick_ptycho.forward_model.pwe.utils._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
 
 
-class ForwardModelPWEFullPinT(BaseForwardModelPWE):
+class PWEFullPinTSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
@@ -34,7 +34,8 @@ class ForwardModelPWEFullPinT(BaseForwardModelPWE):
             "projection_0": None,
             "projection_1": None,  # Rotated
         }
-        self.use_pit = use_pit
+        self._cached_n_id = None
+        self.b_cache = None
         self.alpha = alpha
         # Precompute B0 term if applicable
         self.pwe_finite_differences.full_system = True
@@ -46,9 +47,9 @@ class ForwardModelPWEFullPinT(BaseForwardModelPWE):
 
         # Get number of workers for PiT preconditioner
         # based on available CPU cores
-        self._log(f"Available CPU cores: {os.cpu_count()}")
+        print(f"Available CPU cores: {os.cpu_count()}")
         self.num_workers = min(num_workers, os.cpu_count())
-        self._log(f"Using {self.num_workers} workers for PiT preconditioner.")
+        print(f"Using {self.num_workers} workers for PiT preconditioner.")
 
         self.atol = atol
     
@@ -201,12 +202,12 @@ class ForwardModelPWEFullPinT(BaseForwardModelPWE):
         self._log(f"PiT preconditioner retrieval and setup time: {time_end - time_start:.2f} seconds.\n")
 
 
-        self._log("Solving with PiT-preconditioned GMRES...")
+        print("Solving with PiT-preconditioned GMRES...",flush=True)
 
         residuals = []
         def gmres_callback(rn):
             residuals.append(rn)
-            self._log(f"  Iter {len(residuals):3d} | Precond residual: {rn:.3e}", flush=True)
+            print(f"  Iter {len(residuals):3d} | Precond residual: {rn:.3e}")
 
         t0 = time.perf_counter()
         y, info = spla.gmres(
@@ -223,11 +224,11 @@ class ForwardModelPWEFullPinT(BaseForwardModelPWE):
 
 
 
-        self._log(f"Time with PiT preconditioner: {t1 - t0:.2f} seconds.", flush=True)
+        print(f"Time with PiT preconditioner: {t1 - t0:.2f} seconds.",flush=True)
         if info == 0:
-            self._log(f"GMRES converged in {len(residuals)} iterations.\n", flush=True)
+            print(f"GMRES converged in {len(residuals)} iterations.\n",flush=True)
         else:
-            self._log(f"GMRES stopped early (info={info}) after {len(residuals)} iterations.\n", flush=True)
+            print(f"GMRES stopped early (info={info}) after {len(residuals)} iterations.\n",flush=True)
 
 
 

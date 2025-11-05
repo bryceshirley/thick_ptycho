@@ -4,7 +4,7 @@ import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
-from thick_ptycho.thick_ptycho.forward_model.pwe.operators import PWEFiniteDifferences
+from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
 
 
 class BasePWESolver(BaseForwardModelSolver):
@@ -21,7 +21,7 @@ class BasePWESolver(BaseForwardModelSolver):
             verbose=verbose,
             log=log,
         )
-        self.pwe_finite_differences = PWEFiniteDifferences(simulation_space, ptycho_object)
+        self.pwe_finite_differences = PWEForwardModel(simulation_space, ptycho_object)
         self.block_size = self.pwe_finite_differences.block_size
 
     # ------------------------------------------------------------------
