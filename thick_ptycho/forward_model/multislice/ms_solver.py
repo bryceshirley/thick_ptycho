@@ -43,6 +43,9 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
         fx = np.fft.fftfreq(nx, d=self.dx)
         kx = 2 * np.pi * fx # Spatial frequency in x
+
+        fx = np.fft.fftfreq(nx, d=self.dx)
+        kx = 2 * np.pi * fx # Spatial frequency in x
         inside = (self.k ** 2 - kx ** 2)
         kz = np.sqrt(np.clip(inside, 0.0, None))
 

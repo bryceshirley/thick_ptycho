@@ -50,7 +50,9 @@ class Visualisation:
 
     def plot_two_panels(self, data, view="phase_amp",title="",
                         xlabel=None, ylabel=None,
-                        filename=None, extent=None, aspect='auto'):
+                        filename=None, extent=None, aspect='auto',
+                        colorbar_limits_left=None,
+                        colorbar_limits_right=None):
         """Return figure and axes for phase/amp or real/imag view.
         Parameters
         ----------
@@ -62,6 +64,16 @@ class Visualisation:
             If provided, saves the figure to this file. 
         extent : list, optional for continuous axes
             Extent for imshow [xmin, xmax, ymin, ymax].
+        aspect : str or float
+            Aspect ratio for imshow.
+        colorbar_limits : tuple, optional
+            (vmin, vmax) for colorbar limits.
+        Returns
+        -------
+        fig : plt.Figure
+            The created figure.
+        axs : np.ndarray
+            The axes of the figure.
         """
         fig, axs = plt.subplots(1, 2, figsize=(10, 5))
         data1, data2, title1, title2 = self._view_and_title(data, view, title)
@@ -71,6 +83,13 @@ class Visualisation:
 
         axs[0].set_aspect(aspect)
         axs[1].set_aspect(aspect)
+
+        # update colorbar limits if provided
+        if colorbar_limits_left is not None:
+            im0.set_clim(colorbar_limits_left)
+        
+        if colorbar_limits_right is not None:
+            im1.set_clim(colorbar_limits_right)
 
         fig.colorbar(im0, ax=axs[0])
         fig.colorbar(im1, ax=axs[1])
