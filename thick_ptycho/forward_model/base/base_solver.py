@@ -40,8 +40,12 @@ class BaseForwardModelSolver:
         self._log = log or setup_log(results_dir, "solver_log.txt", use_logging, verbose)
 
         # Determine slice dimensions
-        self.thin_sample = simulation_space.thin_sample
-        self.effective_dimensions = simulation_space.effective_dimensions
+        self.solve_reduced_domain = simulation_space.solve_reduced_domain
+        if simulation_space.dimension == 1:
+            self.solve_grid = (simulation_space.effective_nx,)
+        else:
+            self.solve_grid = (simulation_space.effective_nx,
+                               simulation_space.effective_ny)
         self.nz = simulation_space.nz
 
         # Probe setup
@@ -164,7 +168,7 @@ class BaseForwardModelSolver:
     def _create_solution_grid(self) -> np.ndarray:
         """Create an empty solution tensor."""
         return np.zeros(
-            (self.num_projections, self.num_angles, self.num_probes, *self.effective_dimensions, self.nz),
+            (self.num_projections, self.num_angles, self.num_probes, *self.solve_grid, self.nz),
             dtype=complex,
         )
     

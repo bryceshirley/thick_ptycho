@@ -14,7 +14,6 @@ from thick_ptycho.forward_model.pwe.utils._pint_utils import (
     _pintobj_matvec_exact,
 )
 
-
 # ---------------------------
 # Helper: PETSc MatShell for A
 # ---------------------------
@@ -245,7 +244,7 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
         return self.pit_cache, self.b_cache
 
     def prepare_solver(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
-        #assert not getattr(self, "thin_sample", False), "Full-system solver does not support thin-sample approximation."
+        #assert not getattr(self, "solve_reduced_domain", False), "Full-system solver does not support thin-sample approximation."
         assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}
         return self._get_or_construct_pit(n=n, mode=mode)
 

@@ -36,7 +36,7 @@ class PtychoProbes:
             * "probe_centre_discrete": int in 1D, (cx, cy) in 2D
             * "sub_limits_continuous": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
             * "sub_limits_discrete": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
-    thin_sample : bool
+    solve_reduced_domain : bool
         If True, use sub-sampled grids from `scan_frame_info`.
 
     Attributes
@@ -49,7 +49,7 @@ class PtychoProbes:
     def __init__(self, simulation_space):
         self.simulation_space = simulation_space
         self.angles = simulation_space.probe_angles
-        self.thin_sample = simulation_space.thin_sample
+        self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.disk_edge_blur = 0.5  # matches previous behavior (_disk_blur)
         self.probe_angles = list(self.angles)
         self.num_angles = len(self.probe_angles)
@@ -381,7 +381,7 @@ class PtychoProbes:
     def _get_coordinates(self, scan: int) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
-            if self.thin_sample:
+            if self.solve_reduced_domain:
                 x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
                 x_min, x_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous
                 x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
@@ -389,7 +389,7 @@ class PtychoProbes:
                 x = self.simulation_space.x
             return (x,)
         # 2D
-        if self.thin_sample:
+        if self.solve_reduced_domain:
             #x, y = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
             x_coord_min, x_coord_max, y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
             x_min, x_max, y_min, y_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous

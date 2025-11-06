@@ -44,25 +44,29 @@ class BasePtychoObject(ABC):
         self.simulation_space._log(f"Saving refractive index field to {file_path}")
         np.save(file_path, self.n_true)
 
-    def add_object(self, shape: str, refractive_index: complex, side_length: float,
-                   centre: tuple, depth: float, gaussian_blur=None):
+    def add_object(self, shape: str, refractive_index: complex, side_length_factor: float,
+                   centre_factor: tuple, depth_factor: float, gaussian_blur=None):
         """
         Add an optical object to the simulation.
 
         Parameters:
         shape (str): Shape of the object.
         refractive_index (float): Refractive index of the object.
-        side_length (float): Side length of the object.
-        centre (tuple): Centre of the object.
-        depth (float): Depth of the object.
+        side_length_factor (float): Side length of the object.
+        centre_factor (tuple): Centre of the object as a fraction of simulation space.
+        depth_factor (float): Depth of the object.
         """
+        assert 0.0 <= centre_factor[0] <= 1.0, "Centre x-factor must be in [0, 1]."
+        assert 0.0 <= centre_factor[1] <= 1.0, "Centre z-factor must be in [0, 1]."
+        assert 0.0 <= side_length_factor <= 1.0, "Side length factor must be in (0, 1]."
+        assert 0.0 <= depth_factor <= 1.0, "Depth factor must be in (0, 1]."
         self.objects.append(
             OpticalShape(
-                centre,
+                centre_factor,
                 shape,
                 refractive_index,
-                side_length,
-                depth,
+                side_length_factor,
+                depth_factor,
                 gaussian_blur,
                 self.simulation_space))
         
@@ -152,7 +156,7 @@ class BasePtychoObject(ABC):
             n = self.n_true
 
         # Restrict to thin sample region if requested
-        if self.simulation_space.thin_sample:
+        if self.simulation_space.solve_reduced_domain:
             sub_limits = self.simulation_space.scan_frame_info[scan_index].sub_limits_discrete
             n = self.get_sub_sample(n, sub_limits)
 

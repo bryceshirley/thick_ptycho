@@ -3,8 +3,7 @@ import scipy.sparse as sp
 from scipy.special import jv
 from typing import Optional, Tuple, Union
 import scipy.sparse.linalg as spla
-from .boundary_conditions import BoundaryConditions
-
+from .operator_matrices import OperatorMatrices
 
 class PWEForwardModel:
     """
@@ -18,42 +17,42 @@ class PWEForwardModel:
     ----------
     simulation_space : object
         Geometry/discretization descriptor (see `Probes` docstring).
-    thin_sample : bool
+    solve_reduced_domain : bool
         If True, use sub-sampled grids per scan from `detector_frame_info`.
     full_system : bool, default False
-        If True and not thin_sample, prebuild a system step used for repeated
+        If True and not solve_reduced_domain, prebuild a system step used for repeated
         scan indices (performance path in 1D).
     """
 
-    def __init__(self, simulation_space, ptycho_object, full_system: bool = False):
+    def __init__(self, simulation_space, ptycho_object, 
+                 full_system: bool = False,
+                 bc_type: str = "impedance"):
         self.simulation_space = simulation_space
         self.ptycho_object = ptycho_object
         self.full_system = full_system
-        self.thin_sample = simulation_space.thin_sample
+        self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.signal_strength = 1.0  # reserved for future scaling
 
-        # Grid sizes (respect thin sample sub-sampling)
-        if self.thin_sample:
-            self.effective_dimensions = simulation_space.probe_dimensions
-        else:
-            self.effective_dimensions = simulation_space.discrete_dimensions[:-1]
-
         if self.simulation_space.dimension == 1:
-            self.nx = self.effective_dimensions[0]
+            self.nx = simulation_space.effective_nx
         else:
-            self.nx, self.ny = self.effective_dimensions
+            self.nx, self.ny = simulation_space.effective_nx, simulation_space.effective_ny
 
-        self.block_size = self.nx if self.simulation_space.dimension == 1 else self.nx * self.ny
+        self.block_size = self.simulation_space.block_size
 
         self.b0 = None
+
+        # Boundary conditions operator
+        self.differiential_operator_matrices = OperatorMatrices(self.simulation_space, 
+                                 bc_type=bc_type)
 
     def precompute_b0(self, probes: np.ndarray):
         """Precompute b0 (fast path for 1D, full system)"""
         assert (
             self.simulation_space.dimension == 1
-            and (not self.thin_sample)
+            and (not self.solve_reduced_domain)
             and self.full_system
-        ), "precompute_b0 fast path requires 1D, not thin_sample and full_system"
+        ), "precompute_b0 fast path requires 1D, not solve_reduced_domain and full_system"
         self.A_step, self.B_step, self.b_step = self.generate_zstep_matrices()
 
         num_angles = len(self.simulation_space.probe_angles)
@@ -75,7 +74,7 @@ class PWEForwardModel:
         scipy.sparse.csr_matrix
             Sparse matrix of size ( (nz-1)*block_size , (nz-1)*block_size ).
         """
-        if self.thin_sample or not self.full_system:
+        if self.solve_reduced_domain or not self.full_system:
             self.A_step, self.B_step, _ = self.generate_zstep_matrices(probe=probe)
 
         A_homogeneous = (
@@ -97,7 +96,7 @@ class PWEForwardModel:
         ndarray (complex)
             Vector of length (nz-1)*block_size.
         """
-        if self.thin_sample or not self.full_system:
+        if self.solve_reduced_domain or not self.full_system:
             _, _, self.b_step = self.generate_zstep_matrices(probe=probe)
         return np.tile(self.b_step, self.simulation_space.nz - 1)
 
@@ -148,7 +147,7 @@ class PWEForwardModel:
         if self.b0 is not None:
             b0 = self.b0[scan_index, :]
         else:
-            if self.thin_sample:
+            if self.solve_reduced_domain:
                 _, self.B_step, self.b_step = self.generate_zstep_matrices(probe=probe)
             if probe is None:
                 b0 = self.b_step
@@ -169,9 +168,10 @@ class PWEForwardModel:
             B_step : LHS block coupling to previous axial step
             b_step : RHS boundary term at z0 for this probe
         """
-        bcs = BoundaryConditions(self.simulation_space, probe)
-        A_step, B_step = bcs.get_matrix_system()
-        b_step = bcs.get_initial_boundary_conditions_system()
+        self.differiential_operator_matrices.probe = probe
+        A_step, B_step = self.differiential_operator_matrices.get_matrix_system()
+        b_step = self.differiential_operator_matrices.get_probe_boundary_conditions_system()
+        self.differiential_operator_matrices.reset_probe()
         return A_step, B_step, b_step
         
 

@@ -177,7 +177,7 @@ class Visualisation2D(Visualisation):
         Parameters
         ----------
         simulation_space : object
-            Must provide attributes x, y, z, num_probes, scan_points, bc_type, and nz.
+            Must provide attributes x, y, z, num_probes, scan_points, and nz.
         results_dir : str, optional
             Directory to save plots. If None, plots are not saved automatically.
         """
@@ -288,7 +288,7 @@ class Visualisation2D(Visualisation):
 
         extent = [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]] if axis_ticks == "real" else None
         if title in (None, ""):
-            title = f" ({self.simulation_space.bc_type}, {mode})"
+            title = f" ({mode})"
 
         len_z = solution.shape[2]
 

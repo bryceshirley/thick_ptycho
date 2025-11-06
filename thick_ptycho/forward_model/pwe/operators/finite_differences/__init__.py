@@ -1,2 +1,3 @@
+from .operator_matrices import OperatorMatrices
 from .boundary_conditions import BoundaryConditions
 from .forward_model import PWEForwardModel

@@ -83,6 +83,7 @@ import os
 from typing import List, Tuple, Union, Optional
 import numpy as np
 
+from thick_ptycho.simulation.config import ProbeType
 from thick_ptycho.utils.io import setup_log
 
 
@@ -106,118 +107,116 @@ class BaseSimulationSpace(ABC):
 
     def __init__(
         self,
-        continuous_dimensions: List[Tuple[float, float]],
-        discrete_dimensions: List[int],
-        probe_dimensions: List[int],
-        scan_points: int,
-        step_size: float,
-        bc_type: str,
-        probe_type: str,
-        wave_number: float,
-        probe_diameter_scale: Optional[float] = None,
-        probe_focus: Optional[float] = None,
-        probe_angles: Optional[Tuple[float, ...]] = (0.0,),
-        tomographic_projection_90_degree: bool = False,
-        thin_sample: bool = False,
-        n_medium: Union[float, complex] = 1.0,
+        wave_length: float,
+        probe_diameter: float,
+        continuous_dimensions: Tuple[Tuple[float, float], ...],
+        probe_type: ProbeType = ProbeType.AIRY_DISK,
+        probe_focus: Optional[float] = 0.0,
+        probe_angles: Tuple[float, ...] = (0.0,),
+        scan_points: int = 1, 
+        step_size_px: int = 1, 
+        pad_factor: float = 1.1, 
+        solve_reduced_domain: bool = False,
+        points_per_wavelength: int = 8,
+        nz: Optional[int] = None,
+        tomographic_projection_90_degree: Optional[bool] = False,
+        medium: float = 1.0,  # 1.0 for free space
         results_dir: Optional[str] = None,
         use_logging: bool = True,
-        verbose: bool = False,
+        verbose: bool = False
     ) -> None:
         """
-        Initialize the simulation space.
-
+        Initialize the base simulation space.
         Parameters
         ----------
-        continuous_dimensions : list of tuple
-            Continuous spatial limits in each dimension, e.g. [(x_min, x_max), (z_min, z_max)].
-        discrete_dimensions : list of int
-            Number of discrete points (pixels) in each dimension.
-        probe_dimensions : list of int
-            Probe shape in pixels.
-        scan_points : int
-            Number of scan points along one axis.
-        step_size : float
-            Step size between scan points (pixels).
-        bc_type : str
-            Boundary condition type ('dirichlet', 'neumann', etc.).
-        probe_type : str
-            Type of probe (e.g. Gaussian, plane wave).
-        wave_number : float
-            Wavenumber (1/nm).
-        probe_diameter_scale : float, optional
-            Fraction of total x-range representing probe diameter.
+        wave_length : float
+            Wavelength of the illuminating wave in meters.
+        probe_diameter : float
+            Diameter of the probe in meters.
+        continuous_dimensions : Tuple[Tuple[float, float], ...]
+            xlims, zlims or xlims, ylims, zlims
+            Continuous spatial extent of the domain in meters.
+        probe_type : ProbeType, optional
+            Type of probe illumination.
         probe_focus : float, optional
-            Probe focal distance.
+            Focal position of the probe along z (meters).
         probe_angles : tuple of float, optional
-            Incident probe angles.
-        tomographic_projection_90_degree : bool, default=False
-            If True, adds an orthogonal projection (requires cubic grid).
-        thin_sample : bool, default=False
-            If True, assumes thin-sample propagation.
-        n_medium : float or complex, default=1.0
-            Background refractive index.
+            Angles of incidence for the probe (degrees).
+        scan_points : int, optional
+            Number of scan points in one dimension greater than 0.
+        step_size_px : int, optional
+            Step size between scan points in pixels greater than 0 for more than 1 scan point.
+        pad_factor : float, optional
+            Padding factor >= 1.0 to expand the simulation domain.
+        solve_reduced_domain : bool, optional
+            Whether to solve only the reduced effective domain.
+        points_per_wavelength : int, optional
+            Number of grid points per wavelength along the propagation axis.
+        nz : int, optional
+            Explicit override for the number of discretization points along z.
+        tomographic_projection_90_degree : bool, optional
+            Enables the 90° projection transform used in 2D multislice tomography.
+        medium : float, optional
+            Background refractive index of the propagation medium.
         results_dir : str, optional
-            Directory for logging and results.
-        use_logging : bool, default=True
-            Enable file logging.
-        verbose : bool, default=False
-            Enable console verbosity.
+            Output directory for storing intermediate and final results.
+        use_logging : bool, optional
+            Enable runtime logging and progress reporting.
+        verbose : bool, optional
+            Print additional debugging and diagnostic information.
         """
-
-        # ------------------------------------------------------------------
-        # 1. Validation and core dimension setup
-        # ------------------------------------------------------------------
-        self._validate_dimensions(continuous_dimensions, discrete_dimensions)
+        # Scanning setup
+        self.scan_points = scan_points
+        self.step_size = int(step_size_px)
+        self.pad_factor = pad_factor
+        self._scan_frame_info: List[ScanFrame] = []
+        self.num_projections = self._determine_num_projections(
+            tomographic_projection_90_degree
+        )
+       
+        # Core dimension setup
         self.continuous_dimensions = continuous_dimensions
-        self.discrete_dimensions = discrete_dimensions
-        self.thin_sample = thin_sample
+        # z-dimension
+        self.zlims = continuous_dimensions[-1]
+        if nz is None:
+            z_range = self.zlims[1] - self.zlims[0]
+            self.dz = wave_length / points_per_wavelength
+            self.nz = int(z_range / self.dz)
+        else:
+            self.nz = nz
+        self.z = np.linspace(self.zlims[0], self.zlims[1], self.nz)
+        self.dz = self.z[1] - self.z[0]
 
         # Effective (in-plane) dimensions
-        self.effective_dimensions = (
-            probe_dimensions if thin_sample else discrete_dimensions[:-1]
-        )
+        self.solve_reduced_domain = solve_reduced_domain
+        min_nx = (self.scan_points - 1) * self.step_size
+        self.nx = int(pad_factor * (self.scan_points - 1) * self.step_size)
+        self.pad_discrete = self.nx - min_nx
+        self.edge_margin = self.pad_discrete // 2
+        if solve_reduced_domain:
+            self.effective_dimensions = self.pad_discrete
+        else:
+            self.effective_dimensions = self.nx
+        self.dx = (self.continuous_dimensions[0][1] - self.continuous_dimensions[0][0]) / self.nx
 
-        # ------------------------------------------------------------------
-        # 2. Probe configuration
-        # ------------------------------------------------------------------
-        self.probe_dimensions = probe_dimensions
+
+        # Probe configuration
+        self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = probe_diameter
+        self.probe_diameter_pixels = int(probe_diameter / self.dx)
+        self.wavelength = wave_length
         self.probe_type = probe_type
         self.probe_focus = probe_focus
         self.probe_angles = probe_angles
         self.num_angles = len(self.probe_angles)
+        self.k = 2 * np.pi / self.wavelength
+        self.total_scans = self.num_angles * self.scan_points * self.num_projections
 
-        self._setup_probe_diameter(probe_diameter_scale)
 
-        # ------------------------------------------------------------------
-        # 3. Scanning setup
-        # ------------------------------------------------------------------
-        self.scan_points = scan_points
-        self.step_size = step_size
-        self.total_step = (self.scan_points - 1) * self.step_size + self.probe_dimensions[0]
-        
-        # ------------------------------------------------------------------
-        # 4. Tomography configuration
-        # ------------------------------------------------------------------
-        self.num_projections = self._determine_num_projections(
-            discrete_dimensions, tomographic_projection_90_degree
-        )
+        # Physical constants
+        self.n_medium = complex(medium)
 
-        # ------------------------------------------------------------------
-        # 5. Physical constants
-        # ------------------------------------------------------------------
-        self.k = float(wave_number)
-        self.wavelength = 2 * np.pi / self.k
-        self.n_medium = complex(n_medium)
-
-        # ------------------------------------------------------------------
-        # 6. Spatial grid setup (z-axis)
-        # ------------------------------------------------------------------
-        self._setup_z_dimension()
-
-        # ------------------------------------------------------------------
-        # 7. Logging and results management
-        # ------------------------------------------------------------------
+        # Logging and results management
         self.results_dir = results_dir
         self._log = setup_log(
             results_dir,
@@ -227,13 +226,8 @@ class BaseSimulationSpace(ABC):
         )
         self.verbose = verbose
 
-        # ------------------------------------------------------------------
-        # 8. Boundary conditions and scan frame info
-        # ------------------------------------------------------------------
-        self.bc_type = bc_type.lower()
-        self._scan_frame_info: List[ScanFrame] = []
-
-        self.total_scans = self.num_angles * self.scan_points * self.num_projections
+        # Validate parameters
+        self._validate_parameters()
 
 
     # ----------------------------------------------------------------------
@@ -247,43 +241,36 @@ class BaseSimulationSpace(ABC):
             raise ValueError("results_dir is not set.")
         return os.path.join(self.results_dir, filename)
 
-    def _validate_dimensions(
-        self,
-        continuous_dimensions: List[Tuple[float, float]],
-        discrete_dimensions: List[int],
+    def _validate_parameters(
+        self
     ) -> None:
         """Validate consistency between continuous and discrete dimensions."""
-        if len(continuous_dimensions) != len(discrete_dimensions):
-            raise ValueError(
-                "continuous_dimensions and discrete_dimensions must have the same length."
-            )
-        for i, (start, end) in enumerate(continuous_dimensions):
+        if len(self.continuous_dimensions) != 2 and len(self.continuous_dimensions) != 3:
+            raise ValueError("continuous_dimensions must have 2 or 3 dimensions.")
+        if self.pad_factor < 1.0:
+            raise ValueError("pad_factor must be >= 1.0.")
+        if self.scan_points < 1:
+            raise ValueError("scan_points must be greater than 0.")
+        if self.step_size < 1 and self.scan_points > 1:
+            raise ValueError("step_size_px must be greater than 0 for more than 1 scan point.")
+        if self.probe_diameter <= 0:
+            raise ValueError("probe_diameter must be positive.")
+        for i, (start, end) in enumerate(self.continuous_dimensions):
             if start >= end:
                 raise ValueError(f"Invalid range for dimension {i}: start >= end.")
-
-    def _setup_probe_diameter(self, probe_diameter_scale: Optional[float]) -> None:
-        """Compute probe diameter in discrete and continuous units."""
-        nx = self.discrete_dimensions[0]
-        x_start, x_end = self.continuous_dimensions[0]
-        x_range = x_end - x_start
-        dx = x_range / nx
-
-        if probe_diameter_scale is None:
-            self.probe_diameter_discrete = self.probe_dimensions[0]
-            self.probe_diameter_continuous = self.probe_diameter_discrete * dx
-        else:
-            if not (0.0 < probe_diameter_scale < 1.0):
-                raise ValueError("probe_diameter_scale must be between 0 and 1.")
-            self.probe_diameter_continuous = probe_diameter_scale * x_range
-            self.probe_diameter_discrete = int(probe_diameter_scale * nx)
+            if i < len(self.continuous_dimensions) - 1:  # only check spatial dimensions
+                if self.probe_diameter > end - start:
+                    raise ValueError(
+                        f"Probe diameter must be smaller than the range of dimension {i}."
+                    )
 
     def _determine_num_projections(
-        self, discrete_dimensions: List[int], tomo_flag: bool
+        self, tomo_flag: bool
     ) -> int:
         """Determine number of tomographic projections."""
         if not tomo_flag:
             return 1
-        if len(set(discrete_dimensions)) == 1:
+        if len(self.discrete_dimensions) == 1:
             return 2
         print(
             "Warning: 90° tomographic projection requires cubic dimensions; "
@@ -291,13 +278,6 @@ class BaseSimulationSpace(ABC):
         )
         return 1
 
-    def _setup_z_dimension(self) -> None:
-        """Initialize z-axis grid and spacing."""
-        self.nz = self.discrete_dimensions[-1]
-        z_min, z_max = self.continuous_dimensions[-1]
-        self.z = np.linspace(z_min, z_max, self.nz)
-        self.dz = self.z[1] - self.z[0]
-        self.zlims = (z_min, z_max)
 
     # ----------------------------------------------------------------------
     # Abstract and utility methods
@@ -317,11 +297,3 @@ class BaseSimulationSpace(ABC):
     def _generate_scan_frames(self) -> List[ScanFrame]:
         """Generate scan frame information."""
         raise NotImplementedError
-
-    def update_nz(self, nz: int) -> None:
-        """Update the number of z-slices and recompute z-axis spacing."""
-        dims = list(self.discrete_dimensions)
-        dims[-1] = nz
-        self.discrete_dimensions = tuple(dims)
-        self._setup_z_dimension()
-        self.summarize()

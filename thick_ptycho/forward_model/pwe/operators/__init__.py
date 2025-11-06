@@ -4,9 +4,9 @@ Contains boundary condition handling and test utilities.
 """
 
 from .finite_differences.forward_model import PWEForwardModel
-from .finite_differences.boundary_conditions import BoundaryConditions
+from .utils import BoundaryType
 
 __all__ = [
     "PWEForwardModel",
-    "BoundaryConditions",
+    "BoundaryType",
 ]

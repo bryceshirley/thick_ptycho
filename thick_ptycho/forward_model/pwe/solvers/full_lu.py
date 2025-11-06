@@ -8,16 +8,19 @@ import time
 
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
+from thick_ptycho.forward_model.pwe.operators import BoundaryType
 
 class PWEFullLUSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+                 bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
             ptycho_object,
             ptycho_probes,
+            bc_type=bc_type,
             results_dir=results_dir,
             use_logging=use_logging,
             verbose=verbose,
@@ -99,7 +102,7 @@ class PWEFullLUSolver(BasePWESolver):
         mode : {'forward', 'adjoint','forward_rotated','adjoint_rotated'}
             Propagation mode.
         """
-        assert not getattr(self, "thin_sample", False), \
+        assert not getattr(self, "solve_reduced_domain", False), \
             "Full-system solver does not support thin-sample approximation."
         assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, f"Invalid mode: {mode!r}"
         

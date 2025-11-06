@@ -5,12 +5,13 @@ from typing import Optional, Tuple
 
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
-
+from thick_ptycho.forward_model.pwe.operators import BoundaryType
 
 class BasePWESolver(BaseForwardModelSolver):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+                 bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=True, log=None):
         super().__init__(
             simulation_space,
@@ -21,7 +22,9 @@ class BasePWESolver(BaseForwardModelSolver):
             verbose=verbose,
             log=log,
         )
-        self.pwe_finite_differences = PWEForwardModel(simulation_space, ptycho_object)
+        self.bc_type = bc_type
+        self.pwe_finite_differences = PWEForwardModel(simulation_space, ptycho_object,
+                                                      bc_type=bc_type)
         self.block_size = self.pwe_finite_differences.block_size
 
     # ------------------------------------------------------------------
@@ -31,7 +34,7 @@ class BasePWESolver(BaseForwardModelSolver):
         """Precompute LU factorizations for a given propagation mode."""
         assert mode in ["forward", "adjoint", "reverse"], \
             f"Unsupported mode: {mode}"
-        assert not self.simulation_space.thin_sample, \
+        assert not self.simulation_space.solve_reduced_domain, \
             "presolve_setup does not support thin samples."
         self._get_or_construct_lu(n=n, mode=mode)
 

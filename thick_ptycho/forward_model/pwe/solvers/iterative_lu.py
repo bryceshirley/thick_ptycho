@@ -4,17 +4,20 @@ import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
+from thick_ptycho.forward_model.pwe.operators import BoundaryType
 
 
 class PWEIterativeLUSolver(BasePWESolver):
     """Iterative LU-based slice-by-slice propagation solver."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+                 bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
             ptycho_object,
             ptycho_probes,
+            bc_type=bc_type,
             results_dir=results_dir,
             use_logging=use_logging,
             verbose=verbose,
@@ -34,7 +37,7 @@ class PWEIterativeLUSolver(BasePWESolver):
     # ------------------------------------------------------------------
     def presolve_setup(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         """Precompute LU factorizations for a given propagation mode."""
-        assert not self.simulation_space.thin_sample, \
+        assert not self.simulation_space.solve_reduced_domain, \
             "presolve_setup does not support thin samples."
         self._get_or_construct_lu(n=n, mode=mode)
 
@@ -54,7 +57,7 @@ class PWEIterativeLUSolver(BasePWESolver):
             Precomputed LU factorizations, RHS matrices, and right-hand side vector.
         """
         assert mode in {"forward", "adjoint", "reverse", "forward_rotated", "adjoint_rotated", "reverse_rotated"}, f"Invalid mode: {mode}"
-        #assert not self.simulation_space.thin_sample, "presolve_setup does not support thin samples."
+        #assert not self.simulation_space.solve_reduced_domain, "presolve_setup does not support thin samples."
         if n is None:
             n = self.ptycho_object.n_true
         if mode in {"forward_rotated", "adjoint_rotated", "reverse_rotated"}:

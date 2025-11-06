@@ -10,19 +10,22 @@ from concurrent.futures import ProcessPoolExecutor
 from scipy.sparse.linalg import splu, LinearOperator
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
-from thick_ptycho.forward_model.pwe.utils._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
+from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
+from thick_ptycho.forward_model.pwe.operators import BoundaryType
 
 
 class PWEFullPinTSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+                 bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None,
                 alpha=1e-2, num_workers=8, atol=1e-6):
         super().__init__(
             simulation_space,
             ptycho_object,
             ptycho_probes,
+            bc_type=bc_type,
             results_dir=results_dir,
             use_logging=use_logging,
             verbose=verbose,
@@ -131,7 +134,7 @@ class PWEFullPinTSolver(BasePWESolver):
         mode : {'forward', 'adjoint','forward_rotated','adjoint_rotated'}
             Propagation mode.
         """
-        assert not getattr(self, "thin_sample", False), \
+        assert not getattr(self, "solve_reduced_domain", False), \
             "Full-system solver does not support thin-sample approximation."
         assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, f"Invalid mode: {mode!r}"
     
