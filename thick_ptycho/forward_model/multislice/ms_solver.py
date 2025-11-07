@@ -32,6 +32,9 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
         # Precompute angular spectrum kernels for forward/backward propagation
         self._kernel_cache = {}
+    
+    def reset_cache(self):
+        self._kernel_cache = {}
 
     def _get_propagation_kernels(self, dz: float, nx_eff: Optional[int] = None, remove_global_phase=True) -> np.ndarray:
         """Precompute the forward angular spectrum kernel (H_forward)."""

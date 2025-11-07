@@ -325,7 +325,7 @@ class ReconstructorPWE(ReconstructorBase):
 
             # Apply TV and low-pass filtering
             if tv_lambda_amp > 0.0 or low_pass_sigma_phase > 0.0:
-                nk = self.global_object_update(nk, lambda_amp=tv_lambda_amp, sigma_phase=low_pass_sigma_phase)
+                nk = self.global_object_update(nk, tv_lambda_amp, low_pass_sigma_phase)
 
             # Compute source by solving the reverse problem
             if solve_probe:
@@ -398,7 +398,7 @@ class ReconstructorPWE(ReconstructorBase):
         return np.real(ifft2(fft2(phi) * fftshift(W)))
 
 
-    def global_object_update(self, O, lam_amp=0.01, sigma_phase=0.08):
+    def global_object_update(self, O, lam_amp, sigma_phase):
         """
         Apply amplitude TV + phase low-pass to the complex object O.
         """
