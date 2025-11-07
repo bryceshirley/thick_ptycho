@@ -186,22 +186,51 @@ class BaseSimulationSpace(ABC):
         self.z = np.linspace(self.zlims[0], self.zlims[1], self.nz)
         self.dz = self.z[1] - self.z[0]
 
+        # # Effective (in-plane) dimensions
+        # self.solve_reduced_domain = solve_reduced_domain
+
+        # # Minimum domain needed to cover all scan positions
+        # self.min_nx = self.scan_points * self.step_size
+
+        # # Padded full domain
+        # self.nx = int(np.floor(self.pad_factor * self.min_nx))
+        # self.pad_discrete = self.nx - self.min_nx
+
+        # # Ensure even padding for symmetric split
+        # if self.pad_discrete % 2 != 0:
+        #     self.nx = int(np.ceil(self.pad_factor * self.min_nx))
+        #     self.pad_discrete = self.nx - self.min_nx
+
+        # self.edge_margin = self.pad_discrete // 2
+
+        # # Effective region when solving reduced domain
+        # if self.solve_reduced_domain and self.scan_points > 1:
+        #     self.effective_dimensions = self.pad_discrete + self.step_size
+        # else:
+        #     self.effective_dimensions = self.nx
         # Effective (in-plane) dimensions
         self.solve_reduced_domain = solve_reduced_domain
+
+        # Minimum required domain
         self.min_nx = self.scan_points * self.step_size
-        self.nx = int(np.floor(self.pad_factor * self.min_nx))
+
+        # Apply padding
+        self.nx = int(self.pad_factor * self.min_nx)
         self.pad_discrete = self.nx - self.min_nx
 
-        # Ensure even padding for symmetric split
+        # Enforce symmetric padding
         if self.pad_discrete % 2 != 0:
-            self.nx = int(np.ceil(self.pad_factor * self.min_nx))
+            self.nx += 1
             self.pad_discrete = self.nx - self.min_nx
 
         self.edge_margin = self.pad_discrete // 2
-        if self.solve_reduced_domain:
+
+        # Effective region width
+        if self.solve_reduced_domain and self.scan_points > 1:
             self.effective_dimensions = self.pad_discrete + self.step_size
         else:
             self.effective_dimensions = self.nx
+
 
         self.xlims = self.continuous_dimensions[0]
         self.x = np.linspace(self.xlims[0], self.xlims[1], self.nx)

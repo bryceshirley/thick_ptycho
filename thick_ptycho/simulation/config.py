@@ -8,6 +8,7 @@ simulation parameters, and logging options.
 
 from typing import Tuple, Optional
 from dataclasses import dataclass
+import warnings
 
 from enum import Enum
 
@@ -136,8 +137,12 @@ class SimulationConfig:
 
     def __post_init__(self):
         """Validate configuration parameters after initialization."""
-        if self.step_size_px % 2 != 0:
-            raise ValueError("Ensure stepsize is even")
+        # If only 1 scan point, reduced-domain setting has no effect → warn, don't fail.
+        if self.scan_points == 1 and self.solve_reduced_domain:
+            warnings.warn(
+                "solve_reduced_domain=True has no effect when scan_points=1; using full domain.",
+                RuntimeWarning,
+            )
         if not isinstance(self.continuous_dimensions, tuple) or len(self.continuous_dimensions) < 2:
             raise ValueError("continuous_dimensions must be a tuple of at least two tuples (xlims, zlims).")
         if self.probe_type not in ProbeType:

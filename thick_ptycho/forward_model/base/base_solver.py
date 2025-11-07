@@ -113,6 +113,8 @@ class BaseForwardModelSolver(ABC):
                         probe=probes[angle_idx, scan_idx, :],
                     )
 
+                    if self.solve_reduced_domain:
+                        self.reset_cache()
                     # Log time taken for each probe if verbose is True
                     if self.verbose:
                         self._log(
@@ -164,6 +166,11 @@ class BaseForwardModelSolver(ABC):
     def _solve_single_probe(self, angle_idx: int, probe_idx: int,
                              n=None, mode: str = "forward", initial: np.ndarray = None) -> np.ndarray:
         """Override in subclasses."""
+        raise NotImplementedError
+    
+    @abstractmethod
+    def reset_cache(self):
+        """Reset any cached variables (e.g., LU factors)."""
         raise NotImplementedError
 
     def _create_solution_grid(self) -> np.ndarray:
