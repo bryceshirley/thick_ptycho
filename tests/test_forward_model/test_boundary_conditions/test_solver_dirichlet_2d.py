@@ -4,15 +4,7 @@ import numpy as np
 import pytest
 from thick_ptycho.simulation.ptycho_object import SampleSpace
 from thick_ptycho.forward_model.base_solver import ForwardModel
-<<<<<<< HEAD
 import os
-=======
-from thick_ptycho.utils.visualisations import Visualisation
-
-def u_nm(a, n, m):
-    """Returns the exact solution for a given n and m."""
-    return lambda x, y, z: np.exp(-a*((n**2)+(m**2))*(np.pi**2)*z)*np.sin(n*np.pi*x)*np.sin(m*np.pi*y)
->>>>>>> main
 
 
 def u_nm(a, n):
