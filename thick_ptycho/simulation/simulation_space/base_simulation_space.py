@@ -15,14 +15,15 @@ each position, the domain must be padded on both sides.
 
 Diagram
 -------
-
     x = 0                                                                  x = Nx * dx
-     ______________________________________________________________________________
-     |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<--  pR  -->|
-     |          c₀          c₁          c₂  ...            cₙ₋₂    cₙ₋₁            |
-     |          |<------------------------ min_nx ------------------>|            |
-     |<------------------------------        Nx       ---------------------- ---->|
-     |<--      Ne      -->|
+     _____________________________________________________________________________
+     |<-- pL -->|<--  s  -->|<--  s  -->|╏   ...  |<-- s -->|<-- s -->|<-- pR -->|
+     |                c₁          c₂     ╏             cₙ₋₁       cₙ              |
+     |                |<--  s  -->|      ╏                                       |
+     |<-- pL -->|<--  s  -->|<--  pR  -->|                                       |
+     |<------------  Ne  --------------->|                                       |
+     |          |<------------------------ min_nx ------------------>|           |
+     |<------------------------------        Nx       -------------------------->|
 Where:
     cᵢ  : Scan point centers (pixel indices)
     s   : Step size between consecutive scan points (pixels)
@@ -43,7 +44,7 @@ scan_points : int
 min_nx : int
     Minimum required simulation width to contain all scan positions.
     Computed as::
-        min_nx = (scan_points - 1) * step_size_px
+        min_nx = scan_points * step_size_px
 
 pad_factor : float, >= 1.0
     Controls how much total padding to add around the scanned region.
@@ -56,12 +57,10 @@ Nx : int
         Nx = int(pad_factor * min_nx)
 
 Ne : int
-    Effective padding region width (pL + pR). Used when solving only
-    a reduced "effective" domain instead of the full padded space::
-
-        Ne = Nx - min_nx
-        Ne = (pad_factor - 1) * min_nx
-        (and pL = pR = Ne / 2)
+    Effective . Used when solving only a reduced "effective" domain instead 
+    of the full padded space::
+        padding = Nx - min_nx = (pad_factor - 1) * Nx
+        Ne = step_size + padding
 
 dx : float
     Spatial step in meters (physical pixel size).
@@ -92,11 +91,11 @@ class ScanFrame:
     """Represents one scan frame in a ptychographic scan."""
     probe_centre_continuous: Union[float, Tuple[float, float]]
     probe_centre_discrete: Union[int, Tuple[int, int]]
-    sub_limits_continuous: Union[
+    reduced_limits_continuous: Union[
         Tuple[float, float],
         Tuple[Tuple[float, float], Tuple[float, float]]
     ]
-    sub_limits_discrete: Union[
+    reduced_limits_discrete: Union[
         Tuple[int, int],
         Tuple[Tuple[int, int], Tuple[int, int]]
     ]
@@ -114,7 +113,7 @@ class BaseSimulationSpace(ABC):
         probe_focus: Optional[float] = 0.0,
         probe_angles: Tuple[float, ...] = (0.0,),
         scan_points: int = 1, 
-        step_size_px: int = 1, 
+        step_size_px: int = 10, 
         pad_factor: float = 1.1, 
         solve_reduced_domain: bool = False,
         points_per_wavelength: int = 8,
@@ -189,15 +188,24 @@ class BaseSimulationSpace(ABC):
 
         # Effective (in-plane) dimensions
         self.solve_reduced_domain = solve_reduced_domain
-        min_nx = (self.scan_points - 1) * self.step_size
-        self.nx = int(pad_factor * (self.scan_points - 1) * self.step_size)
-        self.pad_discrete = self.nx - min_nx
+        self.min_nx = self.scan_points * self.step_size
+        self.nx = int(np.floor(self.pad_factor * self.min_nx))
+        self.pad_discrete = self.nx - self.min_nx
+
+        # Ensure even padding for symmetric split
+        if self.pad_discrete % 2 != 0:
+            self.nx = int(np.ceil(self.pad_factor * self.min_nx))
+            self.pad_discrete = self.nx - self.min_nx
+
         self.edge_margin = self.pad_discrete // 2
-        if solve_reduced_domain:
-            self.effective_dimensions = self.pad_discrete
+        if self.solve_reduced_domain:
+            self.effective_dimensions = self.pad_discrete + self.step_size
         else:
             self.effective_dimensions = self.nx
-        self.dx = (self.continuous_dimensions[0][1] - self.continuous_dimensions[0][0]) / self.nx
+
+        self.xlims = self.continuous_dimensions[0]
+        self.x = np.linspace(self.xlims[0], self.xlims[1], self.nx)
+        self.dx = self.x[1] - self.x[0]
 
 
         # Probe configuration
@@ -226,9 +234,6 @@ class BaseSimulationSpace(ABC):
         )
         self.verbose = verbose
 
-        # Validate parameters
-        self._validate_parameters()
-
 
     # ----------------------------------------------------------------------
     # Helper methods
@@ -240,29 +245,6 @@ class BaseSimulationSpace(ABC):
         if self.results_dir is None:
             raise ValueError("results_dir is not set.")
         return os.path.join(self.results_dir, filename)
-
-    def _validate_parameters(
-        self
-    ) -> None:
-        """Validate consistency between continuous and discrete dimensions."""
-        if len(self.continuous_dimensions) != 2 and len(self.continuous_dimensions) != 3:
-            raise ValueError("continuous_dimensions must have 2 or 3 dimensions.")
-        if self.pad_factor < 1.0:
-            raise ValueError("pad_factor must be >= 1.0.")
-        if self.scan_points < 1:
-            raise ValueError("scan_points must be greater than 0.")
-        if self.step_size < 1 and self.scan_points > 1:
-            raise ValueError("step_size_px must be greater than 0 for more than 1 scan point.")
-        if self.probe_diameter <= 0:
-            raise ValueError("probe_diameter must be positive.")
-        for i, (start, end) in enumerate(self.continuous_dimensions):
-            if start >= end:
-                raise ValueError(f"Invalid range for dimension {i}: start >= end.")
-            if i < len(self.continuous_dimensions) - 1:  # only check spatial dimensions
-                if self.probe_diameter > end - start:
-                    raise ValueError(
-                        f"Probe diameter must be smaller than the range of dimension {i}."
-                    )
 
     def _determine_num_projections(
         self, tomo_flag: bool

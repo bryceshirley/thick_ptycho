@@ -24,11 +24,6 @@ class SimulationSpace1D(BaseSimulationSpace):
         self.effective_nx = self.effective_dimensions 
 
         # ------------------------------------------------------------------
-        # 2. Spatial grid setup
-        # ------------------------------------------------------------------
-        self.x = np.linspace(self.xlims[0], self.xlims[1], self.nx)
-
-        # ------------------------------------------------------------------
         # 3. Scan setup
         # ------------------------------------------------------------------
         self.num_probes = self.scan_points
@@ -67,22 +62,27 @@ class SimulationSpace1D(BaseSimulationSpace):
     def _generate_scan_frames(self) -> List[ScanFrame]:
         """Generate detector frames along a serpentine scan path."""
         # --- Corrected start and stop for linspace ---
-        start = self.edge_margin
-        stop = self.nx - self.edge_margin - 1
-        centres_x = np.floor(np.linspace(start, stop, self.scan_points)).astype(int)
+        # start = self.effective_nx // 2
+        # stop = self.nx - self.effective_nx // 2
+        centres_x = [self.effective_nx // 2 + i * (self.step_size) for i in range(self.scan_points)]
+        centres_x[-1] -= 1
+        # start = self.effective_nx // 2
+        # stop = self.nx - self.effective_nx // 2 
+
+        #centres_x = #np.floor(np.linspace(start, stop, self.scan_points))
 
         # --- Construct frames ---
         frames: List[ScanFrame] = []
         for cx in centres_x:
-            x_min = int(cx - self.edge_margin)
-            x_max = int(cx + self.edge_margin)
+            x_min = int(cx - self.effective_nx // 2)
+            x_max = int(cx + self.effective_nx // 2)
 
             frames.append(
                 ScanFrame(
-                    probe_centre_continuous=self.x[cx],
-                    probe_centre_discrete=cx,
-                    sub_limits_continuous=(self.x[x_min], self.x[x_max]),
-                    sub_limits_discrete=(x_min, x_max),
+                    probe_centre_continuous=self.x[int(cx)],
+                    probe_centre_discrete=int(cx),
+                    reduced_limits_continuous=(self.x[x_min], self.x[x_max]),
+                    reduced_limits_discrete=(x_min, x_max),
                 )
             )
         return frames

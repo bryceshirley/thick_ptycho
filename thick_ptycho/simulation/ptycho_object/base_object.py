@@ -157,7 +157,7 @@ class BasePtychoObject(ABC):
 
         # Restrict to thin sample region if requested
         if self.simulation_space.solve_reduced_domain:
-            sub_limits = self.simulation_space.scan_frame_info[scan_index].sub_limits_discrete
+            sub_limits = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete
             n = self.get_sub_sample(n, sub_limits)
 
         # Compute coefficient

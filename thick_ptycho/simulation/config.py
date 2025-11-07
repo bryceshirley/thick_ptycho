@@ -28,15 +28,11 @@ class ProbeType(Enum):
         """Return a list of all probe type names."""
         return [p.value for p in cls]
 
-@dataclass
+@dataclass(frozen=True,slots=True)
 class SimulationConfig:
     """
     Configuration object defining the spatial discretization, probe geometry,
     and optical parameters used for ptychographic simulation.
-
-    This configuration controls both the physical (continuous) dimensions
-    of the sample region and the corresponding discrete grid used for
-    wave propagation and probe scanning.
 
     Parameters
     ----------
@@ -118,31 +114,67 @@ class SimulationConfig:
         Enable runtime logging and progress reporting.
 
     verbose : bool, default=False
-        Print additional debugging and diagnostic information.
-
-    Notes
-    -----
-    - Increasing ``pad_factor`` improves boundary behavior and prevents
-      artificial reflections but increases memory and computational load.
-    - Setting ``solve_reduced_domain=True`` is recommended for speed but beware
-      of potential boundary effects.
-    - ``points_per_wavelength`` controls axial resolution; too small values
-      cause propagation errors, while very large values increase computational cost.
+        Enable runtime printing and progress reporting.
     """
     wave_length: float
     probe_diameter: float
-    continuous_dimensions: Tuple[Tuple[float, float], ...] 
-    scan_points: int = 1# number of scan points in one dimension greater than 0
+    continuous_dimensions: Tuple[Tuple[float, float], ...]
+    scan_points: int = 1 # number of scan points in one dimension greater than 0
     step_size_px: int = 1 # in pixels greater than 0 for more than 1 scan point
     probe_type: ProbeType = ProbeType.AIRY_DISK
     probe_focus: Optional[float] = 0.0
     probe_angles: Tuple[float, ...] = (0.0,)
     pad_factor: float = 1.1 # Must be >= 1.0
     solve_reduced_domain: bool = False
-    points_per_wavelength: int = 8
+    points_per_wavelength: Optional[int] = 8
     nz: Optional[int] = None 
     tomographic_projection_90_degree: Optional[bool] = False
     medium: float = 1.0 # 1.0 for free space
     results_dir: Optional[str] = None
     use_logging: bool = True
     verbose: bool = False
+
+    def __post_init__(self):
+        """Validate configuration parameters after initialization."""
+        if self.step_size_px % 2 != 0:
+            raise ValueError("Ensure stepsize is even")
+        if not isinstance(self.continuous_dimensions, tuple) or len(self.continuous_dimensions) < 2:
+            raise ValueError("continuous_dimensions must be a tuple of at least two tuples (xlims, zlims).")
+        if self.probe_type not in ProbeType:
+            raise ValueError(f"Invalid probe type: {self.probe_type}. Must be one of {ProbeType.list()}.")
+        if self.pad_factor < 1.0:
+            raise ValueError("pad_factor must be >= 1.0")
+        if self.scan_points < 1:
+            raise ValueError("scan_points must be greater than 0")
+        if self.step_size_px < 1 and self.scan_points > 1:
+            raise ValueError("step_size_px must be greater than 0 for multiple scan points")
+        if self.points_per_wavelength < 1:
+            raise ValueError("points_per_wavelength must be >= 1")
+        if len(self.continuous_dimensions) != 2 and len(self.continuous_dimensions) != 3:
+            raise ValueError("continuous_dimensions must have 2 or 3 dimensions.")
+        if self.probe_diameter <= 0:
+            raise ValueError("probe_diameter must be positive.")
+        for i, (start, end) in enumerate(self.continuous_dimensions):
+            if start >= end:
+                raise ValueError(f"Invalid range for dimension {i}: start >= end.")
+            if i < len(self.continuous_dimensions) - 1:  # only check spatial dimensions
+                if self.probe_diameter > end - start:
+                    raise ValueError(
+                        f"Probe diameter must be smaller than the range of dimension {i}."
+                    )
+        if self.nz is not None and self.nz <= 0:
+            raise ValueError("nz must be a positive integer if specified.")
+        if self.results_dir is not None and not isinstance(self.results_dir, str):
+            raise ValueError("results_dir must be a string if specified.")
+        if self.use_logging and not isinstance(self.use_logging, bool):
+            raise ValueError("use_logging must be a boolean value.")
+        if self.verbose and not isinstance(self.verbose, bool):
+            raise ValueError("verbose must be a boolean value.")
+        if self.tomographic_projection_90_degree and len(self.continuous_dimensions) != 2:
+            raise ValueError("tomographic_projection_90_degree is only valid for 2D simulations.")
+        if self.wave_length <= 0:
+            raise ValueError("wave_length must be a positive value.")
+        if self.points_per_wavelength is None and self.nz is None:
+            raise ValueError("Either points_per_wavelength or nz must be specified.")
+        if self.points_per_wavelength is not None and self.points_per_wavelength <= 0:
+            raise ValueError("points_per_wavelength must be a positive if specified.")

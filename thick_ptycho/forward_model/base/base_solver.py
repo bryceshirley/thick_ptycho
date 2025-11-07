@@ -6,8 +6,10 @@ from thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
 from thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
 from thick_ptycho.utils.io import setup_log
 
+from abc import ABC, abstractmethod
+
 # TODO: Update Visualisation of data and add support for tomographic projects
-class BaseForwardModelSolver:
+class BaseForwardModelSolver(ABC):
     """
     Abstract base class for all forward model solvers (PWE, Multislice, etc.).
     Handles:
@@ -158,8 +160,7 @@ class BaseForwardModelSolver:
 
         return u
 
-    
-
+    @abstractmethod
     def _solve_single_probe(self, angle_idx: int, probe_idx: int,
                              n=None, mode: str = "forward", initial: np.ndarray = None) -> np.ndarray:
         """Override in subclasses."""

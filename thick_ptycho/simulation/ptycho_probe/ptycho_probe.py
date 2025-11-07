@@ -2,6 +2,7 @@ import numpy as np
 from scipy.special import jv
 from typing import Optional, Tuple, Union
 
+
 def u0_nm_neumann(n, m):
     """Return exact Neumann solution basis u(x,y) = cos(nπx)cos(mπy)."""
     return lambda x, y: np.cos(n * np.pi * x) * np.cos(m * np.pi * y)
@@ -34,8 +35,8 @@ class PtychoProbes:
         - scan_frame_info[scan] : dict with
             * "probe_centre_continuous": float in 1D, (cx, cy) in 2D
             * "probe_centre_discrete": int in 1D, (cx, cy) in 2D
-            * "sub_limits_continuous": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
-            * "sub_limits_discrete": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
+            * "reduced_limits_continuous": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
+            * "reduced_limits_discrete": (x_min, x_max) in 1D or (x_min, x_max, y_min, y_max) in 2D
     solve_reduced_domain : bool
         If True, use sub-sampled grids from `scan_frame_info`.
 
@@ -53,6 +54,7 @@ class PtychoProbes:
         self.disk_edge_blur = 0.5  # matches previous behavior (_disk_blur)
         self.probe_angles = list(self.angles)
         self.num_angles = len(self.probe_angles)
+        self.probe_type = simulation_space.probe_type
 
     # ---------------------------- public ---------------------------------
 
@@ -260,7 +262,7 @@ class PtychoProbes:
 
         if probe_type == "blurred_disk":
             return self._blurred_disk(coord, center, radius)
-
+        
         raise ValueError(f"Unknown probe_type: {probe_type}")
 
     def _constant(self, coord):
@@ -382,17 +384,17 @@ class PtychoProbes:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
             if self.solve_reduced_domain:
-                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
-                x_min, x_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous
+                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
+                x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous
                 x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.solve_reduced_domain:
-            #x, y = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
-            x_coord_min, x_coord_max, y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].sub_limits_discrete
-            x_min, x_max, y_min, y_max = self.simulation_space.scan_frame_info[scan].sub_limits_continuous
+            #x, y = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
+            x_coord_min, x_coord_max, y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
+            x_min, x_max, y_min, y_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous
             x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             y = np.linspace(y_min, y_max, y_coord_max - y_coord_min)
         else:
