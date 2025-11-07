@@ -164,96 +164,28 @@ class BaseSimulationSpace(ABC):
         verbose : bool, optional
             Print additional debugging and diagnostic information.
         """
-        # Scanning setup
+        self.wave_length = wave_length
+        self.continuous_dimensions = continuous_dimensions
+
+        # Scan setup
         self.scan_points = scan_points
         self.step_size = int(step_size_px)
         self.pad_factor = pad_factor
+        self.solve_reduced_domain = solve_reduced_domain
         self._scan_frame_info: List[ScanFrame] = []
         self.num_projections = self._determine_num_projections(
             tomographic_projection_90_degree
         )
-       
-        # Core dimension setup
-        self.continuous_dimensions = continuous_dimensions
-        # z-dimension
-        self.zlims = continuous_dimensions[-1]
-        if nz is None:
-            z_range = self.zlims[1] - self.zlims[0]
-            self.dz = wave_length / points_per_wavelength
-            self.nz = int(z_range / self.dz)
-        else:
-            self.nz = nz
-        self.z = np.linspace(self.zlims[0], self.zlims[1], self.nz)
-        self.dz = self.z[1] - self.z[0]
 
-        # # Effective (in-plane) dimensions
-        # self.solve_reduced_domain = solve_reduced_domain
+        # Configure simulation geometry
+        self._configure_z_axis(points_per_wavelength, nz)
+        self._configure_domain()
+        self._configure_probe(probe_diameter, probe_type, probe_focus, probe_angles)
 
-        # # Minimum domain needed to cover all scan positions
-        # self.min_nx = self.scan_points * self.step_size
-
-        # # Padded full domain
-        # self.nx = int(np.floor(self.pad_factor * self.min_nx))
-        # self.pad_discrete = self.nx - self.min_nx
-
-        # # Ensure even padding for symmetric split
-        # if self.pad_discrete % 2 != 0:
-        #     self.nx = int(np.ceil(self.pad_factor * self.min_nx))
-        #     self.pad_discrete = self.nx - self.min_nx
-
-        # self.edge_margin = self.pad_discrete // 2
-
-        # # Effective region when solving reduced domain
-        # if self.solve_reduced_domain and self.scan_points > 1:
-        #     self.effective_dimensions = self.pad_discrete + self.step_size
-        # else:
-        #     self.effective_dimensions = self.nx
-        # Effective (in-plane) dimensions
-        self.solve_reduced_domain = solve_reduced_domain
-
-        # Minimum required domain
-        self.min_nx = self.scan_points * self.step_size
-
-        # Apply padding
-        self.nx = int(self.pad_factor * self.min_nx)
-        self.pad_discrete = self.nx - self.min_nx
-
-        # Enforce symmetric padding
-        if self.pad_discrete % 2 != 0:
-            self.nx += 1
-            self.pad_discrete = self.nx - self.min_nx
-
-        self.edge_margin = self.pad_discrete // 2
-
-        # Effective region width
-        if self.solve_reduced_domain and self.scan_points > 1:
-            self.effective_dimensions = self.pad_discrete + self.step_size
-        else:
-            self.effective_dimensions = self.nx
-
-
-        self.xlims = self.continuous_dimensions[0]
-        self.x = np.linspace(self.xlims[0], self.xlims[1], self.nx)
-        self.dx = self.x[1] - self.x[0]
-
-
-        # Probe configuration
-        self.probe_diameter = probe_diameter
-        self.probe_diameter_continuous = probe_diameter
-        self.probe_diameter_pixels = int(probe_diameter / self.dx)
-        self.wavelength = wave_length
-        self.probe_type = probe_type
-        self.probe_focus = probe_focus
-        self.probe_angles = probe_angles
-        self.num_angles = len(self.probe_angles)
-        self.k = 2 * np.pi / self.wavelength
-        self.total_scans = self.num_angles * self.scan_points * self.num_projections
-
-
-        # Physical constants
+        # Physical medium
         self.n_medium = complex(medium)
 
-        # Logging and results management
+        # Logging
         self.results_dir = results_dir
         self._log = setup_log(
             results_dir,
@@ -262,6 +194,73 @@ class BaseSimulationSpace(ABC):
             verbose=verbose,
         )
         self.verbose = verbose
+
+
+    def _configure_z_axis(self, points_per_wavelength: int, nz: Optional[int]) -> None:
+        """Set up the propagation axis."""
+        self.zlims = self.continuous_dimensions[-1]
+        if nz is None:
+            z_range = self.zlims[1] - self.zlims[0]
+            self.dz = self.wave_length / points_per_wavelength
+            self.nz = int(z_range / self.dz)
+        else:
+            self.nz = nz
+
+        self.z = np.linspace(self.zlims[0], self.zlims[1], self.nz)
+        self.dz = self.z[1] - self.z[0]
+
+
+    def _configure_domain(self) -> None:
+        """Compute domain width, apply padding, enforce symmetry, set coordinates."""
+
+        self.min_nx = self.scan_points * self.step_size
+        self.nx = int(self.pad_factor * self.min_nx)
+        self.pad_discrete = self.nx - self.min_nx
+
+        # Ensure symmetric padding (even)
+        if self.pad_discrete % 2 != 0:
+            self.nx += 1
+            self.pad_discrete = self.nx - self.min_nx
+
+        # Ensure scan symmetry: parity rule
+        desired_parity = 1 if (self.step_size % 2 == 0) else 0
+        if self.nx % 2 != desired_parity:
+            self.nx += 1
+            self.pad_discrete = self.nx - self.min_nx
+
+        self.edge_margin = self.pad_discrete // 2
+
+        # Effective region Ne
+        if self.solve_reduced_domain and self.scan_points > 1:
+            self.effective_dimensions = self.pad_discrete + self.step_size - 1
+        else:
+            self.effective_dimensions = self.nx
+
+        # Coordinates
+        xlims = self.continuous_dimensions[0]
+        self.x = np.linspace(xlims[0], xlims[1], self.nx)
+        self.dx = self.x[1] - self.x[0]
+
+
+    def _configure_probe(
+        self,
+        probe_diameter: float,
+        probe_type: ProbeType,
+        probe_focus: float,
+        probe_angles: Tuple[float, ...],
+    ) -> None:
+        """Store probe configuration & derived quantities."""
+
+        self.probe_diameter = probe_diameter
+        self.probe_diameter_continuous = probe_diameter
+        self.probe_diameter_pixels = int(probe_diameter / self.dx)
+        self.probe_type = probe_type
+        self.probe_focus = probe_focus
+        self.probe_angles = probe_angles
+        self.num_angles = len(probe_angles)
+
+        self.k = 2 * np.pi / self.wave_length
+        self.total_scans = self.num_angles * self.scan_points * self.num_projections
 
 
     # ----------------------------------------------------------------------
