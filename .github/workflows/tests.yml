@@ -28,7 +28,6 @@ jobs:
         run: |
           poetry install
 
-      # Optional: skip known failing tests for now
       - name: Run tests (skipping known broken shape tests)
         run: |
-          poetry run pytest -k "not test_object_out_of_bounds_raises_assertion and not test_object_out_of_bounds_raises_assertion_2d" --maxfail=1 --disable-warnings
+          poetry run pytest
