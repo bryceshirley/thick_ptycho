@@ -46,9 +46,9 @@ class BoundaryConditions:
         """Modify matrix K for 1D Dirichlet boundary conditions."""
         K = K.tolil()
         K[0, :] = 0
-        K[0, 0] = 1
+        # K[0, 0] = 1
         K[-1, :] = 0
-        K[-1, -1] = 1
+        # K[-1, -1] = 1
         return K.tocsr()
 
     def _apply_1D_neumann(self, K):

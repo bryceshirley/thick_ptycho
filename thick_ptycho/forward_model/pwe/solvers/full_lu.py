@@ -9,13 +9,15 @@ import time
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
 class PWEFullLUSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
-                 results_dir="", use_logging=False, verbose=False, log=None):
+                 results_dir="", use_logging=False, verbose=False, log=None,
+                 test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
             ptycho_object,
@@ -42,6 +44,9 @@ class PWEFullLUSolver(BasePWESolver):
 
         # Solver type (for logging purposes)
         self.solver_type = "Block PWE Full Solver with LU Decomposition"
+
+        # For testing purposes
+        self.test_bcs = test_bcs
 
     def _get_or_construct_lu(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         """
@@ -89,6 +94,14 @@ class PWEFullLUSolver(BasePWESolver):
             self.b_cache = b_h
 
         return self.lu_cache, self.b_cache
+
+    def reset_cache(self):
+        self.lu_cache = {
+            "projection_0": None,
+            "projection_1": None,  # Rotated
+        }
+        self.b_cache = None
+        self._cached_n_id = None
 
 
     def prepare_solver(self, n: Optional[np.ndarray] = None, mode: str = "forward"):

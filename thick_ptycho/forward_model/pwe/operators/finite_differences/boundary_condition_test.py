@@ -1,7 +1,8 @@
 import numpy as np
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_conditions import BoundaryConditions
 
 
-class BoundaryConditionsTest:
+class BoundaryConditionsTest(BoundaryConditions):
     """
     Test-only class providing exact analytic Neumann / impedance boundary
     conditions for validation of finite difference solvers.
@@ -12,16 +13,18 @@ class BoundaryConditionsTest:
     """
 
     def __init__(self, simulation_space):
-        self.simulation_space = simulation_space
-        self.a = 1j / (2 * simulation_space.k)
-        self.beta_x = getattr(simulation_space, "beta_x", 1.0)
-        self.beta_y = getattr(simulation_space, "beta_y", 1.0)
-        self.x = simulation_space.x
-        self.y = getattr(simulation_space, "y", None)
-        self.z = simulation_space.z
-        self.nx = simulation_space.nx
-        self.ny = getattr(simulation_space, "ny", None)
-        self.nz = simulation_space.nz
+        super().__init__(simulation_space, bc_type="impedance")
+        self.x = np.linspace(
+            simulation_space.xlims[0],
+            simulation_space.xlims[1],
+            simulation_space.effective_nx,
+        )
+        if simulation_space.dimension == 2:
+            self.y = np.linspace(
+                simulation_space.ylims[0],
+                simulation_space.ylims[1],
+                simulation_space.effective_ny,
+            )
 
     # ------------------------------------------------------------------
     # Analytic reference solutions (Neumann exact forms)
@@ -82,9 +85,9 @@ class BoundaryConditionsTest:
     # ------------------------------------------------------------------
     # Validation helpers
     # ------------------------------------------------------------------
-    def test_exact_impedance_forward_model_rhs(self, probe):
+    def test_exact_impedance_forward_model_rhs(self):
         """
-        Build RHS using the average of exact boundary conditions between slices.
+        Build RHS using the average of exact boundary conditions between steps.
         Useful for validating impedance BC implementation.
         """
         z = self.simulation_space.z
@@ -96,7 +99,7 @@ class BoundaryConditionsTest:
             out.append(0.5 * (b0 + b1))
         return np.concatenate(out, axis=0)
 
-    def test_exact_impedance_rhs_slice(self, j: int):
+    def test_exact_impedance_rhs_step(self, j: int):
         """Average exact boundary conditions across a single slab interface j-1→j."""
         z = self.simulation_space.z
         b_old = self.get_exact_boundary_conditions_system(z[j - 1])

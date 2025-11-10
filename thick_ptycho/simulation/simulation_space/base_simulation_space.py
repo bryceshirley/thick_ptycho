@@ -114,7 +114,7 @@ class BaseSimulationSpace(ABC):
         probe_angles: Tuple[float, ...] = (0.0,),
         scan_points: int = 1, 
         step_size_px: int = 10, 
-        pad_factor: float = 1.1, 
+        pad_factor: float = 1, 
         solve_reduced_domain: bool = False,
         points_per_wavelength: int = 8,
         nz: Optional[int] = None,

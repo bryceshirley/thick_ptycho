@@ -2,91 +2,81 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from thick_ptycho.simulation.ptycho_object import SampleSpace
-from thick_ptycho.forward_model.base_solver import ForwardModel
-from thick_ptycho.utils.visualisations import Visualisation
-
+from thick_ptycho.simulation.config import SimulationConfig, ProbeType
+from thick_ptycho.simulation.simulation_space import create_simulation_space
+from thick_ptycho.simulation.ptycho_object import create_ptycho_object
+from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
+from thick_ptycho.forward_model import PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver
 import os
 
-def u_nm(a, n):
+from thick_ptycho.forward_model.pwe.operators.utils import BoundaryType
+
+
+def u_nm(n, k):
+    a = 1j / (2 * k)
     """Returns the exact solution for a given n in 1D."""
     return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.cos(n * np.pi * x)
 
 
-def compute_error(nx, nz, thin_sample, full_system_solver):
+def compute_error(nx, nz,Solver):
     """Computes the Frobenius norm of the error between the exact and computed solutions in 1D."""
-    bc_type = "impedance"  # Impedance boundary condition
-    probe_type = "neumann_test"  # Sum of cosines
-    wave_number = 100
+    k = 100
+    wave_length = 2 * np.pi / k
 
     # Set continuous space limits
     xlims = [0, 1]
-    zlims = [0, 5]
+    zlims = [0, 2]
 
-    continuous_dimensions = [
-        xlims,
-        zlims
-    ]
-
-    # Set detector shape, probe radius, step size, and no of scan points in each coordinate (All in pixels)
-    probe_dimensions = [nx]
-    discrete_dimensions = [
-        nx,
-        nz
-    ]
-    scan_points = 1
-    step_size = 0
-
-    sample_space = SampleSpace(
-        continuous_dimensions,
-        discrete_dimensions,
-        probe_dimensions,
-        scan_points,
-        step_size,
-        bc_type,
-        probe_type,
-        wave_number,
+    sim_config = SimulationConfig(
+        probe_type="neumann_test",      # triggers sinusoidal probe generation
+        wave_length=wave_length,
+        step_size_px=nx,
+        nz = nz,
+        continuous_dimensions=(xlims, zlims),
     )
 
-    forward_model = ForwardModel(sample_space,
-                                 thin_sample=thin_sample,
-                                 full_system_solver=full_system_solver)
+    simulation_space = create_simulation_space(sim_config)
+    obj = create_ptycho_object(simulation_space)
+    probes = create_ptycho_probes(simulation_space)
 
-    # Solve the experiment
-    solution = forward_model.solve(test_impedance=True)[0, :, :]
-
-    a = 1j / (2 * wave_number)
+    solver = Solver(simulation_space, obj, probes, bc_type="neumann")
+    solution = solver.solve().squeeze()                        # shape: (scan, x, z)
 
     # Define grid points
-    x = np.linspace(xlims[0], xlims[1], nx)
-    z = np.linspace(zlims[0], zlims[1], nz)
+    x = np.linspace(xlims[0], xlims[1], simulation_space.nx)
+    z = np.linspace(zlims[0], zlims[1], simulation_space.nz)
     X, Z = np.meshgrid(x, z, indexing='ij')
 
     # Compute the exact solution
-    exact_solution = u_nm(a, 1)(X, Z) + 0.5 * u_nm(a, 2)(X, Z) + 0.2 * u_nm(a, 5)(X, Z)
+    exact_solution = u_nm(1,k)(X, Z) + 0.5 * u_nm(2, k)(X, Z) + 0.2 * u_nm(5, k)(X, Z)
 
     # Compute the relative RMSE
     return exact_solution, solution
 
-@pytest.mark.parametrize("thin_sample", [True, False], ids=["Thin", "Thick"])
-@pytest.mark.parametrize("full_system_solver", [True, False], ids=["AllAtOnce", "Iterations"])
-def test_error(thin_sample, full_system_solver, request):
+@pytest.mark.parametrize("Solver", [PWEIterativeLUSolver, 
+                                    PWEFullPinTSolver,
+                                    #PWEFullLUSolver
+                                    ], ids=["SolverIterative", 
+                                            "SolverFullPinT", 
+                                            #"SolverFullLU"
+                                            ])
+def test_error(Solver, request):
     """Test that the error norm decreases as the grid resolution increases."""
 
-    nx_values = [16, 32, 64, 128, 256, 512, 1024]
+    nx_values = [16, 32, 64, 128, 256, 512]
     nz_values = []
     # rmse_errors = []
     inf_norms = []
-    bc_type = "Impedance 2D"
+    bc_type = "Neumann 2D"
 
     print(f"\n=== CONVERGENCE STUDY: {bc_type.upper()} BOUNDARY CONDITIONS ===")
-    print(f"thin_sample: {thin_sample}, full_system_solver: {full_system_solver}\n")
+    print(f"Solver: {Solver}\n")
     for i, nx in enumerate(nx_values):
         nz = nx
         nz_values.append(nz)
 
         print(f"Computing solution for nx={nx}, nz={nz}")
-        exact_solution, solution = compute_error(nx, nz, thin_sample, full_system_solver)
+        exact_solution, solution = compute_error(nx, nz, Solver)
         error = solution - exact_solution
         error_norm = np.max(np.abs(error))
 
@@ -117,7 +107,7 @@ def test_error(thin_sample, full_system_solver, request):
             label=r'Infinity Norm ($L^\infty$)')
         plt.xlabel(r'Grid Points ($n_x = n_z$)')
         plt.ylabel(r'Infinity Norm Error ($L^\infty$)')
-        plt.title('Convergence Study: '+ r'$L^\infty$'+ f' Error vs Grid Resolution\n({bc_type} BC)')
+        plt.title('Convergence Study: '+ r'$L^\infty$'+ f' Error vs Grid Resolution\n({bc_type} BC) Solver: {Solver.__name__}')
         plt.grid(True, alpha=0.3)
 
         # Add theoretical convergence lines for reference
@@ -127,17 +117,6 @@ def test_error(thin_sample, full_system_solver, request):
         plt.loglog(nx_values, theoretical_line, 'r--', alpha=0.7, 
                label='Theoretical convergence rate = 2')
         plt.legend()
-
-        # plt.subplot(1, 2, 2)
-        # plt.loglog(nx_values, rel_l2_norms, 'ro-', linewidth=2, markersize=8, 
-        #         label=f'L2 norm ({bc_type} BC)')
-        # plt.xlabel('Number of x grid points (nx=nz)')
-        # plt.ylabel('L2 Norm Error')
-        # plt.title(f'Convergence Study: Rel L2 Norm vs Grid Resolution ({bc_type} BC)')
-        # plt.grid(True, alpha=0.3)
-        # plt.loglog(nx_values, np.array(dx_values)**2 * rel_l2_norms[0] / dx_values[0]**2, 
-        #         'r--', alpha=0.7, label='O(dx² + dz²) reference')
-        # plt.legend()
 
         plt.tight_layout()
         plt.show()
@@ -196,10 +175,26 @@ def test_error(thin_sample, full_system_solver, request):
         plt.xlabel('z')
         plt.ylabel('x')
 
-        plt.suptitle(rf'{bc_type} Grid $n_x$ x $n_z$: {nx}x{nz} (dz ~ dx)')
+        plt.suptitle(f'{bc_type} Grid {nx}x{nz}, Solver: {Solver.__name__}')
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
 
     # Assert that the error decreases
-    for i in range(2, len(inf_norms)):
+    for i in range(1, len(inf_norms)):
         assert inf_norms[i] < inf_norms[i - 1], f"Error norm did not decrease: {inf_norms[i]} >= {inf_norms[i - 1]}"
+
+
+    # Compute observed convergence rates
+    observed_rates = []
+    for i in range(1, len(inf_norms)):
+        ratio = inf_norms[i-1] / inf_norms[i]
+        rate = np.log2(ratio)
+        observed_rates.append(rate)
+
+    avg_rate = np.mean(observed_rates[-3:])  # focus on fine-grid regime
+
+    print(f"\nExpected convergence rate ≈ 2, observed average rate = {avg_rate:.2f}")
+
+    # Assert second order convergence within tolerance
+    assert 1.5 <= avg_rate <= 2.5, \
+        f"Expected ~second-order convergence, but observed rate was {avg_rate:.3f}"

@@ -12,6 +12,7 @@ from scipy.sparse.linalg import splu, LinearOperator
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
 
 class PWEFullPinTSolver(BasePWESolver):
@@ -20,7 +21,8 @@ class PWEFullPinTSolver(BasePWESolver):
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None,
-                alpha=1e-2, num_workers=8, atol=1e-6):
+                 alpha=1e-2, num_workers=8, atol=1e-6,
+                 test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
             ptycho_object,
@@ -55,6 +57,9 @@ class PWEFullPinTSolver(BasePWESolver):
         print(f"Using {self.num_workers} workers for PiT preconditioner.")
 
         self.atol = atol
+
+        # For testing purposes
+        self.test_bcs = test_bcs
     
     def _get_or_construct_pit(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         """
@@ -117,10 +122,20 @@ class PWEFullPinTSolver(BasePWESolver):
             self.pit_cache[projection_key] = (Aop, M_prec, ARop)
 
         # Construct RHS if needed (mirror LU b_cache logic)
-        if self.b_cache is None:
+        if self.b_cache is None and self.test_bcs is None:
             self.b_cache = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+        else:
+            self.b_cache = self.test_bcs.test_exact_impedance_forward_model_rhs()
 
         return self.pit_cache, self.b_cache
+    
+    def reset_cache(self):
+        self.pit_cache = {
+            "projection_0": None,
+            "projection_1": None,  # Rotated
+        }
+        self.b_cache = None
+        self._cached_n_id = None
 
 
     def prepare_solver(self, n: Optional[np.ndarray] = None, mode: str = "forward"):

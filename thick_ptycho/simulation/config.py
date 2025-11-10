@@ -118,14 +118,14 @@ class SimulationConfig:
         Enable runtime printing and progress reporting.
     """
     wave_length: float
-    probe_diameter: float
     continuous_dimensions: Tuple[Tuple[float, float], ...]
+    probe_diameter: float = 1.0
     scan_points: int = 1 # number of scan points in one dimension greater than 0
     step_size_px: int = 1 # in pixels greater than 0 for more than 1 scan point
     probe_type: ProbeType = ProbeType.AIRY_DISK
     probe_focus: Optional[float] = 0.0
     probe_angles: Tuple[float, ...] = (0.0,)
-    pad_factor: float = 1.1 # Must be >= 1.0
+    pad_factor: float = 1 # Must be >= 1.0
     solve_reduced_domain: bool = False
     points_per_wavelength: Optional[int] = 8
     nz: Optional[int] = None 

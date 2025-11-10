@@ -43,8 +43,10 @@ class PWEForwardModel:
         self.b0 = None
 
         # Boundary conditions operator
-        self.differiential_operator_matrices = OperatorMatrices(self.simulation_space, 
-                                 bc_type=bc_type)
+        self.differiential_operator_matrices = OperatorMatrices(
+            self.simulation_space, 
+            bc_type=bc_type
+            )
 
     def precompute_b0(self, probes: np.ndarray):
         """Precompute b0 (fast path for 1D, full system)"""

@@ -35,6 +35,7 @@ class OpticalShapeBase:
             assert c <1.0 and c >0.0, "Centre scales must be between 0 and 1"
         assert side_length_scale <1.0 and side_length_scale >0.0, "Side length scales must be between 0 and 1"
         assert depth_scale <1.0 and depth_scale >0.0, "Depth scales must be between 0 and 1"
+        
 
         # Shape properties
         self.shape = shape
@@ -61,6 +62,10 @@ class OpticalShapeBase:
         # Convert from normalized (0–1) to absolute discrete units
         self.discrete_side_length = int(side_length_scale*self.nx)
         self.discrete_depth = int(depth_scale*self.nz)
+        
+        # Convert to discrete units (pixel-based grid indexing)
+        self.discrete_side_length = int(self.nx * side_length_scale)
+        self.discrete_depth = int(self.nz * depth_scale)
         self.discrete_centre = []
 
         # Calculate continuous and discrete centre positions
@@ -74,19 +79,35 @@ class OpticalShapeBase:
         # Bounds check of continuous object extents against the used grid extents
         self.half_w = 0.5 * side_length_continuous
         self.half_d = 0.5 * depth_continuous
+        assert side_length_scale < 0.5, "Object side length scale too large"
+        assert depth_scale < 0.5, "Object depth scale too large"
         assert (self.centre_continuous[-1] - self.half_d) >= self.z[0], "Object out of bounds"
         assert (self.centre_continuous[-1] + self.half_d) <= self.z[-1], "Object out of bounds"
         assert (self.centre_continuous[0] - self.half_w) >= self.x[0], "Object out of bounds"
         assert (self.centre_continuous[0] + self.half_w) <= self.x[-1], "Object out of bounds"
+
+        # -----------------------------------------------
+        # Ensure object fits in grid
+        # -----------------------------------------------
+        cx = self.discrete_centre[0]
+        cz = self.discrete_centre[-1]
+        self.half_w_pixels = self.discrete_side_length // 2
+        self.half_d_pixels = self.discrete_depth // 2
+
+        assert cx - self.half_w_pixels >= 0, "Object out of x-bounds"
+        assert cx + self.half_w_pixels < self.nx, "Object out of x-bounds"
+        assert cz - self.half_d_pixels >= 0, "Object out of z-bounds"
+        assert cz + self.half_d_pixels < self.nz, "Object out of z-bounds"
+
 
 
     def get_refractive_index_field(self):
         """Return the field of the object."""
         pass
 
-    def _get_field(self):
-        """Return the field of a object."""
-        pass
+    # def _get_field(self):
+    #     """Return the field of a object."""
+    #     pass
 
 
 class OpticalShape1D(OpticalShapeBase):
@@ -98,6 +119,10 @@ class OpticalShape1D(OpticalShapeBase):
         super().__init__(centre_scale, shape, refractive_index,
                          side_length_scale, depth_scale, guassian_blur,
                          simulation_space)
+        self.discrete_centre = [
+            int(round(centre_scale[0] * (self.nx - 1))),
+            int(round(centre_scale[1] * (self.nz - 1)))
+        ]
         self.cx, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
@@ -247,13 +272,15 @@ class OpticalShape2D(OpticalShapeBase):
         super().__init__(centre_scale, shape, refractive_index,
                          side_length_scale, depth_scale, guassian_blur,
                          simulation_space)
-        # Simulation Space properties
         self.ny = simulation_space.ny
         self.y = simulation_space.y
+        cy = self.discrete_centre[1]
         
         # Bounds check of continuous object extents against the used grid extents
         assert (self.centre_continuous[1] - self.half_w) >= self.y[0], "Object out of bounds"
         assert (self.centre_continuous[1] + self.half_w) <= self.y[-1], "Object out of bounds"
+        assert cy - self.half_w_pixels >= 0, "Object out of y-bounds"
+        assert cy + self.half_w_pixels < self.ny, "Object out of y-bounds"
         self.cx, self.cy, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
@@ -318,7 +345,10 @@ class OpticalShape2D(OpticalShapeBase):
         mask = np.zeros((self.nx * self.ny, self.nz), dtype=bool)
         obj = np.tile(binary_matrix[:, np.newaxis], (1, self.discrete_depth))
         obj = obj.reshape(self.nx * self.ny, self.discrete_depth)
-        mask[:, self.cz - half_depth:self.cz + half_depth] = obj
+        half_depth = self.discrete_depth // 2
+        start = self.cz - half_depth
+        end = self.cz + half_depth + 1  # include center slice
+        mask[:, start:end] = obj
         mask = mask.reshape((self.nx, self.ny, self.nz))
 
         # Create Refractive index field

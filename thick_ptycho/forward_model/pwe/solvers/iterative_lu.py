@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
 
 class PWEIterativeLUSolver(BasePWESolver):
@@ -12,7 +13,8 @@ class PWEIterativeLUSolver(BasePWESolver):
 
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
-                 results_dir="", use_logging=False, verbose=False, log=None):
+                 results_dir="", use_logging=False, verbose=False, 
+                 log=None, test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
             ptycho_object,
@@ -31,6 +33,9 @@ class PWEIterativeLUSolver(BasePWESolver):
 
         # Solver type (for logging purposes)
         self.solver_type = "Iterative PWE Full Solver"
+
+        # For testing purposes
+        self.test_bcs = test_bcs
 
     # ------------------------------------------------------------------
     # LU setup
@@ -205,10 +210,11 @@ class PWEIterativeLUSolver(BasePWESolver):
         # Main solve loop (reuse LU always)
         # ------------------------------------------------------
         for j in range(1, self.nz):
-            # if test_impedance:
-            #     b = self.linear_system.test_exact_impedance_rhs_slice(j)
             if rhs_block is not None:
                 b = rhs_block[:, -j] if mode == "adjoint" else rhs_block[:, j - 1]
+
+            if self.test_bcs is not None:
+                b = self.test_bcs.test_exact_impedance_rhs_step(j)
 
             rhs_matrix = B_list[j - 1] @ u[:, j - 1] + b
             u[:, j] = A_lu_list[j - 1].solve(rhs_matrix)
@@ -231,6 +237,8 @@ class PWEIterativeLUSolver(BasePWESolver):
             b = rhs_block[:, :, -j] if (rhs_block is not None and mode == "adjoint") \
                                     else rhs_block[:, :, j-1] if rhs_block is not None \
                                     else b_global
+            if test_impedance:
+                    b = BoundaryConditionsTest.test_exact_impedance_rhs_step(j)
 
             rhs = (B_list[j-1] @ u[:, :, j-1].T).T + b
 
