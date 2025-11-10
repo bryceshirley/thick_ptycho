@@ -89,9 +89,11 @@ class PWEFullLUSolver(BasePWESolver):
             self.lu_cache[projection_key] = lu
 
         # Build if missing
-        if self.b_cache is None:  # Same for both modes
-            b_h = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
-            self.b_cache = b_h
+        if self.b_cache is None and self.test_bcs is None:
+            self.b_cache = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+        else:
+            self.b_cache = self.test_bcs.test_exact_impedance_forward_model_rhs()
+
 
         return self.lu_cache, self.b_cache
 

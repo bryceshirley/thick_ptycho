@@ -14,6 +14,8 @@ from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import _init_worke
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
+# import multiprocessing as mp
+# mp.set_start_method("spawn", force=True)
 
 class PWEFullPinTSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
