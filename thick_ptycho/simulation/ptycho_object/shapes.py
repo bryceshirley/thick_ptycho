@@ -49,8 +49,8 @@ class OpticalShapeBase:
         self.z = simulation_space.z
 
         # Simulation Space Bounds
-        x_start, x_end = simulation_space.continuous_dimensions[0]
-        z_start, z_end = simulation_space.continuous_dimensions[1]
+        x_start, x_end = simulation_space.spatial_limits.x
+        z_start, z_end = simulation_space.spatial_limits.z
         range_x = abs(x_end - x_start)
         range_z = abs(z_end - z_start)
 
@@ -69,12 +69,12 @@ class OpticalShapeBase:
         self.discrete_centre = []
 
         # Calculate continuous and discrete centre positions
-        for i, con_dim in  enumerate(simulation_space.continuous_dimensions):
+        for i, con_dim in  enumerate(simulation_space.spatial_limits.as_tuple()):
             start, end = con_dim
             range_dim = abs(end - start)
             self.centre_continuous.append(start + centre_scale[i] * range_dim)
 
-            self.discrete_centre.append(int(np.ceil(((self.centre_continuous[i] - start) / (end - start)) * simulation_space.discrete_dimensions[i])))
+            self.discrete_centre.append(int(np.ceil(((self.centre_continuous[i] - start) / (end - start)) * simulation_space.shape[i])))
 
         # Bounds check of continuous object extents against the used grid extents
         self.half_w = 0.5 * side_length_continuous

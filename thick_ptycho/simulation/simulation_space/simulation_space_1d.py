@@ -4,7 +4,7 @@ from typing import List
 from thick_ptycho.utils.visualisations import Visualisation
 from .base_simulation_space import BaseSimulationSpace, ScanFrame
 import numpy as np
-
+from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits
 
 class SimulationSpace1D(BaseSimulationSpace):
     """1D simulation domain setup."""
@@ -15,8 +15,7 @@ class SimulationSpace1D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         # 1. Geometry setup
         # ------------------------------------------------------------------
-        self.xlims, self.zlims = self.continuous_dimensions
-        self.discrete_dimensions = (self.nx, self.nz)
+        self.shape = (self.nx, self.nz)
         self.dimension = 1
 
         # Effective width
@@ -41,41 +40,39 @@ class SimulationSpace1D(BaseSimulationSpace):
         # Print summary of the scan
         continuous_stepsize = self.step_size * self.dx  
 
-        # Overlap in meters
-        overlap = self.probe_diameter_continuous - continuous_stepsize
-
         self._log("=== Scan Summary (Continuous) ===")
-        self._log(f"  Sample space (x-range): {self.xlims[1] - self.xlims[0]:.3e} m")
-        self._log(f"  Sample space (z-range): {self.zlims[1] - self.zlims[0]:.3e} m")
+        self._log(f"  Sample space (x-range): {self.spatial_limits.x[1] - self.spatial_limits.x[0]:.3e} m")
+        self._log(f"  Sample space (z-range): {self.spatial_limits.z[1] - self.spatial_limits.z[0]:.3e} m")
         self._log(f"  Sample Pixels:          {self.nx}")
         self._log(f"  Number of scan points:  {self.scan_points}")
         self._log(f"  Steps in z:             {self.nz}")
         if self.solve_reduced_domain:
             self._log(f"  Solve reduced domain:   {self.effective_nx} px")
-        self._log(f"  Probe diameter:         {self.probe_diameter_continuous:.3e} m")
-        self._log(f"  Probe Pixels:          {int(self.probe_diameter_pixels)} px")
-
-        if self.scan_points > 1:
-            self._log(f"  Max Overlap:            {overlap:.3e} m")
-            self._log(f"  Percentage Overlap:     {overlap / (self.probe_diameter_continuous) * 100:.2f}%\n")
+        if self.probe_diameter is not None:
+            overlap = self.probe_diameter - continuous_stepsize
+            self._log(f"  Probe diameter:         {self.probe_diameter:.3e} m")
+            self._log(f"  Probe Pixels:          {int(self.probe_diameter_pixels)} px")
+            if self.scan_points > 1:
+                self._log(f"  Max Overlap:            {overlap:.3e} m")
+                self._log(f"  Percentage Overlap:     {overlap / (self.probe_diameter) * 100:.2f}%\n")
 
     def _generate_scan_frames(self) -> List[ScanFrame]:
         """Generate detector frames along a symmetric scan grid."""
 
-        # ---- Determine window width: always Ne ----
+        # ---- Determine window width (Effective N) ----
         W = self.step_size + self.pad_discrete
 
-        # ---- Special Case: Single Scan ----
+        # ---- Single Scan ----
         if self.scan_points == 1:
             cx = self.nx // 2
-            return [
-                ScanFrame(
-                    probe_centre_continuous=self.x[cx],
-                    probe_centre_discrete=cx,
-                    reduced_limits_continuous=(self.x[0], self.x[self.nx - 1]),
-                    reduced_limits_discrete=(0, self.nx - 1),
-                )
-            ]
+            scan_frame = ScanFrame(
+                        probe_centre_continuous=Point(x=self.x[cx]),
+                        probe_centre_discrete=Point(x=cx))
+            if self.solve_reduced_domain:
+                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[0], self.x[self.nx - 1])))
+                scan_frame.set_reduced_limits_discrete(Limits(x=(0, self.nx - 1)))
+
+            return [scan_frame]
 
         # ---- Multi-scan Case ----
         half = W // 2
@@ -89,26 +86,15 @@ class SimulationSpace1D(BaseSimulationSpace):
         frames = []
         for cx in centres_x:
             xmin = cx - half
-            xmax = xmin + W  # exclusive
+            xmax = xmin + W - 1
 
-            # Clamp to bounds while preserving width
-            if xmin < 0:
-                xmax -= xmin
-                xmin = 0
-            if xmax > self.nx:
-                shift = xmax - self.nx
-                xmin -= shift
-                xmax -= shift
-
-            xmax_inc = xmax - 1  # inclusive right endpoint
-
-            frames.append(
-                ScanFrame(
-                    probe_centre_continuous=self.x[cx],
-                    probe_centre_discrete=cx,
-                    reduced_limits_continuous=(self.x[xmin], self.x[xmax_inc]),
-                    reduced_limits_discrete=(xmin, xmax_inc),
-                )
-            )
+            scan_frame = ScanFrame(
+                        probe_centre_continuous=Point(x=self.x[cx]),
+                        probe_centre_discrete=Point(x=cx))
+            if self.solve_reduced_domain:
+                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[xmin], self.x[xmax])))
+                scan_frame.set_reduced_limits_discrete(Limits(x=(xmin, xmax)))
+    
+            frames.append(scan_frame)
 
         return frames

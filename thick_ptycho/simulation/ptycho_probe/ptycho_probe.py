@@ -31,7 +31,7 @@ class PtychoProbes:
         - x[, y] : ndarray (grid coordinates)
         - dx[, dy] : float (pixel size)
         - k : float (wavenumber)
-        - probe_diameter_continuous : float
+        - probe_diameter : float
         - scan_frame_info[scan] : dict with
             * "probe_centre_continuous": float in 1D, (cx, cy) in 2D
             * "probe_centre_discrete": int in 1D, (cx, cy) in 2D
@@ -127,8 +127,12 @@ class PtychoProbes:
         center = self._get_center(scan)
 
         # Base amplitude/profile
-        radius = self.simulation_space.probe_diameter_continuous / 2.0
-        field = self._build_profile(probe_type, coord, center, max(radius, 1e-12))
+        if self.simulation_space.probe_diameter is not None:
+            radius = max(self.simulation_space.probe_diameter / 2.0, 1e-12)
+        else:
+            radius = None
+        
+        field = self._build_profile(probe_type, coord, center, radius)
 
         # Phase terms
         k = self.simulation_space.k
@@ -384,17 +388,18 @@ class PtychoProbes:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
             if self.solve_reduced_domain:
-                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
-                x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous
+                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.x
+                x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
                 x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.solve_reduced_domain:
-            #x, y = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
-            x_coord_min, x_coord_max, y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete
-            x_min, x_max, y_min, y_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous
+            x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.x
+            y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.y
+            x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
+            y_min, y_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.y
             x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             y = np.linspace(y_min, y_max, y_coord_max - y_coord_min)
         else:
@@ -403,8 +408,7 @@ class PtychoProbes:
 
     def _get_center(self, scan: int) -> Union[float, Tuple[float, float]]:
         """Return probe center (cx) in 1D or (cx, cy) in 2D."""
-        info = self.simulation_space.scan_frame_info[scan].probe_centre_continuous
-        return info if self.simulation_space.dimension == 2 else float(info)
+        return self.simulation_space.scan_frame_info[scan].probe_centre_continuous.as_tuple()
 
     def _normalize_angles(
         self, probe_angle: Union[float, Tuple[float, float]]

@@ -182,8 +182,8 @@ class Visualisation2D(Visualisation):
             Directory to save plots. If None, plots are not saved automatically.
         """
         super().__init__(simulation_space, results_dir)
-        self.x_lims = simulation_space.continuous_dimensions[0]
-        self.y_lims = simulation_space.continuous_dimensions[1]
+        self.x_lims = simulation_space.spatial_limits.x
+        self.y_lims = simulation_space.spatial_limits.y
         self.z = simulation_space.z
 
     # ------------------------------------------------------------------

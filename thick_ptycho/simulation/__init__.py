@@ -2,6 +2,7 @@ from .simulation_space import create_simulation_space, SimulationSpace1D, Simula
 from .ptycho_object import create_ptycho_object
 from .ptycho_probe import create_ptycho_probes, PtychoProbes
 from .config import *
+from .scan_frame import *
 
 __all__ = [
     "create_simulation_space",

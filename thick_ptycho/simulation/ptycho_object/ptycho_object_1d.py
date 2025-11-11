@@ -95,9 +95,9 @@ class PtychoObject1D(BasePtychoObject):
 
 
 
-    def get_sub_sample(self,n,sub_limits):
+    def get_reduced_sample(self,n,scan_index):
         """Retrieve the object slices for propagation."""
-        x_min,x_max = sub_limits
+        x_min, x_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.x
         return n[
             x_min:x_max,
             :

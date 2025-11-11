@@ -5,7 +5,7 @@ class BoundaryConditions:
     Handles boundary conditions.
     """
 
-    def __init__(self, simulation_space, bc_type="impedance"):
+    def __init__(self, simulation_space, bc_type ="impedance"):
         self.simulation_space = simulation_space
         self.bc_type = bc_type
         self.probe_type = simulation_space.probe_type

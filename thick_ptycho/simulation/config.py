@@ -10,6 +10,8 @@ from typing import Tuple, Optional
 from dataclasses import dataclass
 import warnings
 
+from thick_ptycho.simulation.scan_frame import Limits
+
 from enum import Enum
 
 class ProbeType(Enum):
@@ -91,14 +93,12 @@ class SimulationConfig:
         Determines axial discretization::
 
             dz = wave_length / points_per_wavelength
-            nz = int((zlims[1] - zlims[0]) / dz)
 
     nz : int, optional
         Explicit override for the number of discretization points along z.
         If provided, it replaces the computed value.
 
-    continuous_dimensions : Tuple[Tuple[float, float], ...]
-        xlims, zlims or xlims, ylims, zlims
+    spatial_limits : Limits
         Continuous spatial extent of the domain in meters.
 
     tomographic_projection_90_degree : bool, default=False
@@ -118,8 +118,8 @@ class SimulationConfig:
         Enable runtime printing and progress reporting.
     """
     wave_length: float
-    continuous_dimensions: Tuple[Tuple[float, float], ...]
-    probe_diameter: float = 1.0
+    spatial_limits: Limits # with limits.units in meters
+    probe_diameter: float = None
     scan_points: int = 1 # number of scan points in one dimension greater than 0
     step_size_px: int = 1 # in pixels greater than 0 for more than 1 scan point
     probe_type: ProbeType = ProbeType.AIRY_DISK
@@ -143,9 +143,7 @@ class SimulationConfig:
                 "solve_reduced_domain=True has no effect when scan_points=1; using full domain.",
                 RuntimeWarning,
             )
-        if not isinstance(self.continuous_dimensions, tuple) or len(self.continuous_dimensions) < 2:
-            raise ValueError("continuous_dimensions must be a tuple of at least two tuples (xlims, zlims).")
-        if self.probe_type not in ProbeType:
+        if self.probe_type.value not in ProbeType.list():
             raise ValueError(f"Invalid probe type: {self.probe_type}. Must be one of {ProbeType.list()}.")
         if self.pad_factor < 1.0:
             raise ValueError("pad_factor must be >= 1.0")
@@ -155,18 +153,16 @@ class SimulationConfig:
             raise ValueError("step_size_px must be greater than 0 for multiple scan points")
         if self.points_per_wavelength < 1:
             raise ValueError("points_per_wavelength must be >= 1")
-        if len(self.continuous_dimensions) != 2 and len(self.continuous_dimensions) != 3:
-            raise ValueError("continuous_dimensions must have 2 or 3 dimensions.")
-        if self.probe_diameter <= 0:
-            raise ValueError("probe_diameter must be positive.")
-        for i, (start, end) in enumerate(self.continuous_dimensions):
-            if start >= end:
-                raise ValueError(f"Invalid range for dimension {i}: start >= end.")
-            if i < len(self.continuous_dimensions) - 1:  # only check spatial dimensions
+        if self.probe_diameter is not None:
+            if self.probe_diameter <= 0:
+                raise ValueError("probe_diameter must be positive.")
+            for i, (start, end) in enumerate(self.spatial_limits.as_tuple()):
                 if self.probe_diameter > end - start:
                     raise ValueError(
                         f"Probe diameter must be smaller than the range of dimension {i}."
                     )
+        if self.spatial_limits.units != "meters":
+            raise ValueError("spatial_limits must have units in 'meters'.")
         if self.nz is not None and self.nz <= 0:
             raise ValueError("nz must be a positive integer if specified.")
         if self.results_dir is not None and not isinstance(self.results_dir, str):
@@ -175,7 +171,7 @@ class SimulationConfig:
             raise ValueError("use_logging must be a boolean value.")
         if self.verbose and not isinstance(self.verbose, bool):
             raise ValueError("verbose must be a boolean value.")
-        if self.tomographic_projection_90_degree and len(self.continuous_dimensions) != 2:
+        if self.tomographic_projection_90_degree and self.spatial_limits.y is not None:
             raise ValueError("tomographic_projection_90_degree is only valid for 2D simulations.")
         if self.wave_length <= 0:
             raise ValueError("wave_length must be a positive value.")

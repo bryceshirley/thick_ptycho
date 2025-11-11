@@ -2,35 +2,37 @@
 import numpy as np
 import pytest
 from thick_ptycho.simulation.ptycho_object import OpticalShape, OpticalShape1D, OpticalShape2D
-
+from thick_ptycho.simulation.scan_frame import Limits
 # Create a dummy simulation 1D space class for testing it should have all the parameters referenced in the OpticalShape class
 import numpy as np
 
 class SimulationSpace1D:
     """Dummy 1D simulation space for testing OpticalShape1D."""
-    def __init__(self, nx=100, nz=100, x_range=(0, 1), z_range=(0, 1)):
+    def __init__(self, nx=100, nz=100, spatial_limits=Limits(x=(0, 1),z=(0, 1))):
         self.nx = nx
         self.nz = nz
-        self.x = np.linspace(*x_range, nx)
-        self.z = np.linspace(*z_range, nz)
+        self.x = np.linspace(*spatial_limits.x, nx)
+        self.z = np.linspace(*spatial_limits.z, nz)
 
-        self.continuous_dimensions = [x_range, z_range]
-        self.discrete_dimensions = [nx, nz]
+        self.spatial_limits = spatial_limits
+        self.shape = [nx, nz]
 
 
 class SimulationSpace2D:
     """Dummy 2D simulation space for testing OpticalShape2D."""
     def __init__(self, nx=64, ny=64, nz=64,
-                 x_range=(0, 1), y_range=(0, 1), z_range=(0, 1)):
+                 spatial_limits=Limits(x=(0, 1),
+                                       y=(0, 1),
+                                       z=(0, 1))):
         self.nx = nx
         self.ny = ny
         self.nz = nz
-        self.x = np.linspace(*x_range, nx)
-        self.y = np.linspace(*y_range, ny)
-        self.z = np.linspace(*z_range, nz)
+        self.x = np.linspace(*spatial_limits.x, nx)
+        self.y = np.linspace(*spatial_limits.y, ny)
+        self.z = np.linspace(*spatial_limits.z, nz)
 
-        self.continuous_dimensions = [x_range, y_range, z_range]
-        self.discrete_dimensions = [nx, ny, nz]
+        self.spatial_limits = spatial_limits
+        self.shape = [nx, ny, nz]
 
 
 # ------------------------------------------------------------------------------

@@ -15,14 +15,14 @@ class BoundaryConditionsTest(BoundaryConditions):
     def __init__(self, simulation_space):
         super().__init__(simulation_space, bc_type="impedance")
         self.x = np.linspace(
-            simulation_space.xlims[0],
-            simulation_space.xlims[1],
+            simulation_space.spatial_limits.x[0],
+            simulation_space.spatial_limits.x[1],
             simulation_space.effective_nx,
         )
         if simulation_space.dimension == 2:
             self.y = np.linspace(
-                simulation_space.ylims[0],
-                simulation_space.ylims[1],
+                simulation_space.spatial_limits.y[0],
+                simulation_space.spatial_limits.y[1],
                 simulation_space.effective_ny,
             )
 

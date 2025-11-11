@@ -12,12 +12,13 @@ class PtychoObject2D(BasePtychoObject):
     def __init__(self, simulation_space):
         super().__init__(simulation_space)
 
-    def get_sub_sample(self,n,sub_limits):
+    def get_reduced_sample(self,n,scan_index):
         """Retrieve the object slices for propagation."""
-        x_min, y_min = sub_limits
+        x_min,x_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.x
+        y_min, y_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.y    
         return n[
-                    x_min:x_min + self.simulation_space.probe_dimensions[0],
-                    y_min:y_min + self.simulation_space.probe_dimensions[1],
+                    x_min:x_max,
+                    y_min:y_max,
                     :
                 ]
 

@@ -7,52 +7,98 @@ from thick_ptycho.simulation.simulation_space import create_simulation_space
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 from thick_ptycho.forward_model import PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver
-import os
 
+from thick_ptycho.simulation.scan_frame import Limits
 from thick_ptycho.forward_model.pwe.operators.utils import BoundaryType
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
-
-def u_nm(n, k):
+def u_nm_neumann(n, k):
     a = 1j / (2 * k)
     """Returns the exact solution for a given n in 1D."""
     return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.cos(n * np.pi * x)
 
+def u_nm_dirichlet(n,k):
+    """Returns the exact solution for a given n in 1D."""
+    a = 1j / (2 * k)
+    return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.sin(n * np.pi * x)
 
-def compute_error(nx, nz,Solver):
+def get_exact_solution(bc_type, k, X, Z):
+    """Select the appropriate exact solution function based on boundary condition type."""
+    if bc_type == BoundaryType.IMPEDANCE or bc_type == BoundaryType.NEUMANN:
+        return (
+            u_nm_neumann(1, k)(X, Z)
+            + 0.5 * u_nm_neumann(2, k)(X, Z)
+            + 0.2 * u_nm_neumann(5, k)(X, Z)
+        )
+    elif bc_type == BoundaryType.DIRICHLET:
+        return (
+            u_nm_dirichlet(1, k)(X, Z)
+            + 0.5 * u_nm_dirichlet(5, k)(X, Z)
+            + 0.2 * u_nm_dirichlet(9, k)(X, Z)
+        )
+    else:
+        raise ValueError(f"Unsupported boundary condition type: {bc_type}")
+
+def select_probe_type(bc_type):
+    """Select the appropriate probe type based on boundary condition type."""
+    if bc_type == BoundaryType.IMPEDANCE:
+        return ProbeType.NEUMANN_TEST
+    elif bc_type == BoundaryType.NEUMANN:
+        return ProbeType.NEUMANN_TEST
+    elif bc_type == BoundaryType.DIRICHLET:
+        return ProbeType.DIRICHLET_TEST
+    else:
+        raise ValueError(f"Unsupported boundary condition type: {bc_type}")
+
+def compute_error(nx, nz,Solver, bc_type):
     """Computes the Frobenius norm of the error between the exact and computed solutions in 1D."""
     k = 100
     wave_length = 2 * np.pi / k
 
     # Set continuous space limits
-    xlims = [0, 1]
-    zlims = [0, 2]
+    spatial_limits = Limits(x=(0, 1), z=(0, 2),units="meters")
 
     sim_config = SimulationConfig(
-        probe_type="neumann_test",      # triggers sinusoidal probe generation
+        probe_type=select_probe_type(bc_type),      # triggers sinusoidal probe generation
         wave_length=wave_length,
         step_size_px=nx,
-        nz = nz,
-        continuous_dimensions=(xlims, zlims),
+        nz=nz,
+        spatial_limits=spatial_limits,
     )
 
     simulation_space = create_simulation_space(sim_config)
     obj = create_ptycho_object(simulation_space)
     probes = create_ptycho_probes(simulation_space)
 
-    solver = Solver(simulation_space, obj, probes, bc_type="neumann")
-    solution = solver.solve().squeeze()                        # shape: (scan, x, z)
+
+    if bc_type == BoundaryType.IMPEDANCE:
+        test_bcs = BoundaryConditionsTest(simulation_space)
+    else:
+        test_bcs = None
+
+    solver = Solver(simulation_space, obj, 
+                    probes, bc_type=bc_type.value,
+                    test_bcs=test_bcs)
+    solution = solver.solve().squeeze()
 
     # Define grid points
-    x = np.linspace(xlims[0], xlims[1], simulation_space.nx)
-    z = np.linspace(zlims[0], zlims[1], simulation_space.nz)
+    x = np.linspace(*spatial_limits.x, simulation_space.nx)
+    z = np.linspace(*spatial_limits.z, simulation_space.nz)
     X, Z = np.meshgrid(x, z, indexing='ij')
 
     # Compute the exact solution
-    exact_solution = u_nm(1,k)(X, Z) + 0.5 * u_nm(2, k)(X, Z) + 0.2 * u_nm(5, k)(X, Z)
+    exact_solution = get_exact_solution(bc_type, k, X, Z)
 
     # Compute the relative RMSE
     return exact_solution, solution
 
+@pytest.mark.parametrize("bc_type", [BoundaryType.NEUMANN,
+                                     BoundaryType.IMPEDANCE,
+                                     BoundaryType.DIRICHLET
+                                    ], ids=["Neumann", 
+                                            "Impedance",
+                                            "Dirichlet"
+                                            ])
 @pytest.mark.parametrize("Solver", [PWEIterativeLUSolver, 
                                     PWEFullPinTSolver,
                                     #PWEFullLUSolver
@@ -60,31 +106,23 @@ def compute_error(nx, nz,Solver):
                                             "SolverFullPinT", 
                                             #"SolverFullLU"
                                             ])
-def test_error(Solver, request):
+def test_error(Solver, bc_type, request):
     """Test that the error norm decreases as the grid resolution increases."""
 
     nx_values = [16, 32, 64, 128, 256, 512]
     nz_values = []
-    # rmse_errors = []
     inf_norms = []
-    bc_type = "Neumann 2D"
 
-    print(f"\n=== CONVERGENCE STUDY: {bc_type.upper()} BOUNDARY CONDITIONS ===")
+    print(f"\n=== CONVERGENCE STUDY: {bc_type} BOUNDARY CONDITIONS ===")
     print(f"Solver: {Solver}\n")
     for i, nx in enumerate(nx_values):
         nz = nx
         nz_values.append(nz)
 
         print(f"Computing solution for nx={nx}, nz={nz}")
-        exact_solution, solution = compute_error(nx, nz, Solver)
+        exact_solution, solution = compute_error(nx, nz, Solver, bc_type)
         error = solution - exact_solution
         error_norm = np.max(np.abs(error))
-
-        # rmse = np.sqrt(np.mean(np.abs(error)**2))
-        # error_norm = np.linalg.norm(error) / np.linalg.norm(exact_solution)
-
-        # Store errors for plotting
-        # rmse_errors.append(rmse)
         inf_norms.append(error_norm)
     
     # Print convergence rates

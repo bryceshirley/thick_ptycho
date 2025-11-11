@@ -16,13 +16,13 @@ each position, the domain must be padded on both sides.
 Diagram
 -------
     x = 0                                                                  x = Nx * dx
-     _____________________________________________________________________________
-     |<-- pL -->|<--  s  -->|<--  s  -->|╏   ...  |<-- s -->|<-- s -->|<-- pR -->|
-     |                c₁          c₂     ╏             cₙ₋₁       cₙ              |
-     |                |<--  s  -->|      ╏                                       |
-     |<-- pL -->|<--  s  -->|<--  pR  -->|                                       |
-     |<------------  Ne  --------------->|                                       |
-     |          |<------------------------ min_nx ------------------>|           |
+     ____________________________________________________________________________
+     |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<-- pR -->|
+                      c₁          c₂                  cₙ₋₁       cₙ              
+                      |<--  s  -->|                                             
+                 |<-- pL -->|<--  s  -->|<--  pR  -->|                          
+     |<------------  Ne  --------------->|                                       
+                |<------------------------ min_nx ------------------>|           
      |<------------------------------        Nx       -------------------------->|
 Where:
     cᵢ  : Scan point centers (pixel indices)
@@ -77,28 +77,14 @@ Notes
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import os
 from typing import List, Tuple, Union, Optional
 import numpy as np
 
 from thick_ptycho.simulation.config import ProbeType
 from thick_ptycho.utils.io import setup_log
+from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits
 
-
-@dataclass
-class ScanFrame:
-    """Represents one scan frame in a ptychographic scan."""
-    probe_centre_continuous: Union[float, Tuple[float, float]]
-    probe_centre_discrete: Union[int, Tuple[int, int]]
-    reduced_limits_continuous: Union[
-        Tuple[float, float],
-        Tuple[Tuple[float, float], Tuple[float, float]]
-    ]
-    reduced_limits_discrete: Union[
-        Tuple[int, int],
-        Tuple[Tuple[int, int], Tuple[int, int]]
-    ]
 
 
 class BaseSimulationSpace(ABC):
@@ -108,7 +94,7 @@ class BaseSimulationSpace(ABC):
         self,
         wave_length: float,
         probe_diameter: float,
-        continuous_dimensions: Tuple[Tuple[float, float], ...],
+        spatial_limits: Limits,
         probe_type: ProbeType = ProbeType.AIRY_DISK,
         probe_focus: Optional[float] = 0.0,
         probe_angles: Tuple[float, ...] = (0.0,),
@@ -132,10 +118,9 @@ class BaseSimulationSpace(ABC):
             Wavelength of the illuminating wave in meters.
         probe_diameter : float
             Diameter of the probe in meters.
-        continuous_dimensions : Tuple[Tuple[float, float], ...]
-            xlims, zlims or xlims, ylims, zlims
+        spatial_limits : Limits
             Continuous spatial extent of the domain in meters.
-        probe_type : ProbeType, optional
+        probe_type : string, optional
             Type of probe illumination.
         probe_focus : float, optional
             Focal position of the probe along z (meters).
@@ -165,7 +150,7 @@ class BaseSimulationSpace(ABC):
             Print additional debugging and diagnostic information.
         """
         self.wave_length = wave_length
-        self.continuous_dimensions = continuous_dimensions
+        self.spatial_limits = spatial_limits
 
         # Scan setup
         self.scan_points = scan_points
@@ -180,7 +165,7 @@ class BaseSimulationSpace(ABC):
         # Configure simulation geometry
         self._configure_z_axis(points_per_wavelength, nz)
         self._configure_domain()
-        self._configure_probe(probe_diameter, probe_type, probe_focus, probe_angles)
+        self._configure_probe(probe_diameter, probe_type.value, probe_focus, probe_angles)
 
         # Physical medium
         self.n_medium = complex(medium)
@@ -198,15 +183,14 @@ class BaseSimulationSpace(ABC):
 
     def _configure_z_axis(self, points_per_wavelength: int, nz: Optional[int]) -> None:
         """Set up the propagation axis."""
-        self.zlims = self.continuous_dimensions[-1]
         if nz is None:
-            z_range = self.zlims[1] - self.zlims[0]
+            z_range = self.spatial_limits.z[1] - self.spatial_limits.z[0]
             self.dz = self.wave_length / points_per_wavelength
             self.nz = int(z_range / self.dz)
         else:
             self.nz = nz
 
-        self.z = np.linspace(self.zlims[0], self.zlims[1], self.nz)
+        self.z = np.linspace(*self.spatial_limits.z, self.nz)
         self.dz = self.z[1] - self.z[0]
 
 
@@ -237,23 +221,25 @@ class BaseSimulationSpace(ABC):
             self.effective_dimensions = self.nx
 
         # Coordinates
-        xlims = self.continuous_dimensions[0]
-        self.x = np.linspace(xlims[0], xlims[1], self.nx)
+        self.x = np.linspace(self.spatial_limits.x[0], 
+                             self.spatial_limits.x[1], 
+                             self.nx)
         self.dx = self.x[1] - self.x[0]
 
 
     def _configure_probe(
         self,
         probe_diameter: float,
-        probe_type: ProbeType,
+        probe_type: str,
         probe_focus: float,
         probe_angles: Tuple[float, ...],
     ) -> None:
         """Store probe configuration & derived quantities."""
-
-        self.probe_diameter = probe_diameter
-        self.probe_diameter_continuous = probe_diameter
-        self.probe_diameter_pixels = int(probe_diameter / self.dx)
+        if probe_diameter is not None:
+            self.probe_diameter = probe_diameter
+            self.probe_diameter_pixels = int(probe_diameter / self.dx)
+        else:
+            self.probe_diameter = None
         self.probe_type = probe_type
         self.probe_focus = probe_focus
         self.probe_angles = probe_angles
@@ -280,7 +266,7 @@ class BaseSimulationSpace(ABC):
         """Determine number of tomographic projections."""
         if not tomo_flag:
             return 1
-        if len(self.discrete_dimensions) == 1:
+        if len(self.shape) == 1:
             return 2
         print(
             "Warning: 90° tomographic projection requires cubic dimensions; "

@@ -20,11 +20,11 @@ class BasePtychoObject(ABC):
     def __init__(self, simulation_space):
         self.simulation_space = simulation_space
         self.objects = []
-        self.n_true = np.ones(simulation_space.discrete_dimensions, dtype=complex) * simulation_space.n_medium
+        self.n_true = np.ones(simulation_space.shape, dtype=complex) * simulation_space.n_medium
 
     @abstractmethod
-    def get_sub_sample(self, *args, **kwargs):
-        """Retrieve the object slices for propagation."""
+    def get_reduced_sample(self, *args, **kwargs):
+        """Retrieve the reduced object for propagation."""
         pass
 
     def build_field(self):
@@ -157,8 +157,7 @@ class BasePtychoObject(ABC):
 
         # Restrict to thin sample region if requested
         if self.simulation_space.solve_reduced_domain:
-            sub_limits = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete
-            n = self.get_sub_sample(n, sub_limits)
+            n = self.get_reduced_sample(n, scan_index)
 
         # Compute coefficient
         if grad:
