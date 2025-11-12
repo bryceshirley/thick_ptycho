@@ -8,7 +8,7 @@ NONDEFAULT_CONFIG_1D = dict(
     wave_length=0.05,
     probe_diameter=0.01,
     spatial_limits=Limits(x=(0, 1),
-                          z=(0, 1)),
+                          z=(0, 1), units="meters"),
 )
 
 @pytest.mark.parametrize(
@@ -66,7 +66,7 @@ def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad):
     assert centres[0] == (sim.nx - 1) - centres[-1]
 
     # Centres correct distance away from boundary of sample
-    assert centres[0] == sim.effective_dimensions // 2
+    assert centres[0] == sim.effective_nx // 2
 
 
 def test_domain_limits_without_reduction():
@@ -78,7 +78,7 @@ def test_domain_limits_without_reduction():
         solve_reduced_domain=False,
     )
     # Whole domain is used
-    assert sim.effective_dimensions == sim.nx
+    assert sim.effective_nx == sim.nx
 
 
 def test_domain_limits_with_reduction():
@@ -90,7 +90,7 @@ def test_domain_limits_with_reduction():
         solve_reduced_domain=True,
     )
     expected_ne = sim.step_size + sim.pad_discrete - 1
-    assert sim.effective_dimensions == expected_ne 
+    assert sim.effective_nx == expected_ne 
 
     xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
@@ -131,7 +131,7 @@ def test_single_scan_point_centering_and_bounds():
     centre = sim._scan_frame_info[0].probe_centre_discrete.x
     mid = (sim.nx - 1) / 2
     assert abs(centre - mid) <= 0.5
-    assert sim.effective_dimensions == sim.nx
+    assert sim.effective_nx == sim.nx
 
 
 def test_single_scan_point_full_window():

@@ -41,13 +41,10 @@ class BaseForwardModelSolver(ABC):
         # Logger
         self._log = log or setup_log(results_dir, "solver_log.txt", use_logging, verbose)
 
-        # Determine slice dimensions
+        # Determine step frame dimensions
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
-        if simulation_space.dimension == 1:
-            self.solve_grid = (simulation_space.effective_nx,)
-        else:
-            self.solve_grid = (simulation_space.effective_nx,
-                               simulation_space.effective_ny)
+        self.effective_shape = simulation_space.effective_shape
+        self.block_size = simulation_space.block_size
         self.nz = simulation_space.nz
 
         # Probe setup
@@ -176,7 +173,7 @@ class BaseForwardModelSolver(ABC):
     def _create_solution_grid(self) -> np.ndarray:
         """Create an empty solution tensor."""
         return np.zeros(
-            (self.num_projections, self.num_angles, self.num_probes, *self.solve_grid, self.nz),
+            (self.num_projections, self.num_angles, self.num_probes, *self.effective_shape),
             dtype=complex,
         )
     
@@ -202,7 +199,7 @@ class BaseForwardModelSolver(ABC):
         -------
         exit_waves : np.ndarray
             Exit wave field at detector plane (z = nz - 1)
-            Shape: (num_angles, num_probes, *effective_dimensions)
+            Shape: (num_angles, num_probes, *effective_shape)
         """
         return u[..., -1].reshape((self.simulation_space.total_scans, 
                        self.simulation_space.block_size))

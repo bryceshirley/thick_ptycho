@@ -15,33 +15,41 @@ from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condit
 
 
 # ----------------------------------------------------------------------------------------
-#  Analytical 1D exact solutions
+#  Analytical 3D exact solutions
 # ----------------------------------------------------------------------------------------
 
-def _u_nm_neumann(n, k):
+def _u_nm_neumann(n, m, k):
+    """Returns the exact solution for a given n and m."""
     a = 1j / (2 * k)
-    return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.cos(n * np.pi * x)
+    return lambda x, y, z: np.exp(-a*((n**2)+(m**2))*(np.pi**2)*z)*np.cos(n*np.pi*x)*np.cos(m*np.pi*y)
 
 
-def _u_nm_dirichlet(n, k):
+def _u_nm_dirichlet(n, m, k):
+    """Returns the exact solution for a given n and m."""
     a = 1j / (2 * k)
-    return lambda x, z: np.exp(-a * (n**2) * (np.pi**2) * z) * np.sin(n * np.pi * x)
+    return lambda x, y, z: np.exp(-a*((n**2)+(m**2))*(np.pi**2)*z)*np.sin(n*np.pi*x)*np.sin(m*np.pi*y)
 
 
-def get_exact_solution(bc_type, k, X, Z):
+def get_exact_solution(bc_type, k, X, Y, Z):
     """Return the analytical solution corresponding to the boundary type."""
     if bc_type in (BoundaryType.IMPEDANCE, BoundaryType.NEUMANN):
         return (
-            _u_nm_neumann(1, k)(X, Z)
-            + 0.5 * _u_nm_neumann(2, k)(X, Z)
-            + 0.2 * _u_nm_neumann(5, k)(X, Z)
+            _u_nm_neumann(1, 1, k)(X, Y, Z) 
+            + 0.5*_u_nm_neumann(2, 2, k)(X, Y, Z)
+            + 0.2*_u_nm_neumann(5, 5, k)(X, Y, Z)
         )
     elif bc_type == BoundaryType.DIRICHLET:
-        return (
-            _u_nm_dirichlet(1, k)(X, Z)
-            + 0.5 * _u_nm_dirichlet(5, k)(X, Z)
-            + 0.2 * _u_nm_dirichlet(9, k)(X, Z)
+        exact_solution = (
+            _u_nm_dirichlet(1, 1, k)(X, Z)
+            + 0.5 * _u_nm_dirichlet(5, 5, k)(X, Z)
+            + 0.2 * _u_nm_dirichlet(9, 9, k)(X, Z)
         )
+        # Stricly enforce the boundary conditions
+        exact_solution[:, 0, :] = 0
+        exact_solution[:, -1, :] = 0
+        exact_solution[0, :, :] = 0
+        exact_solution[-1, :, :] = 0
+        return exact_solution
     raise ValueError(f"Unsupported BC type: {bc_type}")
 
 
@@ -68,7 +76,7 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
     """
     k = 100
     wavelength = 2 * np.pi / k
-    limits = Limits(x=(0, 1), y=(0,1), z=(0, 2), units="meters")
+    limits = Limits(x=(0, 1),y=(0,1), z=(0, 2), units="meters")
 
     sim_cfg = SimulationConfig(
         probe_type=select_probe_type(bc_type),
@@ -95,7 +103,7 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
     x = np.linspace(*limits.x, sim_space.nx)
     y = np.linspace(*limits.y, sim_space.ny)
     z = np.linspace(*limits.z, sim_space.nz)
-    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+    X, Y, Z = np.meshgrid(x,y, z, indexing='ij')
 
     exact_solution = get_exact_solution(bc_type, k, X, Y, Z)
     return exact_solution, solution
@@ -108,32 +116,24 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
 def plot_convergence(nx_values, inf_norms, bc_type, Solver):
     """Plot L-inf norm convergence curve."""
     plt.figure(figsize=(6, 5))
-    plt.loglog(nx_values, inf_norms, 'bo-', linewidth=2, markersize=8, 
-        label=r'Infinity Norm ($L^\infty$)')
-    plt.xlabel(r'Grid Points ($n_x = n_y = n_z$)')
-    plt.ylabel(r'Infinity Norm Error ($L^\infty$)')
-    plt.title('Convergence Study: '+ r'$L^\infty$'+ f' Error vs Grid Resolution\n({bc_type} BC)- {Solver.__name__}')
+    plt.loglog(nx_values, inf_norms, 'bo-', linewidth=2, markersize=8, label=r'$L^\infty$ norm')
+    plt.xlabel(r'Grid points ($n_x = n_z$)')
+    plt.ylabel(r'$L^\infty$ Error')
+    plt.title(f'Convergence Study ({bc_type}) — {Solver.__name__}')
     plt.grid(True, alpha=0.3)
 
-    # Add theoretical convergence lines for reference
-    dx_values = [1.0/(nx-1) for nx in nx_values]
-    # Plot theoretical convergence rate reference line (slope = 2)
-    theoretical_line = np.array(dx_values) ** 2 * inf_norms[-1] / dx_values[-1] ** 2
-    plt.loglog(nx_values, theoretical_line, 'r--', alpha=0.7, 
-            label='Theoretical convergence rate = 2')
+    dx_values = [1.0 / (nx - 1) for nx in nx_values]
+    theoretical_line = np.array(dx_values)**2 * inf_norms[-1] / dx_values[-1]**2
+    plt.loglog(nx_values, theoretical_line, 'r--', alpha=0.7, label='Theoretical slope = 2')
     plt.legend()
     plt.tight_layout()
     plt.show()
 
 
-def plot_error_maps(exact, numerical, bc_type, Solver):
+def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
     """Visualize real/imag parts of exact, numerical, and error fields."""
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     titles = ['Numerical', 'Exact', 'Error']
-
-    exit_wave_numerical = numerical[:, :, -1]
-    exit_wave_exact = exact[:, :, -1]
-    exit_wave_error = exit_wave_numerical - exit_wave_exact
 
     def _plot(ax, data, title, label, vmin=None, vmax=None):
         im = ax.imshow(data, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
@@ -142,22 +142,18 @@ def plot_error_maps(exact, numerical, bc_type, Solver):
         ax.set_ylabel('x')
         fig.colorbar(im, ax=ax, label=label)
 
-    real_min = min(np.real(exit_wave_numerical).min(), np.real(exit_wave_exact).min())
-    real_max = max(np.real(exit_wave_numerical).max(), np.real(exit_wave_exact).max())
-    imag_min = min(np.imag(exit_wave_numerical).min(), np.imag(exit_wave_exact).min())
-    imag_max = max(np.imag(exit_wave_numerical).max(), np.imag(exit_wave_exact).max())
+    real_min = min(np.real(numerical).min(), np.real(exact).min())
+    real_max = max(np.real(numerical).max(), np.real(exact).max())
+    imag_min = min(np.imag(numerical).min(), np.imag(exact).min())
+    imag_max = max(np.imag(numerical).max(), np.imag(exact).max())
 
-    for j, (data_real, data_imag) in enumerate([(np.real(exit_wave_numerical), np.imag(exit_wave_numerical)),
-                                                (np.real(exit_wave_exact), np.imag(exit_wave_exact)),
-                                                (np.real(exit_wave_error), np.imag(exit_wave_error))]):
-        if titles[j] == 'Error':
-            _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re')
-            _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im')
-        else:
-            _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re', real_min, real_max)
-            _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im', imag_min, imag_max)
+    for j, (data_real, data_imag) in enumerate([(np.real(numerical), np.imag(numerical)),
+                                                (np.real(exact), np.imag(exact)),
+                                                (np.real(error), np.imag(error))]):
+        _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re', real_min, real_max)
+        _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im', imag_min, imag_max)
 
-    fig.suptitle(f"{bc_type} BC — Grid {exit_wave_exact.shape}, {Solver.__name__}", fontsize=12)
+    fig.suptitle(f"{bc_type} BC — Grid {nx}×{nz}, {Solver.__name__}", fontsize=12)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
@@ -174,13 +170,11 @@ def plot_error_maps(exact, numerical, bc_type, Solver):
 @pytest.mark.parametrize("Solver", [
     PWEIterativeLUSolver,
     PWEFullPinTSolver,
-    #PWEFullLUSolver
-], ids=["Iterative", "FullPinT", 
-        #"FullLU"
-        ])
+    PWEFullLUSolver
+], ids=["Iterative", "FullPinT", "FullLU"])
 def test_error_convergence(Solver, bc_type, request):
     """Validate second-order convergence for each solver and boundary type."""
-    nx_values = [16, 32, 64]
+    nx_values = [16, 32, 64, 128]
     inf_norms = []
 
     print(f"\n=== {Solver.__name__} — {bc_type} BC ===")

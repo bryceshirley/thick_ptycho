@@ -19,8 +19,8 @@ class SimulationSpace1D(BaseSimulationSpace):
         self.dimension = 1
 
         # Effective width
-        self.block_size = self.effective_dimensions
-        self.effective_nx = self.effective_dimensions 
+        self.block_size = self.effective_nx
+        self.effective_shape = (self.nx, self.nz)
 
         # ------------------------------------------------------------------
         # 3. Scan setup
@@ -69,8 +69,9 @@ class SimulationSpace1D(BaseSimulationSpace):
                         probe_centre_continuous=Point(x=self.x[cx]),
                         probe_centre_discrete=Point(x=cx))
             if self.solve_reduced_domain:
-                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[0], self.x[self.nx - 1])))
-                scan_frame.set_reduced_limits_discrete(Limits(x=(0, self.nx - 1)))
+                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[0], self.x[self.nx - 1]),
+                                                                units="meters"))
+                scan_frame.set_reduced_limits_discrete(Limits(x=(0, self.nx - 1),units="pixels"))
 
             return [scan_frame]
 
@@ -85,15 +86,15 @@ class SimulationSpace1D(BaseSimulationSpace):
 
         frames = []
         for cx in centres_x:
-            xmin = cx - half
-            xmax = xmin + W - 1
-
+            xmin = max(cx - half, 0)
+            xmax = min(xmin + W - 1,(self.nx - 1))
             scan_frame = ScanFrame(
                         probe_centre_continuous=Point(x=self.x[cx]),
                         probe_centre_discrete=Point(x=cx))
             if self.solve_reduced_domain:
-                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[xmin], self.x[xmax])))
-                scan_frame.set_reduced_limits_discrete(Limits(x=(xmin, xmax)))
+                scan_frame.set_reduced_limits_continuous(Limits(x=(self.x[xmin], self.x[xmax]),units="meters"))
+                scan_frame.set_reduced_limits_discrete(Limits(x=(xmin, xmax),
+                                                              units="pixels"))
     
             frames.append(scan_frame)
 

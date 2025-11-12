@@ -390,6 +390,7 @@ class PtychoProbes:
             if self.solve_reduced_domain:
                 x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.x
                 x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
+                print(x_coord_min, x_coord_max)
                 x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
             else:
                 x = self.simulation_space.x

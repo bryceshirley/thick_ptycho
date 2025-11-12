@@ -83,8 +83,7 @@ import numpy as np
 
 from thick_ptycho.simulation.config import ProbeType
 from thick_ptycho.utils.io import setup_log
-from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits
-
+from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits, ScanPath
 
 
 class BaseSimulationSpace(ABC):
@@ -107,6 +106,7 @@ class BaseSimulationSpace(ABC):
         tomographic_projection_90_degree: Optional[bool] = False,
         medium: float = 1.0,  # 1.0 for free space
         results_dir: Optional[str] = None,
+        scan_path: Optional[ScanPath] = None,
         use_logging: bool = True,
         verbose: bool = False
     ) -> None:
@@ -206,7 +206,7 @@ class BaseSimulationSpace(ABC):
             self.nx += 1
             self.pad_discrete = self.nx - self.min_nx
 
-        # Ensure scan symmetry: parity rule
+        # Ensure scan symmetry
         desired_parity = 1 if (self.step_size % 2 == 0) else 0
         if self.nx % 2 != desired_parity:
             self.nx += 1
@@ -216,9 +216,9 @@ class BaseSimulationSpace(ABC):
 
         # Effective region Ne
         if self.solve_reduced_domain and self.scan_points > 1:
-            self.effective_dimensions = self.pad_discrete + self.step_size - 1
+            self.effective_nx = self.pad_discrete + self.step_size - 1
         else:
-            self.effective_dimensions = self.nx
+            self.effective_nx = self.nx
 
         # Coordinates
         self.x = np.linspace(self.spatial_limits.x[0], 

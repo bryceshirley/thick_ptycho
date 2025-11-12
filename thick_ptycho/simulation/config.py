@@ -10,7 +10,7 @@ from typing import Tuple, Optional
 from dataclasses import dataclass
 import warnings
 
-from thick_ptycho.simulation.scan_frame import Limits
+from thick_ptycho.simulation.scan_frame import Limits, ScanPath
 
 from enum import Enum
 
@@ -130,6 +130,7 @@ class SimulationConfig:
     points_per_wavelength: Optional[int] = 8
     nz: Optional[int] = None 
     tomographic_projection_90_degree: Optional[bool] = False
+    scan_path: Optional[ScanPath] = None
     medium: float = 1.0 # 1.0 for free space
     results_dir: Optional[str] = None
     use_logging: bool = True
@@ -156,7 +157,11 @@ class SimulationConfig:
         if self.probe_diameter is not None:
             if self.probe_diameter <= 0:
                 raise ValueError("probe_diameter must be positive.")
-            for i, (start, end) in enumerate(self.spatial_limits.as_tuple()):
+                
+            for i, lim in enumerate([self.spatial_limits.x, self.spatial_limits.y]):
+                if lim is None:
+                    continue
+                start, end = lim
                 if self.probe_diameter > end - start:
                     raise ValueError(
                         f"Probe diameter must be smaller than the range of dimension {i}."

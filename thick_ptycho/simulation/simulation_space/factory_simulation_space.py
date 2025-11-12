@@ -24,6 +24,7 @@ def create_simulation_space(config: SimulationConfig):
         nz=config.nz,
         tomographic_projection_90_degree=config.tomographic_projection_90_degree,
         medium=config.medium,
+        scan_path=config.scan_path,
         results_dir=config.results_dir,
         use_logging=config.use_logging,
         verbose=config.verbose)
