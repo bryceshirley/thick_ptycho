@@ -95,6 +95,8 @@ def test_domain_limits_with_reduction():
     xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
 
+    assert sim.effective_shape == (sim.effective_nx,sim.nz)
+
 
 
 @pytest.mark.parametrize(

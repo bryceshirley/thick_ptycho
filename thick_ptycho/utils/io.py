@@ -35,11 +35,11 @@ def setup_log(results_dir: str = "results",
             file_handler.setFormatter(fmt)
             logger.addHandler(file_handler)
 
-    def log(msg, level=logging.INFO):
+    def log(msg, level=logging.INFO,flush=False):
         if use_logging:
             logger.log(level, msg)
         if verbose:
-            print(msg)
+            print(msg, flush=flush)
 
     return log
 

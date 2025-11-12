@@ -108,7 +108,7 @@ class BaseForwardModelSolver(ABC):
                         n=n, mode=temp_mode, 
                         rhs_block=rhs_block,
                         probe=probes[angle_idx, scan_idx, :],
-                    )
+                    ).reshape(*self.effective_shape)
 
                     if self.solve_reduced_domain:
                         self.reset_cache()
@@ -171,7 +171,13 @@ class BaseForwardModelSolver(ABC):
         raise NotImplementedError
 
     def _create_solution_grid(self) -> np.ndarray:
-        """Create an empty solution tensor."""
+        """Create an empty solution tensor.
+        Returns
+        -------
+        u : ndarray
+            Complex propagated field, shape
+            (num_projections, num_angles, num_probes, nx[,ny], nz).
+        """
         return np.zeros(
             (self.num_projections, self.num_angles, self.num_probes, *self.effective_shape),
             dtype=complex,

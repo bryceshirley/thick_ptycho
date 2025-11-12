@@ -194,3 +194,36 @@ def test_single_scan_point_centering_and_full_window():
     ymin, ymax = sim._scan_frame_info[0].reduced_limits_discrete.y
     assert (xmin, xmax) == (0, sim.nx - 1)
     assert (ymin, ymax) == (0, sim.ny - 1)
+
+
+def test_domain_limits_without_reduction():
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        scan_points=4,
+        step_size_px=3,
+        pad_factor=2.0,
+        solve_reduced_domain=False,
+    )
+    # Whole domain is used
+    assert sim.effective_nx == sim.nx
+    assert sim.effective_ny == sim.ny
+
+
+def test_domain_limits_with_reduction():
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        scan_points=4,
+        step_size_px=3,
+        pad_factor=2.0,
+        solve_reduced_domain=True,
+    )
+    expected_ne = sim.step_size + sim.pad_discrete - 1
+    assert sim.effective_nx == expected_ne
+    assert sim.effective_ny == expected_ne 
+
+    xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
+    assert (xmin, xmax) == (0, expected_ne)
+    ymin, ymax = sim._scan_frame_info[0].reduced_limits_discrete.y
+    assert (ymin, ymax) == (0, expected_ne)
+
+    assert sim.effective_shape == (sim.effective_nx, sim.effective_ny ,sim.nz)

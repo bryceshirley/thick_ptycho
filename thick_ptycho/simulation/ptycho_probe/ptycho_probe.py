@@ -69,10 +69,8 @@ class PtychoProbes:
               1D: (num_angles, num_probes, nx)
               2D: (num_angles, num_probes, nx, ny)
         """
-        if self.simulation_space.dimension == 1:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.effective_nx), dtype=complex)
-        else:
-            probes = np.zeros((self.num_angles, self.simulation_space.num_probes, self.simulation_space.effective_nx, self.simulation_space.effective_ny), dtype=complex)
+        probes = np.zeros((self.num_angles, self.simulation_space.num_probes, *self.simulation_space.effective_shape[:-1]), dtype=complex)
+
 
         for a_idx, angle in enumerate(self.probe_angles):
             for s_idx in range(self.simulation_space.num_probes):
@@ -388,21 +386,17 @@ class PtychoProbes:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 1:
             if self.solve_reduced_domain:
-                x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.x
                 x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
-                print(x_coord_min, x_coord_max)
-                x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
+                x = np.linspace(x_min, x_max, self.simulation_space.effective_nx)
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.solve_reduced_domain:
-            x_coord_min, x_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.x
-            y_coord_min, y_coord_max = self.simulation_space.scan_frame_info[scan].reduced_limits_discrete.y
             x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
             y_min, y_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.y
-            x = np.linspace(x_min, x_max, x_coord_max - x_coord_min)
-            y = np.linspace(y_min, y_max, y_coord_max - y_coord_min)
+            x = np.linspace(x_min, x_max, self.simulation_space.effective_nx)
+            y = np.linspace(y_min, y_max, self.simulation_space.effective_ny)
         else:
             x, y = self.simulation_space.x, self.simulation_space.y
         return np.meshgrid(x, y, indexing="ij")

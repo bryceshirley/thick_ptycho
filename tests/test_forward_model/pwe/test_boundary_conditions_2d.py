@@ -93,11 +93,10 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
 
     # Define coordinate grid
     x = np.linspace(*limits.x, sim_space.nx)
-    y = np.linspace(*limits.y, sim_space.ny)
     z = np.linspace(*limits.z, sim_space.nz)
-    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+    X, Z = np.meshgrid(x, z, indexing='ij')
 
-    exact_solution = get_exact_solution(bc_type, k, X, Y, Z)
+    exact_solution = get_exact_solution(bc_type, k, X, Z)
     return exact_solution, solution
 
 

@@ -17,8 +17,8 @@ class PtychoObject2D(BasePtychoObject):
         x_min,x_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.x
         y_min, y_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.y    
         return n[
-                    x_min:x_max,
-                    y_min:y_max,
+                    x_min:x_max+1,
+                    y_min:y_max+1,
                     :
                 ]
 

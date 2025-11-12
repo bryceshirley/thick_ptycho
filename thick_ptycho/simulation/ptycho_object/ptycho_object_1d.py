@@ -99,6 +99,6 @@ class PtychoObject1D(BasePtychoObject):
         """Retrieve the object slices for propagation."""
         x_min, x_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.x
         return n[
-            x_min:x_max,
+            x_min:x_max+1,
             :
         ]

@@ -26,7 +26,7 @@ class SimulationSpace2D(BaseSimulationSpace):
         # Effective resolution
         self.effective_nx = self.effective_nx
         self.effective_ny = self.effective_nx
-        self.effective_shape = (self.nx, self.ny, self.nz)
+        self.effective_shape = (self.effective_nx, self.effective_ny, self.nz)
         self.block_size = self.effective_nx * self.effective_ny
 
         # ------------------------------------------------------------------

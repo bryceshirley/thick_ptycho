@@ -20,7 +20,7 @@ class SimulationSpace1D(BaseSimulationSpace):
 
         # Effective width
         self.block_size = self.effective_nx
-        self.effective_shape = (self.nx, self.nz)
+        self.effective_shape = (self.effective_nx, self.nz)
 
         # ------------------------------------------------------------------
         # 3. Scan setup

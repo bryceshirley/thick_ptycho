@@ -45,8 +45,8 @@ class PWEFullPinTSolver(BasePWESolver):
         self.b_cache = None
         self.alpha = alpha
         # Precompute B0 term if applicable
-        self.pwe_finite_differences.full_system = True
-        self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
+        # if not self.solve_reduced_domain:
+        # self.b0 = self.pwe_finite_differences.precompute_b0(ptycho_probes)
 
         # Solver type (for logging purposes)
         self.solver_type = "Block PWE Full Solver"
@@ -54,9 +54,9 @@ class PWEFullPinTSolver(BasePWESolver):
 
         # Get number of workers for PiT preconditioner
         # based on available CPU cores
-        print(f"Available CPU cores: {os.cpu_count()}")
+        self._log(f"Available CPU cores: {os.cpu_count()}")
         self.num_workers = min(num_workers, os.cpu_count())
-        print(f"Using {self.num_workers} workers for PiT preconditioner.")
+        self._log(f"Using {self.num_workers} workers for PiT preconditioner.")
 
         self.atol = atol
 
@@ -222,12 +222,12 @@ class PWEFullPinTSolver(BasePWESolver):
         self._log(f"PiT preconditioner retrieval and setup time: {time_end - time_start:.2f} seconds.\n")
 
 
-        print("Solving with PiT-preconditioned GMRES...",flush=True)
+        self._log("Solving with PiT-preconditioned GMRES...",flush=True)
 
         residuals = []
         def gmres_callback(rn):
             residuals.append(rn)
-            print(f"  Iter {len(residuals):3d} | Precond residual: {rn:.3e}")
+            self._log(f"  Iter {len(residuals):3d} | Precond residual: {rn:.3e}")
 
         t0 = time.perf_counter()
         y, info = spla.gmres(
@@ -244,11 +244,11 @@ class PWEFullPinTSolver(BasePWESolver):
 
 
 
-        print(f"Time with PiT preconditioner: {t1 - t0:.2f} seconds.",flush=True)
+        self._log(f"Time with PiT preconditioner: {t1 - t0:.2f} seconds.",flush=True)
         if info == 0:
-            print(f"GMRES converged in {len(residuals)} iterations.\n",flush=True)
+            self._log(f"GMRES converged in {len(residuals)} iterations.\n",flush=True)
         else:
-            print(f"GMRES stopped early (info={info}) after {len(residuals)} iterations.\n",flush=True)
+            self._log(f"GMRES stopped early (info={info}) after {len(residuals)} iterations.\n",flush=True)
 
 
 
