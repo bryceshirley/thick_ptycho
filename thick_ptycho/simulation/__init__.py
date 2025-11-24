@@ -13,5 +13,6 @@ __all__ = [
     "BoundaryType",
     "ProbeType",
     "SimulationConfig",
+    "ProbeConfig",
     "PtychoProbes",
 ]

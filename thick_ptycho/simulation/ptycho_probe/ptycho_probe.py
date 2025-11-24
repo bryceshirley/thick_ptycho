@@ -48,44 +48,61 @@ class PtychoProbes:
     """
 
     def __init__(self, simulation_space):
+        self.probe_tilts = list(simulation_space.probe_angles)
+        self.probe_type = simulation_space.probe_type
+        self.probe_focus = simulation_space.probe_focus
+        self.probe_diameter = simulation_space.probe_diameter
         self.simulation_space = simulation_space
-        self.angles = simulation_space.probe_angles
+
+        if self.probe_diameter is not None:
+            for i, lim in enumerate([self.simulation_space.spatial_limits.x, self.simulation_space.spatial_limits.y]):
+                if lim is None:
+                    continue
+                start, end = lim
+                if self.probe_diameter > end - start:
+                    raise ValueError(
+                        f"Probe diameter must be smaller than the range of dimension {i}."
+                    )
+
+        self.num_probes = simulation_space.num_probes
+        self.num_tilts = len(self.probe_tilts)
+
+        self.simulation_space = simulation_space
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.disk_edge_blur = 0.5  # matches previous behavior (_disk_blur)
-        self.probe_angles = list(self.angles)
-        self.num_angles = len(self.probe_angles)
-        self.probe_type = simulation_space.probe_type
 
     # ---------------------------- public ---------------------------------
 
     def build_probes(self) -> np.ndarray:
         """
-        Build the (angle, scan, [...space...]) probe tensor.
+
+        Build the (tilt, scan, [...space...]) probe tensor.
 
         Returns
         -------
         ndarray (complex)
             Shape:
-              1D: (num_angles, num_probes, nx)
-              2D: (num_angles, num_probes, nx, ny)
+              1D: (num_tilts, num_probes, nx)
+              2D: (num_tilts, num_probes, nx, ny)
         """
-        probes = np.zeros((self.num_angles, self.simulation_space.num_probes, *self.simulation_space.effective_shape[:-1]), dtype=complex)
-
-
-        for a_idx, angle in enumerate(self.probe_angles):
-            for s_idx in range(self.simulation_space.num_probes):
-                probes[a_idx, s_idx, ...] = self.make_single_probe(
+        probes = self.create_empty_probe_stack()
+        for a_idx, tilt in enumerate(self.probe_tilts):
+            for s_idx in range(self.num_probes):
+                probes[a_idx, s_idx, ...] = self.make_single_probe(                    
                     scan=s_idx,
-                    probe_angle=angle,
+                    probe_tilt=tilt,
                 )
         return probes
+
+    def create_empty_probe_stack(self):
+        return np.zeros((self.num_tilts, self.num_probes, *self.simulation_space.effective_shape[:-1]), dtype=complex)
 
     def make_single_probe(
         self,
         scan: int,
         probe_type: Optional[str] = None,
         probe_focus: Optional[float] = None,
-        probe_angle: Optional[Union[float, Tuple[float, float]]] = None,
+        probe_tilt: Optional[float] = 0.0,
     ) -> np.ndarray:
         """
         Build a single probe field for a given scan with optional phase terms.
@@ -102,9 +119,9 @@ class PtychoProbes:
         probe_focus : float, optional
             Focal length (meters or consistent units). If provided and finite,
             a quadratic phase exp[-i k r^2/(2 f)] is applied.
-        probe_angle : float or (float, float), optional
-            Linear-tilt angles in radians. In 1D, provide a single float (x tilt).
-            In 2D, provide a float (x tilt only) or (angle_x, angle_y).
+        probe_tilt : float or (float, float), optional
+            Linear-tilt tilts in radians. In 1D, provide a single float (x tilt).
+            In 2D, provide a float (x tilt only) or (tilt_x, tilt_y).
 
         Returns
         -------
@@ -114,19 +131,17 @@ class PtychoProbes:
         """
         # Defaults from simulation_space if not given
         if probe_type is None:
-            probe_type = self.simulation_space.probe_type
+            probe_type = self.probe_type
         if probe_focus is None:
-            probe_focus = self.simulation_space.probe_focus
-        if probe_angle is None:
-            probe_angle = self.simulation_space.probe_angle
+            probe_focus = self.probe_focus
 
         # Coordinates and probe center
         coord = self._get_coordinates(scan)
         center = self._get_center(scan)
 
         # Base amplitude/profile
-        if self.simulation_space.probe_diameter is not None:
-            radius = max(self.simulation_space.probe_diameter / 2.0, 1e-12)
+        if self.probe_diameter is not None:
+            radius = max(self.probe_diameter / 2.0, 1e-12)
         else:
             radius = None
         
@@ -137,9 +152,9 @@ class PtychoProbes:
         if probe_focus is not None and np.isfinite(probe_focus) and probe_focus != 0.0:
             field = self.add_quadratic_focus(field, coord, center, k, probe_focus)
 
-        angle_x, angle_y = self._normalize_angles(probe_angle)
-        if angle_x != 0.0 or (self.simulation_space.dimension == 2 and angle_y != 0.0):
-            field = self.add_linear_tilt(field, coord, center, k, angle_x, angle_y)
+        tilt_x, tilt_y = self._normalize_tilts(probe_tilt)
+        if tilt_x != 0.0 or (self.simulation_space.dimension == 2 and tilt_y != 0.0):
+            field = self.add_linear_tilt(field, coord, center, k, tilt_x, tilt_y)
 
         return field
 
@@ -149,8 +164,8 @@ class PtychoProbes:
         coord: Tuple[np.ndarray, Optional[np.ndarray]],
         center: Union[float, Tuple[float, float]],
         k: float,
-        angle_x: float,
-        angle_y: float = 0.0,
+        tilt_x: float,
+        tilt_y: float = 0.0,
     ) -> np.ndarray:
         """
         Apply a linear (tilt) phase exp[i k ((x-cx) sin(ax) + (y-cy) sin(ay))].
@@ -165,10 +180,10 @@ class PtychoProbes:
             Probe center in continuous coordinates.
         k : float
             Wavenumber (2π/λ).
-        angle_x : float
-            Tilt angle around x in radians (0 → no tilt).
-        angle_y : float, optional
-            Tilt angle around y in radians. Ignored in 1D.
+        tilt_x : float
+            Tilt tilt around x in radians (0 → no tilt).
+        tilt_y : float, optional
+            Tilt tilt around y in radians. Ignored in 1D.
 
         Returns
         -------
@@ -178,13 +193,13 @@ class PtychoProbes:
         if self.simulation_space.dimension == 1:
             (x_mesh,) = coord
             cx = center
-            phase = np.exp(1j * k * (x_mesh - cx) * np.sin(angle_x))
+            phase = np.exp(1j * k * (x_mesh - cx) * np.sin(tilt_x))
             return field * phase
 
         x_mesh, y_mesh = coord
         cx, cy = center
-        phase = np.exp(1j * (k * (x_mesh - cx) * np.sin(angle_x) +
-                             k * (y_mesh - cy) * np.sin(angle_y)))
+        phase = np.exp(1j * (k * (x_mesh - cx) * np.sin(tilt_x) +
+                             k * (y_mesh - cy) * np.sin(tilt_y)))
         return field * phase
 
     def add_quadratic_focus(
@@ -405,19 +420,20 @@ class PtychoProbes:
         """Return probe center (cx) in 1D or (cx, cy) in 2D."""
         return self.simulation_space.scan_frame_info[scan].probe_centre_continuous.as_tuple()
 
-    def _normalize_angles(
-        self, probe_angle: Union[float, Tuple[float, float]]
+    def _normalize_tilts(
+            
+        self, probe_tilt: Union[float, Tuple[float, float]]
     ) -> Tuple[float, float]:
-        """Return (angle_x, angle_y) for 1D/2D convenience."""
+        """Return (tilt_x, tilt_y) for 1D/2D convenience."""
         if self.simulation_space.dimension == 1:
-            if not isinstance(probe_angle, (int, float)):
-                raise ValueError("In 1D, probe_angle must be a single float.")
-            return float(probe_angle), 0.0
+            if not isinstance(probe_tilt, (int, float)):
+                raise ValueError("In 1D, probe_tilt must be a single float.")
+            return float(probe_tilt), 0.0
 
         # 2D
-        if isinstance(probe_angle, (tuple, list)) and len(probe_angle) == 2:
-            ax, ay = probe_angle
+        if isinstance(probe_tilt, (tuple, list)) and len(probe_tilt) == 2:
+            ax, ay = probe_tilt
             return float(ax), float(ay)
-        if isinstance(probe_angle, (int, float)):
-            return float(probe_angle), 0.0
-        raise ValueError("In 2D, probe_angle must be a float or (angle_x, angle_y).")
+        if isinstance(probe_tilt, (int, float)):
+            return float(probe_tilt), 0.0
+        raise ValueError("In 2D, probe_tilt must be a float or (tilt_x, tilt_y).")

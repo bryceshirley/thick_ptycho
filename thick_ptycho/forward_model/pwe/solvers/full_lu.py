@@ -1,4 +1,5 @@
 
+from dataclasses import dataclass, fields
 import os
 import numpy as np
 import scipy.sparse as sp
@@ -11,9 +12,37 @@ from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
+@dataclass
+class PWEFullLUSolverCache():
+    """
+    Cache structure for storing precomputed variables.
+    Parameters
+    ----------
+    lu : spla.SuperLU, optional
+        LU factorization of the full PWE system.
+    b : ndarray, optional
+        Right-hand side vector for homogeneous propagation.
+    """
+    cached_n_id: Optional[int] = None
+    lu: Optional[spla.SuperLU] = None
+    b: Optional[np.ndarray] = None
+
+    def reset(self, n_id: Optional[int] = None):
+        """Reset cached variables."""
+        # Reinitialize all cached variables to None
+        for f in fields(self):
+            setattr(self, f.name, None)
+    
+        # Update cached n id
+        object.__setattr__(self, 'cached_n_id', n_id)
+
+# ------------------------------------------------------------------
+#  Full-system PWE Solver
+# ------------------------------------------------------------------
 class PWEFullLUSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
+    solver_cache_class = PWEFullLUSolverCache
     def __init__(self, simulation_space, ptycho_object, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None,
@@ -27,28 +56,13 @@ class PWEFullLUSolver(BasePWESolver):
             use_logging=use_logging,
             verbose=verbose,
             log=log,
+            test_bcs=test_bcs
         )
 
-        # Cached LU systems and RHS for different modes
-        # Cache LU factorizations for rotated and non-rotated modes
-        self.lu_cache = {
-            "projection_0": None,
-            "projection_1": None,  # Rotated
-        }
-        self.b_cache = None
-        self._cached_n_id = None
-
-        # Precompute B0 term if applicable
-        self.pwe_finite_differences.full_system = True
-        self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
-
-        # Solver type (for logging purposes)
-        self.solver_type = "Block PWE Full Solver with LU Decomposition"
-
-        # For testing purposes
-        self.test_bcs = test_bcs
-
-    def _get_or_construct_lu(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
+    def _construct_solve_cache(self, n: Optional[np.ndarray] = None, 
+                               mode: str = "forward",
+                               scan_idx: Optional[int] = 0,
+                               proj_idx: Optional[int] = 0) -> None:
         """
         Retrieve or construct LU factorization for given mode.
         Caches LU and RHS to avoid recomputation.
@@ -59,79 +73,25 @@ class PWEFullLUSolver(BasePWESolver):
         mode : {'forward', 'adjoint','forward_rotated', 'adjoint_rotated'}
             Propagation mode.
         """
-        assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}, f"Invalid mode: {mode!r}"
-        if n is None:
-            n = self.ptycho_object.n_true
-
-        # Determine projection key and possibly rotate n
-        if mode in {"forward_rotated", "adjoint_rotated"}:
-            n = self.rotate_n(n)
-            projection_key = "projection_1"
-        else:
-            projection_key = "projection_0"
-
-        # Reset LU cache if refractive index changed
-        n_id = id(n)
-        if self._cached_n_id != n_id:
-            # Reinitialize caches if refractive index changed
-            self.lu_cache[projection_key] = None
-            self.b_cache = None
-            self._cached_n_id = n_id
-
-        # Build if missing
-        if self.lu_cache[projection_key] is None:  # Same for both modes
-            A = self.pwe_finite_differences.return_forward_model_matrix(n=n)
-            if not sp.isspmatrix_csc(A):
-                A = A.tocsc()
-
-            lu = spla.splu(A)
-
-            self.lu_cache[projection_key] = lu
-
-        # Build if missing
-        if self.b_cache is None and self.test_bcs is None:
-            self.b_cache = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
-        else:
-            self.b_cache = self.test_bcs.test_exact_impedance_forward_model_rhs()
-
-
-        return self.lu_cache, self.b_cache
-
-    def reset_cache(self):
-        self.lu_cache = {
-            "projection_0": None,
-            "projection_1": None,  # Rotated
-        }
-        self.b_cache = None
-        self._cached_n_id = None
-
-
-    def prepare_solver(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
-        """
-        Precompute LU decomposition and homogeneous RHS for given mode.
-
-        Parameters
-        ----------
-        n : ndarray, optional
-            Refractive index field. If None, uses default.
-        mode : {'forward', 'adjoint','forward_rotated','adjoint_rotated'}
-            Propagation mode.
-        """
-        assert not getattr(self, "solve_reduced_domain", False), \
-            "Full-system solver does not support thin-sample approximation."
-        assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, f"Invalid mode: {mode!r}"
         
-        return self._get_or_construct_lu(n=n, mode=mode)
+        A = self.pwe_finite_differences.return_forward_model_matrix(n=n, scan_index=scan_idx).tocsc()
+        self.projection_cache[proj_idx].modes[mode].lu = spla.splu(A)
+
+
+        if self.test_bcs is None:
+            self.projection_cache[proj_idx].modes[mode].b = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+        else:
+            self.projection_cache[proj_idx].modes[mode].b = self.test_bcs.test_exact_impedance_forward_model_rhs()
 
         
     # -------------------------------------------------------------------------
     # Main probe solve
     # -------------------------------------------------------------------------
-    def _solve_single_probe(
+    def _solve_single_probe_impl(
         self,
         scan_idx: int=0,
+        proj_idx: int=0,
         probe: Optional[np.ndarray] = None,
-        n: Optional[np.ndarray] = None,
         mode: str = "forward",
         rhs_block: Optional[np.ndarray] = None,
     ) -> np.ndarray:
@@ -159,16 +119,13 @@ class PWEFullLUSolver(BasePWESolver):
             Complex propagated field, shape (block_size, nz).
         """
 
-        assert mode in {"forward", "adjoint","forward_rotated","adjoint_rotated"}, \
-            f"Invalid mode '{mode}'. Reverse propagation is unsupported in the full solver."
-
-
         self._log("Retrieving LU decomposition and setting up system...")
         time_start = time.time()
         # Retrieve or construct LU and homogeneous RHS
-        lu, b_homogeneous = self._get_or_construct_lu(n=n, mode=mode)
+        lu = self.projection_cache[proj_idx].modes[mode].lu
+        b_homogeneous = self.projection_cache[proj_idx].modes[mode].b
 
-        # Construct right-hand side
+        # Build RHS
         if rhs_block is not None:
             b = rhs_block
         else:
@@ -177,20 +134,17 @@ class PWEFullLUSolver(BasePWESolver):
                 probe=probe
             )
             b = b_homogeneous + probe_contribution
+
         time_end = time.time()
         self._log(f"LU retrieval and setup time: {time_end - time_start:.2f} seconds.\n")
 
         self._log("Solving with direct LU solver...")
         time_start = time.time()
         # Determine projection key and possibly rotate n
-        if mode in {"forward_rotated", "adjoint_rotated"}:
-            projection_key = "projection_1"
-        else:
-            projection_key = "projection_0"
         if mode == "adjoint":
-            u = lu[projection_key].solve(b, trans="H")
+            u = lu.solve(b, trans="H")
         else:
-            u = lu[projection_key].solve(b)
+            u = lu.solve(b)
         time_end = time.time()
         self._log(f"Direct LU solve time: {time_end - time_start:.2f} seconds.\n")
 

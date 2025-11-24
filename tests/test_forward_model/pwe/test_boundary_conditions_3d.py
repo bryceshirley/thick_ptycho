@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from thick_ptycho.simulation.config import SimulationConfig, ProbeType
+from thick_ptycho.simulation.config import ProbeConfig, SimulationConfig, ProbeType
 from thick_ptycho.simulation.simulation_space import create_simulation_space
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
@@ -78,9 +78,13 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
     wavelength = 2 * np.pi / k
     limits = Limits(x=(0, 1),y=(0,1), z=(0, 2), units="meters")
 
-    sim_cfg = SimulationConfig(
-        probe_type=select_probe_type(bc_type),
+    probe_config = ProbeConfig(
+        type=select_probe_type(bc_type),
         wave_length=wavelength,
+    )
+
+    sim_cfg = SimulationConfig(
+        probe_config=probe_config,
         step_size_px=nx,
         nz=nz,
         spatial_limits=limits,

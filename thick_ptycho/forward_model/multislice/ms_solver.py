@@ -20,9 +20,6 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
         assert simulation_space.dimension == 1, "ForwardModelMS only supports 1D samples."
 
-        # Solver type (for logging purposes)
-        self.solver_type = "Multislice Solver"
-
         self.k = self.simulation_space.k  # Wave number
         self.dx = self.simulation_space.dx  # Pixel size in x
         self.nx = self.simulation_space.nx  # Number of pixels in x

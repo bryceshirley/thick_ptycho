@@ -30,6 +30,44 @@ class ProbeType(Enum):
     def list(cls):
         """Return a list of all probe type names."""
         return [p.value for p in cls]
+    
+@dataclass(frozen=True,slots=True)
+class ProbeConfig:
+    """
+    Configuration object defining the probe geometry and optical parameters
+    used for ptychographic simulation.
+
+    Parameters
+    ----------
+    type : ProbeType, default=ProbeType.AIRY_DISK
+        Selects the illumination probe field model.
+
+    diameter : float
+        Effective diameter or support size of the probe in meters (before
+        discretization into pixel units).
+    focus : float, optional
+        Focal length used for curved probe illumination. ``0.0`` corresponds
+        to a planar probe.  
+    tilts : tuple of float, default=(0.0,)
+        List of probe tilt angles in degrees. Multiple angles enables
+        tilt-series or tomographic ptychography.
+    """
+    wave_length: float
+    type: ProbeType = ProbeType.AIRY_DISK
+    diameter: float = None
+    focus: Optional[float] = 0.0
+    tilts: Tuple[float, ...] = (0.0,)
+
+    def __post_init__(self):
+        """Validate configuration parameters after initialization."""
+        # If only 1 scan point, reduced-domain setting has no effect → warn, don't fail.
+        if self.type.value not in ProbeType.list():
+            raise ValueError(f"Invalid probe type: {self.type}. Must be one of {ProbeType.list()}.")
+        if self.diameter is not None:
+            if self.diameter <= 0:
+                raise ValueError("diameter must be positive.")
+        if self.wave_length <= 0:
+            raise ValueError("wave_length must be a positive value.")
 
 @dataclass(frozen=True,slots=True)
 class SimulationConfig:
@@ -39,23 +77,8 @@ class SimulationConfig:
 
     Parameters
     ----------
-    probe_type : ProbeType, default=ProbeType.AIRY_DISK
-        Selects the illumination probe field model.
-
-    wave_length : float
-        Illumination wavelength in meters.
-
-    probe_diameter : float
-        Effective diameter or support size of the probe in meters (before
-        discretization into pixel units).
-
-    probe_focus : float, optional
-        Focal length used for curved probe illumination. ``0.0`` corresponds
-        to a planar probe.
-
-    probe_angles : tuple of float, default=(0.0,)
-        List of probe tilt angles in degrees. Multiple angles enables
-        tilt-series or tomographic ptychography.
+    ProbeConfig : ProbeConfig
+        Configuration object defining the probe geometry and optical parameters.
 
     scan_points : int
         Number of discrete probe scan positions in the lateral direction.
@@ -117,14 +140,10 @@ class SimulationConfig:
     verbose : bool, default=False
         Enable runtime printing and progress reporting.
     """
-    wave_length: float
+    probe_config: ProbeConfig
     spatial_limits: Limits # with limits.units in meters
-    probe_diameter: float = None
     scan_points: int = 1 # number of scan points in one dimension greater than 0
     step_size_px: int = 1 # in pixels greater than 0 for more than 1 scan point
-    probe_type: ProbeType = ProbeType.AIRY_DISK
-    probe_focus: Optional[float] = 0.0
-    probe_angles: Tuple[float, ...] = (0.0,)
     pad_factor: float = 1 # Must be >= 1.0
     solve_reduced_domain: bool = False
     points_per_wavelength: Optional[int] = 8
@@ -144,8 +163,6 @@ class SimulationConfig:
                 "solve_reduced_domain=True has no effect when scan_points=1; using full domain.",
                 RuntimeWarning,
             )
-        if self.probe_type.value not in ProbeType.list():
-            raise ValueError(f"Invalid probe type: {self.probe_type}. Must be one of {ProbeType.list()}.")
         if self.pad_factor < 1.0:
             raise ValueError("pad_factor must be >= 1.0")
         if self.scan_points < 1:
@@ -154,18 +171,6 @@ class SimulationConfig:
             raise ValueError("step_size_px must be greater than 0 for multiple scan points")
         if self.points_per_wavelength < 1:
             raise ValueError("points_per_wavelength must be >= 1")
-        if self.probe_diameter is not None:
-            if self.probe_diameter <= 0:
-                raise ValueError("probe_diameter must be positive.")
-                
-            for i, lim in enumerate([self.spatial_limits.x, self.spatial_limits.y]):
-                if lim is None:
-                    continue
-                start, end = lim
-                if self.probe_diameter > end - start:
-                    raise ValueError(
-                        f"Probe diameter must be smaller than the range of dimension {i}."
-                    )
         if self.spatial_limits.units != "meters":
             raise ValueError("spatial_limits must have units in 'meters'.")
         if self.nz is not None and self.nz <= 0:
@@ -178,8 +183,6 @@ class SimulationConfig:
             raise ValueError("verbose must be a boolean value.")
         if self.tomographic_projection_90_degree and self.spatial_limits.y is not None:
             raise ValueError("tomographic_projection_90_degree is only valid for 2D simulations.")
-        if self.wave_length <= 0:
-            raise ValueError("wave_length must be a positive value.")
         if self.points_per_wavelength is None and self.nz is None:
             raise ValueError("Either points_per_wavelength or nz must be specified.")
         if self.points_per_wavelength is not None and self.points_per_wavelength <= 0:

@@ -7,14 +7,13 @@ from thick_ptycho.simulation.simulation_space import SimulationSpace1D, Simulati
 from thick_ptycho.utils.io import setup_log
 
 from abc import ABC, abstractmethod
+        
 
-# TODO: Update Visualisation of data and add support for tomographic projects
 class BaseForwardModelSolver(ABC):
     """
     Abstract base class for all forward model solvers (PWE, Multislice, etc.).
     Handles:
       - Logging
-      - Probe generation
       - Common solve() interface across all solvers
       - Multiple probe and angle looping
       - Simulated data creation (exit waves + noisy farfield intensities)
@@ -55,9 +54,14 @@ class BaseForwardModelSolver(ABC):
         self.probe_angles = simulation_space.probe_angles
         self.num_angles = len(self.probe_angles)
 
-        # Solver type (for logging purposes)
-        self.solver_type = "BaseForwardModel"
+        # Solver type (for logging purposes and override in subclasses)
+        self.solver_type = self.__class__.__name__
 
+    @abstractmethod
+    def reset_cache(self):
+        """Reset any cached variables in the solver."""
+        pass
+        
     # ------------------------------------------------------------------
     # Common solving interface
     # ------------------------------------------------------------------
@@ -95,17 +99,14 @@ class BaseForwardModelSolver(ABC):
 
         # Loop over angles and probes
         for proj_idx in range(self.num_projections):
-            temp_mode = mode + "_rotated" if proj_idx == 1 else mode
-    
             for angle_idx, angle in enumerate(self.probe_angles):
                 for scan_idx in range(self.num_probes):
                     if self.verbose:
                         start = time.time()
-
                     # Solve for single probe
                     u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
-                        scan_idx=scan_idx,
-                        n=n, mode=temp_mode, 
+                        scan_idx=scan_idx, proj_idx=proj_idx,
+                        n=n, mode=mode, 
                         rhs_block=rhs_block,
                         probe=probes[angle_idx, scan_idx, :],
                     ).reshape(*self.effective_shape)
@@ -119,55 +120,16 @@ class BaseForwardModelSolver(ABC):
                             f"at angle {angle} in {time.time() - start:.2f}s"
                         )
         return u
-
     
-    def solve_batch(self, n=None, mode="forward", rhs_block=None, probes=None):
-        """
-        Batch solving interface (for future use).
-        """
-        assert mode in {"forward", "adjoint", "reverse"}
-
-        u = self._create_solution_grid()
-        probes = probes if probes is not None else self.probes
-        B = self.num_angles * self.num_probes  # total probes in batch
-
-        for proj_idx in range(self.num_projections):
-            temp_mode = mode + "_rotated" if proj_idx == 1 else mode
-
-            if self.verbose:
-                start = time.time()
-
-            # Flatten probe batch: (num_angles, num_probes, block_size) → (B, block_size)
-            probe_batch = probes.reshape(B, self.block_size)
-
-            # Batch solve
-            result = self._solve_probes_batch(
-                probes=probe_batch,
-                n=n,
-                mode=temp_mode,
-                rhs_block=rhs_block,
-            )  # result shape: (B, block_size, nz)
-
-            # Unflatten: (B, block_size, nz) → (num_angles, num_probes, block_size, nz)
-            u[proj_idx, ...] = result.reshape(self.num_angles, self.num_probes, self.block_size, self.nz)
-
-            if self.verbose:
-                self._log(
-                    f"[{self.solver_type}] solved {B} probes (angles × scans) "
-                    f"in {time.time() - start:.2f}s"
-                )
-
-        return u
+    # ------------------------------------------------------------------
+    #  Single probe solving (to be implemented by subclasses)
+    # ------------------------------------------------------------------
+        
 
     @abstractmethod
     def _solve_single_probe(self, angle_idx: int, probe_idx: int,
                              n=None, mode: str = "forward", initial: np.ndarray = None) -> np.ndarray:
         """Override in subclasses."""
-        raise NotImplementedError
-    
-    @abstractmethod
-    def reset_cache(self):
-        """Reset any cached variables (e.g., LU factors)."""
         raise NotImplementedError
 
     def _create_solution_grid(self) -> np.ndarray:
@@ -182,11 +144,6 @@ class BaseForwardModelSolver(ABC):
             (self.num_projections, self.num_angles, self.num_probes, *self.effective_shape),
             dtype=complex,
         )
-    
-    def rotate_n(self, n: np.ndarray) -> np.ndarray:
-        """Rotate the refractive index array by 90 degrees."""
-        assert self.simulation_space.dimension == 1, "rotate_n only supports 1D images."
-        return np.rot90(n, k=1)
 
     # ------------------------------------------------------------------
     # Synthetic data generation utilities

@@ -86,9 +86,10 @@ class PWEForwardModel:
         self.differiential_operator_matrices.reset_probe()
         return A_step, B_step, b_step
     
+    # Precompute b0 for all probes
     def precompute_b0(self, probes: np.ndarray):
         """Precompute b0 for all probes when caching is enabled."""
-        if not self.enable_caching or self.simulation_space.dimension != 1:
+        if not self.enable_caching or self.simulation_space.dimension != 1 or self.solve_reduced_domain:
             # No precomputation in reduced domain
             return
 

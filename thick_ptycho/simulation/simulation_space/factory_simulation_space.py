@@ -10,12 +10,12 @@ from ..config import SimulationConfig
 def create_simulation_space(config: SimulationConfig):
     """Factory function to create the appropriate simulation space class."""
     cls = SimulationSpace1D if config.spatial_limits.y is None else SimulationSpace2D
-    return cls(wave_length=config.wave_length,
-        probe_diameter=config.probe_diameter,
+    return cls(wave_length=config.probe_config.wave_length,
+        probe_diameter=config.probe_config.diameter,
+        probe_type=config.probe_config.type,
+        probe_focus=config.probe_config.focus,
+        probe_angles=config.probe_config.tilts,
         spatial_limits=config.spatial_limits,
-        probe_type=config.probe_type,
-        probe_focus=config.probe_focus,
-        probe_angles=config.probe_angles,
         scan_points=config.scan_points, 
         step_size_px=config.step_size_px, 
         pad_factor=config.pad_factor, 

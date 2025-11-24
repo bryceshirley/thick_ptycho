@@ -37,28 +37,25 @@ class Limits:
             raise ValueError(f"units must be either 'pixels' or 'meters', got {self.units}")
 
         # Ensure tuples of correct type and length
-        for coords_name, coords in {"x": self.x, "y": self.y, "z": self.z}.items():
-            if coords is None:
-                continue
-
+        for coords in self.as_tuple():
             if not isinstance(coords, tuple) or len(coords) != 2:
-                raise ValueError(f"{coords_name} limits must be a tuple of length 2, got {coords}")
+                raise ValueError(f"Limits must be a tuple of length 2, got {coords}")
 
-            if self.units == "pixels" or self.units=="p":
+            if self.units in ["pixels","p"]:
                 # Must be integers and non-negative
                 if not all(isinstance(v, (int,np.integer)) for v in coords):
-                    raise ValueError(f"{coords_name} limits must be integers when units='pixels', got {coords}")
+                    raise ValueError(f"Limits must be integers when units='pixels', got {coords}")
                 if coords[0] < 0 or coords[1] < 0:
-                    raise ValueError(f"{coords_name} limits must be non-negative, got {coords}")
-            elif self.units == "meters" or self.units=="m":
+                    raise ValueError(f"Limits must be non-negative, got {coords}")
+            elif self.units in ["meters","m"]:
                 # Must be floats and positive or zero
                 # Check numeric type
                 if not all(isinstance(v, (int, float,np.integer, np.floating)) for v in coords):
-                    raise ValueError(f"{coords_name} limits must be numeric, got {coords}")
-            
+                    raise ValueError(f"Limits must be numeric, got {coords}")
+    
             # Increasing order
             if coords[0] >= coords[1]:
-                raise ValueError(f"{coords_name} limits must be increasing, got {coords}")
+                raise ValueError(f"Limits must be increasing, got {coords}")
 
     def as_tuple(self) -> Tuple[Union[Tuple[int, int], Tuple[float, float]], ...]:
         if self.y is None and self.z is None:
@@ -69,50 +66,6 @@ class Limits:
             return (self.x, self.z)
         else:
             return (self.x, self.y, self.z)
-
-
-    # def __post_init__(self):
-    #     """Validate limits after initialization."""
-
-    #     # Convert integer limits to float if units are in meters
-    #     try:
-    #         if self.units == "meters":
-    #             self.x = tuple(float(v) for v in self.x)
-    #             if self.y is not None:
-    #                 self.y = tuple(float(v) for v in self.y)
-    #             if self.z is not None:
-    #                 self.z = tuple(float(v) for v in self.z)
-    #     except TypeError:
-    #         raise ValueError("Limits must be tuples of two numeric values.")
-
-    #     # Validate limits
-    #     for coords in [self.x, self.y, self.z]:
-    #         if coords is None:
-    #             continue
-    #         if len(coords) != 2:
-    #             raise ValueError(f"limits must be tuples of length 2, got {coords}")
-    #         if coords[0] >= coords[1]:
-    #             raise ValueError(f"limits must be increasing, got {coords}")
-    #         if self.units == "pixels":
-    #             if not isinstance(coords[0], int) and not isinstance(coords[1], int):
-    #                 ValueError(f"limits must be integers when units='pixels', got {self.x}")
-    #             if coords[0] < 0 or coords[1] < 0:
-    #                 raise ValueError(f"limits must be non-negative when units='pixels', got {self.x}")
-    #         elif self.units == "meters":
-    #             continue
-    #         else:
-    #             raise ValueError(f"units must be either 'pixels' or 'meters', got {self.units}")
-        
-
-    # def as_tuple(self) -> Tuple[Union[Tuple[int, int], Tuple[float, float]], ...]:
-    #     if self.y is None and self.z is None:
-    #         return (self.x,)
-    #     elif self.z is None:
-    #         return (self.x, self.y)
-    #     elif self.y is None:
-    #         return (self.x, self.z)
-    #     else:
-    #         return (self.x, self.y, self.z)
 
 class ScanPath(Enum):
     """Enumeration of supported scan path patterns."""
