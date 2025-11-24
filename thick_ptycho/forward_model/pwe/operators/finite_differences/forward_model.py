@@ -174,12 +174,14 @@ class PWEForwardModel:
         if self.b0 is not None:
             b0 = self.b0[scan_index, :]
         else:
-            A_step, B_step, b_step = self._get_or_generate_step_matrices(probe)
+            _, B_step, b_step = self._get_or_generate_step_matrices(probe)
+            
             if probe is None:
-                b0 = b_step
+                probe_vec = np.zeros(self.block_size)
             else:
-                probe = probe.flatten()
-                b0 = A_step @ probe + B_step @ probe
+                probe_vec = probe.flatten()
+            
+            b0 = B_step @ probe_vec + b_step
 
         return np.concatenate(
             (b0, np.zeros(self.block_size * (self.simulation_space.nz - 2),))

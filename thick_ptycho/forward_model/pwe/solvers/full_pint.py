@@ -68,7 +68,6 @@ class PWEFullPinTSolver(BasePWESolver):
             log=log,
             test_bcs=test_bcs
         )
-        # TODO: Fix the version when this is not applied ie reduced domain
         self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
 
         # Get number of workers for PiT preconditioner
