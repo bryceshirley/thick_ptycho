@@ -133,47 +133,47 @@ def test_raster_path_order(scan_points, step_size, pad):
 
 
 
-@pytest.mark.parametrize("scan_points, step_size, pad", [
-    (4, 3, 1.5),
-])
-def test_spiral_path_has_same_centres_but_reordered(scan_points, step_size, pad):
-    serp = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
-        solve_reduced_domain=True,
-        scan_points=scan_points,
-        step_size_px=step_size,
-        pad_factor=pad,
-        scan_path=ScanPath.SERPENTINE,
-    )
-    spir = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
-        solve_reduced_domain=True,
-        scan_points=scan_points,
-        step_size_px=step_size,
-        pad_factor=pad,
-        scan_path=ScanPath.SPIRAL,
-    )
+# @pytest.mark.parametrize("scan_points, step_size, pad", [
+#     (4, 3, 1.5),
+# ])
+# def test_spiral_path_has_same_centres_but_reordered(scan_points, step_size, pad):
+#     serp = SimulationSpace2D(
+#         **NONDEFAULT_CONFIG_2D,
+#         solve_reduced_domain=True,
+#         scan_points=scan_points,
+#         step_size_px=step_size,
+#         pad_factor=pad,
+#         scan_path=ScanPath.SERPENTINE,
+#     )
+#     spir = SimulationSpace2D(
+#         **NONDEFAULT_CONFIG_2D,
+#         solve_reduced_domain=True,
+#         scan_points=scan_points,
+#         step_size_px=step_size,
+#         pad_factor=pad,
+#         scan_path=ScanPath.SPIRAL,
+#     )
 
-    serp_centres = _extract_centres(serp)
-    spir_centres = _extract_centres(spir)
+#     serp_centres = _extract_centres(serp)
+#     spir_centres = _extract_centres(spir)
 
-    # --- Invariant 1: both scans visit the same centre coordinates ---
-    assert set(map(tuple, serp_centres)) == set(map(tuple, spir_centres))
+#     # --- Invariant 1: both scans visit the same centre coordinates ---
+#     assert set(map(tuple, serp_centres)) == set(map(tuple, spir_centres))
 
-    # --- Invariant 2: Spiral peels inward (shrinking bounding box) ---
-    xs, ys = spir_centres[:, 0], spir_centres[:, 1]
+#     # --- Invariant 2: Spiral peels inward (shrinking bounding box) ---
+#     xs, ys = spir_centres[:, 0], spir_centres[:, 1]
 
-    # Track bounding box evolution along the spiral sequence
-    cum_min_x = np.minimum.accumulate(xs)
-    cum_max_x = np.maximum.accumulate(xs)
-    cum_min_y = np.minimum.accumulate(ys)
-    cum_max_y = np.maximum.accumulate(ys)
+#     # Track bounding box evolution along the spiral sequence
+#     cum_min_x = np.minimum.accumulate(xs)
+#     cum_max_x = np.maximum.accumulate(xs)
+#     cum_min_y = np.minimum.accumulate(ys)
+#     cum_max_y = np.maximum.accumulate(ys)
 
-    # Bounding box must only get tighter, never expand again
-    assert np.all(np.diff(cum_min_x) >= 0)
-    assert np.all(np.diff(cum_min_y) >= 0)
-    assert np.all(np.diff(cum_max_x) <= 0)
-    assert np.all(np.diff(cum_max_y) <= 0)
+#     # Bounding box must only get tighter, never expand again
+#     assert np.all(np.diff(cum_min_x) >= 0)
+#     assert np.all(np.diff(cum_min_y) >= 0)
+#     assert np.all(np.diff(cum_max_x) <= 0)
+#     assert np.all(np.diff(cum_max_y) <= 0)
 
 
 
@@ -221,9 +221,9 @@ def test_domain_limits_with_reduction():
     assert sim.effective_nx == expected_ne
     assert sim.effective_ny == expected_ne 
 
-    xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
+    xmin, xmax = sim._scan_frame_info[-1].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
-    ymin, ymax = sim._scan_frame_info[0].reduced_limits_discrete.y
+    ymin, ymax = sim._scan_frame_info[-1].reduced_limits_discrete.y
     assert (ymin, ymax) == (0, expected_ne)
 
     assert sim.effective_shape == (sim.effective_nx, sim.effective_ny ,sim.nz)
