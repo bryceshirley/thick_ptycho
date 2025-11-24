@@ -68,6 +68,8 @@ class PWEFullPinTSolver(BasePWESolver):
             log=log,
             test_bcs=test_bcs
         )
+        # TODO: Fix the version when this is not applied ie reduced domain
+        self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
 
         # Get number of workers for PiT preconditioner
         # based on available CPU cores
@@ -110,7 +112,9 @@ class PWEFullPinTSolver(BasePWESolver):
         A_csr = A_step.tocsr()
         B_csr = B_step.tocsr()
         
-        C = self.ptycho_object.create_object_contribution(n=n, scan_index=scan_idx).reshape(-1, self.nz - 1)
+        C = self.ptycho_object.create_object_contribution(n=n, 
+                                                          scan_index=scan_idx
+                                                          ).reshape(-1, self.nz - 1)
 
         #M_prec = self._make_pit_preconditioner(A_step, B_step, C)
         M_prec = self._make_pit_preconditioner_multi_workers(A_step, B_step, C)

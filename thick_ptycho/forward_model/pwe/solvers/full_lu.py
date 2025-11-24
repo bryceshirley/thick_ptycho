@@ -58,6 +58,7 @@ class PWEFullLUSolver(BasePWESolver):
             log=log,
             test_bcs=test_bcs
         )
+        self.b0 = self.pwe_finite_differences.precompute_b0(self.probes)
 
     def _construct_solve_cache(self, n: Optional[np.ndarray] = None, 
                                mode: str = "forward",
@@ -73,8 +74,9 @@ class PWEFullLUSolver(BasePWESolver):
         mode : {'forward', 'adjoint','forward_rotated', 'adjoint_rotated'}
             Propagation mode.
         """
-        
-        A = self.pwe_finite_differences.return_forward_model_matrix(n=n, scan_index=scan_idx).tocsc()
+        A = self.pwe_finite_differences.return_forward_model_matrix(n=n, 
+                                                                    scan_index=scan_idx
+                                                                    ).tocsc()
         self.projection_cache[proj_idx].modes[mode].lu = spla.splu(A)
 
 

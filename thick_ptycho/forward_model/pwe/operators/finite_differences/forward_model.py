@@ -109,6 +109,7 @@ class PWEForwardModel:
         Construct the homogeneous (free-space) LHS block-tridiagonal system.
         """
         A_step, B_step, _ = self._get_or_generate_step_matrices(probe)
+        #A_step, B_step, _ = self.generate_zstep_matrices()
         nz = self.simulation_space.nz
         return (
             sp.kron(sp.eye(nz - 1, format="csr"), A_step, format="csr")
