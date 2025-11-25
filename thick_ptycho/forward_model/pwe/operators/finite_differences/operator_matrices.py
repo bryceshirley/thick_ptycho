@@ -50,9 +50,12 @@ class OperatorMatrices(BoundaryConditions):
 
     def _apply_boundary_conditions_1D(self, Kx):
         if self.bc_type == "dirichlet":
-            Kx = self._apply_1D_dirichlet(Kx)
-        if self.bc_type in ["neumann", "impedance", "impedance2"]:
-            Kx = self._apply_1D_neumann(Kx)
+            return self._apply_1D_dirichlet(Kx)
+
+        # Apply Neumann BCs first
+        Kx = self._apply_1D_neumann(Kx)
+
+        # Apply Impedance BCs
         if self.bc_type == "impedance":
             Kx = self._apply_1D_impedance(Kx)
         elif self.bc_type == "impedance2":
