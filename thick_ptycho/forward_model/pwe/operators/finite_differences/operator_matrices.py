@@ -39,6 +39,13 @@ class OperatorMatrices(BoundaryConditions):
     def get_matrices_1d_system(self):
         Kx = self._create_1D_laplacian()
 
+        Kx = self._apply_boundary_conditions_1D(Kx)
+
+        Ix = sp.eye(self.nx)
+        Ax, Bx = Ix - Kx, Ix + Kx
+        return Ax.tocsr(), Bx.tocsr()
+
+    def _apply_boundary_conditions_1D(self, Kx):
         if self.bc_type == "dirichlet":
             Kx = self._apply_1D_dirichlet(Kx)
         if self.bc_type in ["neumann", "impedance", "impedance2"]:
@@ -47,10 +54,6 @@ class OperatorMatrices(BoundaryConditions):
             Kx = self._apply_1D_impedance(Kx)
         elif self.bc_type == "impedance2":
             Kx = self._apply_1D_impedance2(Kx)
-
-        Ix = sp.eye(self.nx)
-        Ax, Bx = Ix - Kx, Ix + Kx
-        return Ax.tocsr(), Bx.tocsr()
 
     
     # --- 2D builders ----
