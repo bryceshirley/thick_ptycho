@@ -10,18 +10,21 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-        - name: Checkout repository
-          uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: '3.8'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
 
-        - name: Install dependencies with poetry
-          run: |
-            pip install poetry
-            poetry install
+      - name: Install Poetry
+        run: |
+          pip install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry install
 
         - name: Run Pylint
           run: |
