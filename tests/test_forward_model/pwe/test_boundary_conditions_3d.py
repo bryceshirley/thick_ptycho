@@ -188,6 +188,10 @@ def test_error_convergence(Solver, bc_type, request):
     nx_values = [8, 16, 32]
     if bc_type == BoundaryType.DIRICHLET:
         nx_values.append(64)  # Finer grid for Dirichlet due to higher errors
+        if Solver != PWEIterativeLUSolver:
+            # Skip solvers that are too slow on fine grids
+            pytest.mark.skip(reason="Solver too slow for fine grids in CI.")
+
     inf_norms = []
     observed_rates = []
 

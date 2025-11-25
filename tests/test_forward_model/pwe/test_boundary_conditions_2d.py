@@ -240,7 +240,6 @@ def test_error_convergence(Solver, bc_type, request):
         plot_probe_and_ew(exact, numerical, error) 
 
     # Assertions: monotonic decrease & second-order rate
-    # pdb.set_trace()
     assert all(inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))), \
         f"Error did not decrease monotonically: {inf_norms}"
     avg_rate = np.mean(observed_rates[-3:])
