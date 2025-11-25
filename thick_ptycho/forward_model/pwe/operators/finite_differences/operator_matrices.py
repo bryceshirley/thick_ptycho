@@ -61,6 +61,7 @@ class OperatorMatrices(BoundaryConditions):
         elif self.bc_type == "impedance2":
             Kx = self._apply_1D_impedance2(Kx)
         return Kx
+        return Kx
 
     
     # --- 2D builders ----
