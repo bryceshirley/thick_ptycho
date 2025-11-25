@@ -37,10 +37,13 @@ class OperatorMatrices(BoundaryConditions):
         return K.tocsr()  # Convert back to CSR for efficient arithmetic
 
     def get_matrices_1d_system(self):
+        # Create 1D Laplacian
         Kx = self._create_1D_laplacian()
 
+        # Apply boundary conditions
         Kx = self._apply_boundary_conditions_1D(Kx)
 
+        # Create A and B matrices for time stepping
         Ix = sp.eye(self.nx)
         Ax, Bx = Ix - Kx, Ix + Kx
         return Ax.tocsr(), Bx.tocsr()
@@ -54,6 +57,7 @@ class OperatorMatrices(BoundaryConditions):
             Kx = self._apply_1D_impedance(Kx)
         elif self.bc_type == "impedance2":
             Kx = self._apply_1D_impedance2(Kx)
+        return Kx
 
     
     # --- 2D builders ----
