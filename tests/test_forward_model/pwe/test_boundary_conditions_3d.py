@@ -40,9 +40,9 @@ def get_exact_solution(bc_type, k, X, Y, Z):
         )
     elif bc_type == BoundaryType.DIRICHLET:
         exact_solution = (
-            _u_nm_dirichlet(1, 1, k)(X, Z)
-            + 0.5 * _u_nm_dirichlet(5, 5, k)(X, Z)
-            + 0.2 * _u_nm_dirichlet(9, 9, k)(X, Z)
+            _u_nm_dirichlet(1, 1, k)(X, Y, Z)
+            + 0.5 * _u_nm_dirichlet(5, 5, k)(X, Y, Z)
+            + 0.2 * _u_nm_dirichlet(9, 9, k)(X, Y, Z)
         )
         # Stricly enforce the boundary conditions
         exact_solution[:, 0, :] = 0
@@ -135,7 +135,7 @@ def plot_convergence(nx_values, inf_norms, bc_type, Solver):
     plt.show()
 
 
-def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
+def plot_exit_waves(exact, numerical, error, nx, nz, bc_type, Solver):
     """Visualize real/imag parts of exact, numerical, and error fields."""
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     titles = ['Numerical', 'Exact', 'Error']
@@ -143,8 +143,8 @@ def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
     def _plot(ax, data, title, label, vmin=None, vmax=None):
         im = ax.imshow(data, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
         ax.set_title(title)
-        ax.set_xlabel('z')
-        ax.set_ylabel('x')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
         fig.colorbar(im, ax=ax, label=label)
 
     real_min = min(np.real(numerical).min(), np.real(exact).min())
@@ -155,10 +155,14 @@ def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
     for j, (data_real, data_imag) in enumerate([(np.real(numerical), np.imag(numerical)),
                                                 (np.real(exact), np.imag(exact)),
                                                 (np.real(error), np.imag(error))]):
-        _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re', real_min, real_max)
-        _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im', imag_min, imag_max)
+        if j == 2:
+            _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re')
+            _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im')
+        else:
+            _plot(axes[0, j], data_real, f"{titles[j]} (Real)", 'Re', vmin=real_min, vmax=real_max)
+            _plot(axes[1, j], data_imag, f"{titles[j]} (Imag)", 'Im', vmin=imag_min, vmax=imag_max)
 
-    fig.suptitle(f"{bc_type} BC — Grid {nx}×{nz}, {Solver.__name__}", fontsize=12)
+    fig.suptitle(f"{bc_type} BC — Grid {nx}x{nx}×{nz}, {Solver.__name__}", fontsize=12)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
@@ -168,7 +172,7 @@ def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
 # ----------------------------------------------------------------------------------------
 
 # dont test
-@pytest.mark.skip(reason="Tests are too slow for regular CI runs.")
+#@pytest.mark.skip(reason="Tests are too slow for regular CI runs.")
 @pytest.mark.parametrize("bc_type", [
     BoundaryType.NEUMANN,
     BoundaryType.IMPEDANCE,
@@ -181,38 +185,36 @@ def plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver):
 ], ids=["Iterative", "FullPinT", "FullLU"])
 def test_error_convergence(Solver, bc_type, request):
     """Validate second-order convergence for each solver and boundary type."""
-    nx_values = [16, 32, 64, 128]
+    nx_values = [8, 16, 32]
     inf_norms = []
+    observed_rates = []
 
     print(f"\n=== {Solver.__name__} — {bc_type} BC ===")
 
-    for nx in nx_values:
-        nz = nx
-        ny = nx  # 3D square grid
-        exact, numerical = compute_exact_and_numerical(nx, ny, nz, Solver, bc_type)
-        error = numerical - exact
-        inf_norms.append(np.max(np.abs(error)))
-
-    # Report convergence
     print("\nGrid\tInf-Norm\tRate")
-    for i, (nx, err) in enumerate(zip(nx_values, inf_norms)):
+    for i, nx in enumerate(nx_values):
+        nz = nx
+        exact, numerical = compute_exact_and_numerical(nx, nz, Solver, bc_type)
+        error = numerical - exact
+        inf_norm = np.max(np.abs(error))
+        inf_norms.append(inf_norm)
         if i == 0:
-            print(f"{nx}\t{err:.3e}\t-")
+            print(f"{nx}\t{inf_norm:.3e}\t-")
         else:
-            rate = np.log2(inf_norms[i - 1] / err)
-            print(f"{nx}\t{err:.3e}\t{rate:.2f}")
+            rate = np.log2(inf_norms[i - 1] / inf_norm)
+            print(f"{nx}\t{inf_norm:.3e}\t{rate:.2f}")
+            observed_rates.append(rate)
 
     # Optional plotting
     if request.config.getoption("--plot"):
         plot_convergence(nx_values, inf_norms, bc_type, Solver)
 
     if request.config.getoption("--plot_error"):
-        plot_error_maps(exact, numerical, error, nx, nz, bc_type, Solver)
+        plot_exit_waves(exact[:,:,-1], numerical[:,:,-1], error[:,:,-1], nx, nz, bc_type, Solver)
 
     # Assertions: monotonic decrease & second-order rate
     assert all(inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))), \
         f"Error did not decrease monotonically: {inf_norms}"
-    observed_rates = [np.log2(inf_norms[i - 1] / inf_norms[i]) for i in range(1, len(inf_norms))]
     avg_rate = np.mean(observed_rates[-3:])
     assert 1.5 <= avg_rate <= 2.5, \
         f"Expected ~2nd order convergence, got {avg_rate:.2f}"
