@@ -26,6 +26,6 @@ jobs:
         run: |
           poetry install
 
-      - name: Run tests (skipping known broken shape tests)
+      - name: Run tests
         run: |
           poetry run pytest
