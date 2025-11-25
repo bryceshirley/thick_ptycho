@@ -54,7 +54,7 @@ class OperatorMatrices(BoundaryConditions):
             Kx = self._apply_1D_impedance(Kx)
         elif self.bc_type == "impedance2":
             Kx = self._apply_1D_impedance2(Kx)
-
+        return Kx
     
     # --- 2D builders ----
     def _create_2D_laplacian(self, Ax, Bx):
