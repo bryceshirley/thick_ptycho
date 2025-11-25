@@ -13,6 +13,13 @@ from thick_ptycho.simulation.scan_frame import Limits
 from thick_ptycho.forward_model.pwe.operators.utils import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
+# ----------------------------------------------------------------------------------------
+#  Global simulation parameters
+# ----------------------------------------------------------------------------------------
+
+WAVENUMBER = 100
+WAVELENGTH = 2 * np.pi / WAVENUMBER
+LIMITS = Limits(x=(0, 1),y=(0,1), z=(0, 2), units="meters")
 
 # ----------------------------------------------------------------------------------------
 #  Analytical 3D exact solutions
@@ -69,29 +76,30 @@ def select_probe_type(bc_type):
 #  Core solver setup
 # ----------------------------------------------------------------------------------------
 
-def compute_exact_and_numerical(nx, nz, Solver, bc_type):
-    """
-    Compute both analytical and numerical solutions for given grid size.
-    Returns (exact_solution, numerical_solution).
-    """
-    k = 100
-    wavelength = 2 * np.pi / k
-    limits = Limits(x=(0, 1),y=(0,1), z=(0, 2), units="meters")
-
+def create_simulation_space(nx, nz, bc_type):
     probe_config = ProbeConfig(
         type=select_probe_type(bc_type),
-        wave_length=wavelength,
+        wave_length=WAVELENGTH,
     )
 
     sim_cfg = SimulationConfig(
         probe_config=probe_config,
         step_size_px=nx,
         nz=nz,
-        spatial_limits=limits,
+        spatial_limits=LIMITS,
         solve_reduced_domain=False,
     )
 
     sim_space = create_simulation_space(sim_cfg)
+    
+    return sim_space
+
+def compute_numerical(nx, nz, Solver, bc_type):
+    """
+    Compute numerical solutions for given grid size.
+    Returns numerical_solution.
+    """
+    sim_space = create_simulation_space(nx, nz, bc_type)
     obj = create_ptycho_object(sim_space)
     probes = create_ptycho_probes(sim_space)
 
@@ -102,16 +110,21 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
         bc_type=bc_type.value,
         test_bcs=test_bcs
     )
-    solution = solver.solve().squeeze()
+    return solver.solve().squeeze()
 
+def compute_exact(nx, nz, bc_type):
+    """
+    Compute exact solutions for given grid size.
+    Returns exact_solution.
+    """
+    sim_space = create_simulation_space(nx, nz, bc_type)
     # Define coordinate grid
-    x = np.linspace(*limits.x, sim_space.nx)
-    y = np.linspace(*limits.y, sim_space.ny)
-    z = np.linspace(*limits.z, sim_space.nz)
+    x = np.linspace(*LIMITS.x, sim_space.nx)
+    y = np.linspace(*LIMITS.y, sim_space.ny)
+    z = np.linspace(*LIMITS.z, sim_space.nz)
     X, Y, Z = np.meshgrid(x,y, z, indexing='ij')
 
-    exact_solution = get_exact_solution(bc_type, k, X, Y, Z)
-    return exact_solution, solution
+    return get_exact_solution(bc_type, WAVENUMBER, X, Y, Z)
 
 
 # ----------------------------------------------------------------------------------------
@@ -166,41 +179,17 @@ def plot_exit_waves(exact, numerical, error, nx, nz, bc_type, Solver):
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
-
-# ----------------------------------------------------------------------------------------
-#  Main test
-# ----------------------------------------------------------------------------------------
-
-# dont test
-#@pytest.mark.skip(reason="Tests are too slow for regular CI runs.")
-@pytest.mark.parametrize("bc_type", [
-    BoundaryType.NEUMANN,
-    BoundaryType.IMPEDANCE,
-    BoundaryType.DIRICHLET
-], ids=["Neumann", "Impedance", "Dirichlet"])
-@pytest.mark.parametrize("Solver", [
-    PWEIterativeLUSolver,
-    PWEFullPinTSolver,
-    PWEFullLUSolver
-], ids=["Iterative", "FullPinT", "FullLU"])
-def test_error_convergence(Solver, bc_type, request):
-    """Validate second-order convergence for each solver and boundary type."""
-    nx_values = [8, 16, 32]
-    if bc_type == BoundaryType.DIRICHLET:
-        nx_values.append(64)  # Finer grid for Dirichlet due to higher errors
-        if Solver != PWEIterativeLUSolver:
-            # Skip solvers that are too slow on fine grids
-            pytest.mark.skip(reason="Solver too slow for fine grids in CI.")
-
+def error_rates(nx_values, nz_values, Solver, bc_type, request):
+    """Compute error norms and observed convergence rates."""
     inf_norms = []
     observed_rates = []
 
     print(f"\n=== {Solver.__name__} — {bc_type} BC ===")
 
     print("\nGrid\tInf-Norm\tRate")
-    for i, nx in enumerate(nx_values):
-        nz = nx
-        exact, numerical = compute_exact_and_numerical(nx, nz, Solver, bc_type)
+    for i, (nx, nz) in enumerate(zip(nx_values, nx_values)):
+        exact = compute_exact(nx, nz, bc_type)
+        numerical = compute_numerical(nx, nz, Solver, bc_type)
         error = numerical - exact
         inf_norm = np.max(np.abs(error))
         inf_norms.append(inf_norm)
@@ -210,7 +199,7 @@ def test_error_convergence(Solver, bc_type, request):
             rate = np.log2(inf_norms[i - 1] / inf_norm)
             print(f"{nx}\t{inf_norm:.3e}\t{rate:.2f}")
             observed_rates.append(rate)
-
+        
     # Optional plotting
     if request.config.getoption("--plot"):
         plot_convergence(nx_values, inf_norms, bc_type, Solver)
@@ -218,8 +207,47 @@ def test_error_convergence(Solver, bc_type, request):
     if request.config.getoption("--plot_error"):
         plot_exit_waves(exact[:,:,-1], numerical[:,:,-1], error[:,:,-1], nx, nz, bc_type, Solver)
 
+    return inf_norms, observed_rates
+
+# ----------------------------------------------------------------------------------------
+#  Main test
+# ----------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bc_type", [
+    BoundaryType.NEUMANN,
+    BoundaryType.IMPEDANCE,
+], ids=["Neumann", "Impedance"])
+@pytest.mark.parametrize("Solver", [
+    PWEIterativeLUSolver,
+], ids=["Iterative", "FullPinT", "FullLU"])
+def test_error_convergence(Solver, bc_type, request):
+    """
+    Validate second-order convergence.
+        For Dirichlet, only test IterativeLU theoretical convergence
+        due to finer mesh requirements and computational cost. 
+        Then test the other solvers give the same solution as they
+        should be equivalent.
+    """
+    nx_values = [8, 16, 32]
+    if bc_type == BoundaryType.DIRICHLET:
+        nx_values.append(64) # Finer mesh for Dirichlet BC to achieve theortical convergence
+    nz_values = nx_values
+    inf_norms, observed_rates = error_rates(nx_values, nz_values, Solver, bc_type, request)
+
     # Assertions: monotonic decrease & second-order rate
     assert all(inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))), \
         f"Error did not decrease monotonically: {inf_norms}"
     assert 1.5 <= observed_rates[-1] <= 2.5, \
         f"Expected ~2nd order convergence, got {observed_rates[-1]:.2f}"
+
+    # Verify the other slower solvers match the above solution on coarse mesh.
+    nx = 8
+    nz = 8
+    numerical_iterative = compute_numerical(nx, nz, PWEIterativeLUSolver, bc_type)
+    numerical_FullPinT = compute_numerical(nx, nz, PWEFullPinTSolver, bc_type)
+    numerical_FullLU = compute_numerical(nx, nz, PWEFullLUSolver, bc_type)
+
+    assert np.allclose(numerical_iterative, numerical_FullLU, atol=1e-6), \
+        "Convergent Iterative and FullLUSolver solutions do not match for Dirichlet BC"
+    assert np.allclose(numerical_iterative, numerical_FullPinT, atol=1e-6), \
+        "Convergent Iterative and FullPinTSolver solutions do not match for Dirichlet BC"

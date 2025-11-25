@@ -2,19 +2,29 @@ name: Python Tests
 
 on:
   push:
+    paths:
+      - '.github/workflows/tests.yml'
+      - 'thick_ptycho/**'
+      - 'tests/**'
+      - 'pyproject.toml'
   pull_request:
-
+    paths:
+      - '.github/workflows/tests.yml'
+      - 'thick_ptycho/**'
+      - 'tests/**'
+      - 'pyproject.toml'
 jobs:
   test:
     name: Run Pytest
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
