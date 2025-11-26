@@ -4,7 +4,6 @@ import pytest
 import pdb
 from thick_ptycho.simulation.config import SimulationConfig, ProbeType, ProbeConfig
 from thick_ptycho.simulation.simulation_space import create_simulation_space
-from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 from thick_ptycho.forward_model import (
     PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver
@@ -83,13 +82,12 @@ def compute_exact_and_numerical(nx, nz, Solver, bc_type):
     )
 
     sim_space = create_simulation_space(sim_cfg)
-    obj = create_ptycho_object(sim_space)
     probes = create_ptycho_probes(sim_space)
 
     test_bcs = BoundaryConditionsTest(sim_space) if bc_type == BoundaryType.IMPEDANCE else None
 
     solver = Solver(
-        sim_space, obj, probes,
+        sim_space, probes,
         bc_type=bc_type.value,
         test_bcs=test_bcs
     )

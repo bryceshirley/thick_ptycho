@@ -148,12 +148,11 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
       replaced with PETSc factorizations or iterative inner solves.
     """
 
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  results_dir="", use_logging=False, verbose=False, log=None,
                  alpha: float = 1e-6, atol: float = 1e-6):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             results_dir=results_dir,
             use_logging=use_logging,
@@ -180,7 +179,7 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
     def _get_or_construct_pit(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
         assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}
         if n is None:
-            n = self.ptycho_object.n_true
+            n = self.simulation_space.refractive_index_empty
 
         if mode in {"forward_rotated", "adjoint_rotated"}:
             n = self.rotate_n(n)
@@ -201,7 +200,7 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
             L = self.nz - 1
 
             # Object contribution (Nx, L)
-            C = self.ptycho_object.create_object_contribution(n=n).reshape(-1, L).astype(np.complex128)
+            C = self.simulation_space.create_object_contribution(n=n).reshape(-1, L).astype(np.complex128)
 
             A_csr = A_step.tocsr()  # ensure A_step is already complex128 upstream
             B_csr = B_step.tocsr()

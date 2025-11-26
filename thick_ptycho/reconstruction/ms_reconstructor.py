@@ -31,7 +31,7 @@ class ReconstructorMS(ReconstructorBase):
             log_file_name="multislice_reconstruction_log.txt",
         )
         # Create ptychographic object and probes
-        self.ms = MSForwardModelSolver(self.simulation_space, self.ptycho_object, 
+        self.ms = MSForwardModelSolver(self.simulation_space,
                                             self.ptycho_probes,
                                             results_dir=self._results_dir,
                                             use_logging=use_logging,

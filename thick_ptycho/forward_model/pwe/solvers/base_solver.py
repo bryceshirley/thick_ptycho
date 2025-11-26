@@ -47,13 +47,12 @@ class ProjectionCache:
 class BasePWESolver(BaseForwardModelSolver, ABC):
     """Iterative LU-based slice-by-slice propagation solver."""
     solver_cache_class: type = None
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=True, log=None,
                  test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             results_dir=results_dir,
             use_logging=use_logging,
@@ -64,7 +63,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         self.test_bcs = test_bcs
 
         self.bc_type = bc_type
-        self.pwe_finite_differences = PWEForwardModel(simulation_space, ptycho_object,
+        self.pwe_finite_differences = PWEForwardModel(simulation_space,
                                                       bc_type=bc_type)
         self.block_size = self.pwe_finite_differences.block_size
 
@@ -99,41 +98,47 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         call the specific construction logic, and return the populated cache instance.
         """
         assert mode in self.projection_cache[proj_idx].modes, f"Invalid mode: {mode!r}"
-        
-        # 1. Check cache and get potentially rotated object 'n'
-        n_rot, cache_was_reset = self.get_projected_obj(n=n, proj_idx=proj_idx, mode=mode)
-        
-        # 2. Perform construction if cache was reset
-        if cache_was_reset:
-            self._log(f"Cache reset for projection {proj_idx}, mode {mode}.")
-            
-            # The derived class handles the actual work
-            self._construct_solve_cache(
-                n=n_rot, 
-                mode=mode, 
-                proj_idx=proj_idx,
-            )
 
-    def get_projected_obj(self, n: np.ndarray, proj_idx: int = 0, mode: str="forward") -> Optional[np.ndarray]:
+        # Potentially rotate object 'n'
+        n = self.get_projected_obj(n=n, proj_idx=proj_idx)
+
+        cache = self.projection_cache[proj_idx].modes[mode]
+
+        # True if ANY field except cached_n is None
+        uninitialized = any(
+            getattr(cache, f.name) is None
+            for f in fields(cache)
+            if f.name != "cached_n"
+        )
+
+        # Rebuild cache if missing values
+        if cache.cached_n is None or uninitialized or self.simulation_space.solve_reduced_domain:
+            # Build solver matrices
+            self._construct_solve_cache(
+                n=n,
+                mode=mode,
+                proj_idx=proj_idx,
+                scan_idx=scan_idx
+            )
+    
+    def prepare_solver_caches(self, n: np.ndarray,modes: Tuple[str]=("forward","adjoint")):
+        """Prepare solver caches for all projections & modes used."""
+        for proj_idx in range(self.num_projections):
+            for mode in modes:
+                self._construct_solve_cache(
+                    n=n,
+                    proj_idx=proj_idx,
+                    mode=mode
+                )
+
+    def get_projected_obj(self, n: np.ndarray, mode: str = "forward", proj_idx: int = 0) -> Optional[np.ndarray]:
         """Get cached projection matrix for given projection index.
         Also handles rotation of n for different projections."""
-        # Get n if not provided
-        if n is None:
-            n = self.ptycho_object.n_true
-        
-        # Reset cache if n has changed for this projection and mode
-        n_id = id(n)
-        if self.projection_cache[proj_idx].modes[mode].cached_n_id != n_id:
-            self.projection_cache[proj_idx].modes[mode].reset(n_id)
-            reset_cache = 1
-        else:
-            reset_cache = 0
-    
         # Rotate n if needed
         if self.simulation_space.num_projections == 1 or proj_idx == 0:
-            return n, reset_cache
+            return n
         elif proj_idx == 1:
-            return np.rot90(n, k=1), reset_cache
+            return np.rot90(n, k=1)
         else:
             raise ValueError(f"Invalid projection index: {proj_idx}")
         
@@ -149,7 +154,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         probe: Optional[np.ndarray] = None,
         n: Optional[np.ndarray] = None,
         mode: str = "forward",
-        rhs_block: Optional[np.ndarray] = None,
+        rhs_block: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Solve for a single probe's field using the full block-tridiagonal system.
@@ -174,6 +179,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         u : ndarray
             Complex propagated field, shape (block_size, nz).
         """
+
         # Select (and/or construct) cache (e.g., LU factors or PiT Preconditioners)
         self._get_or_construct_cache(n=n, mode=mode, scan_idx=scan_idx, proj_idx=proj_idx)
 

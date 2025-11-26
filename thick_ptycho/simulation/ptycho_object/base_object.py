@@ -20,21 +20,16 @@ class BasePtychoObject(ABC):
     def __init__(self, simulation_space):
         self.simulation_space = simulation_space
         self.objects = []
-        self.n_true = np.ones(simulation_space.shape, dtype=complex) * simulation_space.n_medium
-
-    @abstractmethod
-    def get_reduced_sample(self, *args, **kwargs):
-        """Retrieve the reduced object for propagation."""
-        pass
+        self.refractive_index = simulation_space.refractive_index_empty
 
     def build_field(self):
         """Generate total refractive index field."""
         for obj in self.objects:
-            self.n_true += obj.get_refractive_index_field()
-        # return self.n_true
+            self.refractive_index += obj.get_refractive_index_field()
+        # return self.refractive_index
 
-    # Method to save n_true to npz file
-    def save_n_true(self, file_path: str):
+    # Method to save refractive_index to npz file
+    def save_refractive_index(self, file_path: str):
         """
         Save the refractive index field to a .npy file.
 
@@ -42,7 +37,7 @@ class BasePtychoObject(ABC):
         filename (str): Path to the output .npy file.
         """
         self.simulation_space._log(f"Saving refractive index field to {file_path}")
-        np.save(file_path, self.n_true)
+        np.save(file_path, self.refractive_index)
 
     def add_object(self, shape: str, refractive_index: complex, side_length_factor: float,
                    centre_factor: tuple, depth_factor: float, gaussian_blur=None):
@@ -69,8 +64,6 @@ class BasePtychoObject(ABC):
                 depth_factor,
                 gaussian_blur,
                 self.simulation_space))
-        
-
 
     def load_image(self, file_path: str, real_perturbation=1e-4, imaginary_perturbation=1e-6):
         """
@@ -100,12 +93,12 @@ class BasePtychoObject(ABC):
         img_norm = (img_array - img_array.mean()) / (img_array.std() + 1e-12)
 
         # Construct refractive index field
-        self.n_true = (
+        self.refractive_index = (
             self.simulation_space.n_medium
             - real_perturbation * img_norm
             - 1j * imaginary_perturbation * img_norm
         )
-        return self.n_true
+        return self.refractive_index
 
     def load_sample_object_from_file(self, filepath: str, real_perturbation=1e-4, imaginary_perturbation=1e-6):
         """
@@ -121,51 +114,9 @@ class BasePtychoObject(ABC):
             Magnitude of random perturbation added to the imaginary part.
         """
         loaded_n = np.load(filepath)
-        if loaded_n.shape != self.n_true.shape:
+        if loaded_n.shape != self.refractive_index.shape:
             raise ValueError("Loaded sample shape does not match simulation space shape.")
 
         # Normalize the refractive index field and rescale it
-        n_true = (loaded_n - np.mean(loaded_n)) / np.std(loaded_n) + 1
-        self.n_true = self.simulation_space.n_medium - (real_perturbation * n_true) - (imaginary_perturbation * 1j * n_true)
-
-    def create_object_contribution(self,n=None, grad=False, scan_index=0):
-        """
-        Create the field of object slices in free space.
-
-        Works for 2D (x, z) and 3D (x, y, z) refractive index fields.
-
-        Parameters
-        ----------
-        n : ndarray, optional
-            Refractive index field. If None, uses self.n_true.
-        grad : bool, optional
-            If True, compute gradient coefficient (linear in n).
-            If False, compute propagation coefficient (quadratic in n).
-        scan_index : int, optional
-            Index for sub-sampling info in scan_frame_info.
-
-        Returns
-        -------
-        object_steps : ndarray
-            Complex-valued slices between adjacent z-layers.
-            Shape is same as n except the last axis (z) is reduced by 1.
-        """
-
-        # Use the true refractive index field if not provided
-        if n is None:
-            n = self.n_true
-
-        # Restrict to thin sample region if requested
-        if self.simulation_space.solve_reduced_domain:
-            n = self.get_reduced_sample(n, scan_index)
-
-        # Compute coefficient
-        if grad:
-            coefficient = (self.simulation_space.k / 1j) * n
-        else:
-            coefficient = (self.simulation_space.k / 2j) * (n**2 - 1)
-
-        # Compute all half time-step slices along the z-axis
-        object_steps = (self.simulation_space.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
-
-        return object_steps
+        refractive_index = (loaded_n - np.mean(loaded_n)) / np.std(loaded_n) + 1
+        self.refractive_index = self.simulation_space.n_medium - (real_perturbation * refractive_index) - (imaginary_perturbation * 1j * refractive_index)

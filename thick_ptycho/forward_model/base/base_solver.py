@@ -2,8 +2,8 @@ import numpy as np
 import time
 from typing import Optional, Union
 
-from thick_ptycho.simulation.ptycho_object import PtychoObject1D, PtychoObject2D
 from thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
+from thick_ptycho.simulation.ptycho_probe.factory import create_ptycho_probes
 from thick_ptycho.utils.io import setup_log
 
 from abc import ABC, abstractmethod
@@ -22,7 +22,6 @@ class BaseForwardModelSolver(ABC):
     def __init__(
         self,
         simulation_space: Union[SimulationSpace1D, SimulationSpace2D],
-        ptycho_object: Union[PtychoObject1D, PtychoObject2D],
         ptycho_probes: np.ndarray,
         results_dir: str = "",
         use_logging: bool = False,
@@ -30,7 +29,6 @@ class BaseForwardModelSolver(ABC):
         log=None,
     ):
         self.simulation_space = simulation_space
-        self.ptycho_object = ptycho_object
         self.verbose = verbose
         self.results_dir = results_dir
 
@@ -68,7 +66,8 @@ class BaseForwardModelSolver(ABC):
 
     def solve(self, n: Optional[np.ndarray] = None, mode: str = "forward",
               rhs_block: Optional[np.ndarray] = None,
-              probes: Optional[np.ndarray] = None) -> np.ndarray:
+              probes: Optional[np.ndarray] = None,
+              **kwargs) -> np.ndarray:
         """
         Main multi-angle, multi-probe solving loop.
         Subclasses must define `_solve_single_probe(angle_idx, probe_idx, n, **kwargs)`.
@@ -94,6 +93,9 @@ class BaseForwardModelSolver(ABC):
         # Initialize solution grid with initial condition
         u = self._create_solution_grid()
 
+        if n is None:
+            n = self.simulation_space.refractive_index_empty
+
         if probes is None:
             probes = self.probes
 
@@ -108,7 +110,7 @@ class BaseForwardModelSolver(ABC):
                         scan_idx=scan_idx, proj_idx=proj_idx,
                         n=n, mode=mode, 
                         rhs_block=rhs_block,
-                        probe=probes[angle_idx, scan_idx, :],
+                        probe=probes[angle_idx, scan_idx, :]
                     ).reshape(*self.effective_shape)
 
                     if self.solve_reduced_domain:

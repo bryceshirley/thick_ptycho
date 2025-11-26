@@ -23,18 +23,18 @@ class PWEFullLUSolverCache():
     b : ndarray, optional
         Right-hand side vector for homogeneous propagation.
     """
-    cached_n_id: Optional[int] = None
+    cached_n: Optional[np.ndarray] = None
     lu: Optional[spla.SuperLU] = None
     b: Optional[np.ndarray] = None
 
-    def reset(self, n_id: Optional[int] = None):
+    def reset(self, n: Optional[np.ndarray] = None):
         """Reset cached variables."""
         # Reinitialize all cached variables to None
         for f in fields(self):
             setattr(self, f.name, None)
     
-        # Update cached n id
-        object.__setattr__(self, 'cached_n_id', n_id)
+        # Update cached n
+        self.cached_n = n
 
 # ------------------------------------------------------------------
 #  Full-system PWE Solver
@@ -43,13 +43,12 @@ class PWEFullLUSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
 
     solver_cache_class = PWEFullLUSolverCache
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None,
                  test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             bc_type=bc_type,
             results_dir=results_dir,
@@ -70,7 +69,7 @@ class PWEFullLUSolver(BasePWESolver):
         Parameters
         ----------
         n : ndarray, optional
-            Refractive index field. If None, uses self.ptycho_object.n_true.
+            Refractive index field.
         mode : {'forward', 'adjoint','forward_rotated', 'adjoint_rotated'}
             Propagation mode.
         """
@@ -78,6 +77,7 @@ class PWEFullLUSolver(BasePWESolver):
                                                                     scan_index=scan_idx
                                                                     ).tocsc()
         self.projection_cache[proj_idx].modes[mode].lu = spla.splu(A)
+        self.projection_cache[proj_idx].modes[mode].cached_n = n
 
 
         if self.test_bcs is None:

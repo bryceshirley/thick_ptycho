@@ -21,10 +21,9 @@ class PWEForwardModel:
         If True, use sub-sampled grids per scan from `detector_frame_info`.
     """
 
-    def __init__(self, simulation_space, ptycho_object, 
+    def __init__(self, simulation_space, 
                  bc_type: str = "impedance"):
         self.simulation_space = simulation_space
-        self.ptycho_object = ptycho_object
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.signal_strength = 1.0  # reserved for future scaling
 
@@ -145,7 +144,7 @@ class PWEForwardModel:
         scipy.sparse.dia_matrix
             Diagonal matrix with the object effective contribution and a subdiagonal coupling.
         """
-        effective_object = self.ptycho_object.create_object_contribution(
+        effective_object = self.simulation_space.create_object_contribution(
             n=n, grad=grad, scan_index=scan_index
         )
         return sp.diags(effective_object.T.flatten()) + sp.diags(

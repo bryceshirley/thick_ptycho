@@ -32,19 +32,19 @@ class PWEFullPinTSolverCache():
     b : ndarray, optional
         Right-hand side vector.
     """
-    cached_n_id: Optional[int] = None
+    cached_n: Optional[np.ndarray] = None
     ARop: Optional[LinearOperator] = None
     Mop: Optional[LinearOperator] = None
     b: Optional[np.ndarray] = None
 
-    def reset(self, n_id: Optional[int] = None):
+    def reset(self, n: Optional[np.ndarray] = None):
         """Reset cached variables."""
         # Reinitialize all cached variables to None
         for f in fields(self):
             setattr(self, f.name, None)
     
-        # Update cached n id
-        object.__setattr__(self, 'cached_n_id', n_id)
+        # Update cached n
+        self.cached_n = n
 
 # ------------------------------------------------------------------
 #  Full-system PWE Solver with PiT Preconditioning
@@ -52,14 +52,13 @@ class PWEFullPinTSolverCache():
 class PWEFullPinTSolver(BasePWESolver):
     """Full-system PWE solver using a single block-tridiagonal system."""
     solver_cache_class = PWEFullPinTSolverCache
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, log=None,
                  alpha=1e-2, num_workers=8, atol=1e-8,
                  test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             bc_type=bc_type,
             results_dir=results_dir,
@@ -95,7 +94,7 @@ class PWEFullPinTSolver(BasePWESolver):
         Parameters
         ----------
         n : ndarray, optional
-            Refractive index field. If None, uses self.ptycho_object.n_true.
+            Refractive index field. If None.
         mode : {'forward', 'adjoint', 'reverse'}
             Propagation mode.
         scan_idx : int
@@ -111,7 +110,7 @@ class PWEFullPinTSolver(BasePWESolver):
         A_csr = A_step.tocsr()
         B_csr = B_step.tocsr()
         
-        C = self.ptycho_object.create_object_contribution(n=n, 
+        C = self.simulation_space.create_object_contribution(n=n, 
                                                           scan_index=scan_idx
                                                           ).reshape(-1, self.nz - 1)
 
@@ -139,7 +138,7 @@ class PWEFullPinTSolver(BasePWESolver):
         # Cache A, R, and A@R
         self.projection_cache[proj_idx].modes[mode].ARop = ARop
         self.projection_cache[proj_idx].modes[mode].M_prec = M_prec
-        self.projection_cache[proj_idx].modes[mode].cached_n_id = id(n)
+        self.projection_cache[proj_idx].modes[mode].cached_n = n
 
         # Construct RHS if needed (mirror LU b logic)
         if self.projection_cache[proj_idx].modes[mode].b is None and self.test_bcs is None:

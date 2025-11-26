@@ -16,6 +16,9 @@ class SimulationSpace1D(BaseSimulationSpace):
         # 1. Geometry setup
         # ------------------------------------------------------------------
         self.shape = (self.nx, self.nz)
+        # Empty refractive index field representing the background medium
+        self.refractive_index_empty = np.ones(self.shape, dtype=complex) * self.n_medium
+
         self.dimension = 1
 
         # Effective width
@@ -99,3 +102,11 @@ class SimulationSpace1D(BaseSimulationSpace):
             frames.append(scan_frame)
 
         return frames
+    
+    def _get_reduced_sample(self,n,scan_index):
+        """Retrieve the object slices for propagation."""
+        x_min, x_max = self._scan_frame_info[scan_index].reduced_limits_discrete.x
+        return n[
+            x_min:x_max,
+            :
+        ]

@@ -1,17 +1,3 @@
-# import numpy as np
-# import scipy.sparse.linalg as spla
-
-# import time
-# from typing import Optional, List
-
-# from thick_ptycho.forward_model.pwe.solvers import PWEIterativeLUSolver
-# from thick_ptycho.forward_model.pwe.solvers import PWEFullPinTSolver
-# from thick_ptycho.forward_model.pwe.solvers import PWEFullLUSolver
-# from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
-
-
-# from .base_reconstructor import ReconstructorBase
-
 import numpy as np
 import scipy.sparse.linalg as spla
 from numpy.fft import fft2, ifft2, fftshift
@@ -74,27 +60,25 @@ class ReconstructorPWE(ReconstructorBase):
         # Forward model selection
         SolverClass = PWEFullLUSolver if solver_type == "full" else PWEIterativeLUSolver
         self.forward_model = SolverClass(simulation_space, 
-                                         self.ptycho_object,
                                          self.ptycho_probes,
-                                        results_dir=results_dir)
+                                        results_dir=results_dir,
+                                        use_logging=use_logging,
+                                        verbose=verbose)
 
         self._results_dir = results_dir
         self._log("Initializing Least Squares Solver...")
 
-
-
-    def compute_forward_model(self, nk, probes: Optional[np.ndarray] = None):
+    def compute_forward_model(self, probes: Optional[np.ndarray] = None):
         """Compute the forward model for the current object and gradient."""
-
-        # Prepare the solver with the current refractive index
-        self.forward_model.presolve_setup(n=nk)
-        self.forward_model.presolve_setup(n=nk, mode='adjoint')
-
-        # Compute Gradient of Ak wrt n
-        grad_Ak = - self.forward_model.get_gradient(n=nk)
+        # Prepare solver caches for all projections & modes
+        # for when nk does not change between iterations
+        if not self.simulation_space.solve_reduced_domain:
+            self.forward_model.prepare_solver_caches(n=self.nk, modes=('forward', 'adjoint'))
+        
+        grad_Ak = - self.forward_model.get_gradient(n=self.nk)
 
         uk = self.convert_to_vector_form(self.forward_model.solve(
-            n=nk,
+            n=self.nk,
             probes=probes))
 
 
@@ -111,17 +95,17 @@ class ReconstructorPWE(ReconstructorBase):
         
         idx = 0
         for proj_idx in range(self.num_projections):
-            temp_mode = "adjoint_rotated" if proj_idx == 1 else "adjoint"
-    
             for angle_idx in range(self.num_angles):
                 for scan_idx in range(self.num_probes):
-
+                    
                     # 1) Solve adjoint model
                     backprop = self.forward_model._solve_single_probe(
                     scan_idx=scan_idx,
+                    proj_idx=proj_idx,
                     probe=None,
                     rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx],
-                    mode=temp_mode
+                    mode="adjoint",
+                    n=self.nk
                     )
 
                     # 2) Flatten the spatial field block
@@ -154,12 +138,8 @@ class ReconstructorPWE(ReconstructorBase):
         float: The computed denominator value.
         """
         denominator = 0.0
-        projection_size = self.nx * (self.nz - 1)
-
         idx = 0
         for proj_idx in range(self.num_projections):
-            temp_mode = "forward_rotated" if proj_idx == 1 else "forward"
-
             for angle_idx in range(self.num_angles):
                 for scan_idx in range(self.num_probes):
 
@@ -172,9 +152,11 @@ class ReconstructorPWE(ReconstructorBase):
                     # 3) Solve forward model for delta_u
                     delta_u = self.forward_model._solve_single_probe(
                         scan_idx=scan_idx,
+                        proj_idx=proj_idx,
                         probe=probe,
                         rhs_block=perturb.reshape(self.nz - 1, self.nx).T,
-                        mode=temp_mode
+                        mode="forward",
+                        n=self.nk
                     )
 
                     # (nz, nx) field → drop the first z-plane → flatten
@@ -252,7 +234,7 @@ class ReconstructorPWE(ReconstructorBase):
 
         # Initialize residual
         residual = []
-        nk = n0
+        self.nk = n0
         gradient_update = np.zeros((self.nx, self.nz), dtype=complex)
 
         # Define probe
@@ -266,7 +248,7 @@ class ReconstructorPWE(ReconstructorBase):
         for i in range(max_iters):
             time_start = time.time()
             # Compute the Forward Model
-            uk, grad_Ak = self.compute_forward_model(nk, probes=probesk)
+            uk, grad_Ak = self.compute_forward_model(probes=probesk)
 
             exit_wave_error = self.get_error_in_exit_wave(uk)
             rel_rmse = np.sqrt(np.mean(np.abs(exit_wave_error[...,-1]) ** 2))
@@ -277,9 +259,8 @@ class ReconstructorPWE(ReconstructorBase):
                 break
 
             # Output the current iteration information
-            if self.verbose:
-                self._log(f"Iteration {i + 1}/{max_iters}")
-                self._log(f"    RMSE: {residual[i]}")
+            self._log(f"Iteration {i + 1}/{max_iters}")
+            self._log(f"    RMSE: {residual[i]}")
 
             # Compute the gradient of the least squares problem
             grad_least_squares_real, grad_least_squares_imag = (
@@ -309,7 +290,7 @@ class ReconstructorPWE(ReconstructorBase):
             gradient_update[:, 1:] = alphakdk_re + 1j * alphakdk_im
 
             # Update the current estimate of the refractive index of the object
-            nk += gradient_update
+            self.nk += gradient_update
 
             # Compute beta using Polak-Ribière and Fletcher-Reeves
             betak_re = self.compute_betak(grad_least_squares_real,
@@ -325,29 +306,28 @@ class ReconstructorPWE(ReconstructorBase):
 
             # Apply TV and low-pass filtering
             if tv_lambda_amp > 0.0 or low_pass_sigma_phase > 0.0:
-                nk = self.global_object_update(nk, tv_lambda_amp, low_pass_sigma_phase)
+                self.nk = self.global_object_update(self.nk, tv_lambda_amp, low_pass_sigma_phase)
 
             # Compute source by solving the reverse problem
             if solve_probe:
                 gamma = 0.5 
-                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes(nk)
+                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes()
                 probesk_old = probesk.copy()
             
             time_end = time.time()
-            if self.verbose:
-                self._log(
-                    f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
+            self._log(
+                f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds.")
 
-        return nk, self.convert_to_tensor_form(uk), residual
+        return self.nk, self.convert_to_tensor_form(uk), residual
 
-    def solve_for_probes(self, n, plot_reverse: Optional[bool] = False):
+    def solve_for_probes(self, plot_reverse: Optional[bool] = False):
         """
         Solve the forward model for the probes in reversed time.
         """
         assert not self.phase_retrieval, "Phase retrieval mode not supported for probe solving."
-        self.forward_model.prepare_solver(n=n, mode='reverse')
+        self.forward_model.prepare_solver(n=self.nk, mode='reverse')
 
-        uk_reverse = self.forward_model.solve(n=n,mode='reverse',
+        uk_reverse = self.forward_model.solve(n=self.nk,mode='reverse',
                 probes=self.data)
             
         if plot_reverse:

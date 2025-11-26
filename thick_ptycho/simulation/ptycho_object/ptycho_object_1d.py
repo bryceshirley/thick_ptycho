@@ -22,14 +22,14 @@ class PtychoObject1D(BasePtychoObject):
         n : np.ndarray
             Complex-valued input array to be resized.
         """
-        print(f"Original refractive index shape: {self.n_true.shape}")
+        print(f"Original refractive index shape: {self.refractive_index.shape}")
         n = np.load(file_path)
         print(f"Loaded refractive index shape: {n.shape}")
         target_shape = (self.simulation_space.nz, self.simulation_space.nx)
         real_resized = cv2.resize(np.real(n), target_shape, interpolation=cv2.INTER_LINEAR)
         imag_resized = cv2.resize(np.imag(n), target_shape, interpolation=cv2.INTER_LINEAR)
-        self.n_true = real_resized + 1j * imag_resized
-        print(f"Loaded refractive index new shape: {self.n_true.shape}")
+        self.refractive_index = real_resized + 1j * imag_resized
+        print(f"Loaded refractive index new shape: {self.refractive_index.shape}")
 
     # From from skimage import data create refractive index from phantom image
     def create_refractive_index_of_phantom(self, real_perturbation=1e-4, imaginary_perturbation=1e-6) -> np.ndarray:
@@ -44,7 +44,7 @@ class PtychoObject1D(BasePtychoObject):
 
         Returns
         -------
-        n_true : np.ndarray
+        refractive_index : np.ndarray
             The constructed refractive index field.
         
         """
@@ -84,21 +84,11 @@ class PtychoObject1D(BasePtychoObject):
         img_norm = (img_resized - np.mean(img_resized)) / (np.std(img_resized) + 1e-12)
 
         # Construct refractive index field
-        self.n_true = (
+        self.refractive_index = (
             self.simulation_space.n_medium
             - real_perturbation * img_norm
             - 1j * imaginary_perturbation * img_norm
         )
 
         
-        return self.n_true
-
-
-
-    def get_reduced_sample(self,n,scan_index):
-        """Retrieve the object slices for propagation."""
-        x_min, x_max = self.simulation_space.scan_frame_info[scan_index].reduced_limits_discrete.x
-        return n[
-            x_min:x_max+1,
-            :
-        ]
+        return self.refractive_index

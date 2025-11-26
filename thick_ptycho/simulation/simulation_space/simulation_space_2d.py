@@ -22,6 +22,9 @@ class SimulationSpace2D(BaseSimulationSpace):
         self.shape = (self.nx,
                       self.ny,
                       self.nz)
+        # Empty refractive index field representing the background medium
+        self.refractive_index_empty = np.ones(self.shape, dtype=complex) * self.n_medium
+
 
         # Effective resolution
         self.effective_nx = self.effective_nx
@@ -264,3 +267,13 @@ class SimulationSpace2D(BaseSimulationSpace):
                 centre_x.append(x)
                 centre_y.append(y)
         return centre_x, centre_y
+    
+    def _get_reduced_sample(self,n,scan_index):
+        """Retrieve the object slices for propagation."""
+        x_min,x_max = self._scan_frame_info[scan_index].reduced_limits_discrete.x
+        y_min, y_max = self._scan_frame_info[scan_index].reduced_limits_discrete.y    
+        return n[
+                    x_min:x_max+1,
+                    y_min:y_max+1,
+                    :
+                ]

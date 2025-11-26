@@ -1,15 +1,6 @@
-# import numpy as np
-# from typing import Optional
-# # from thick_ptycho.simulation import ptycho_object, simulation_space
-# from thick_ptycho.utils.io import setup_log
-# from thick_ptycho.simulation.ptycho_object import create_ptycho_object
-# from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
-
 import numpy as np
 from typing import Optional
-# from thick_ptycho.simulation import ptycho_object, simulation_space
 from thick_ptycho.utils.io import setup_log
-from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 
 
@@ -55,7 +46,6 @@ class ReconstructorBase:
         **kwargs,
     ):
         self.simulation_space = simulation_space
-        self.ptycho_object = create_ptycho_object(simulation_space)
         self.ptycho_probes = create_ptycho_probes(simulation_space)
         self.data = np.asarray(data)
         #assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
@@ -259,7 +249,6 @@ class ReconstructorBase:
 #         **kwargs,
 #     ):
 #         self.simulation_space = simulation_space
-#         self.ptycho_object = create_ptycho_object(simulation_space)
 #         self.ptycho_probes = create_ptycho_probes(simulation_space)
 #         self.data = np.asarray(data)
 #         #assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."

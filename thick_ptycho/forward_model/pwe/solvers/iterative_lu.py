@@ -13,31 +13,30 @@ class PWEIterativeLUSolverCache():
     """Cache structure for storing precomputed variables in the PWE Iterative LU solver.
      cached_n_id: Optional[int] = None
     """
-    cached_n_id: Optional[int] = None
+    cached_n: Optional[np.ndarray] = None
     A_lu_list: Optional[Tuple[spla.SuperLU]] = None
     B_list: Optional[Tuple[np.ndarray]] = None
     b: Optional[np.ndarray] = None
 
-    def reset(self, n_id: Optional[int] = None):
+    def reset(self, n: Optional[np.ndarray] = None):
         """Reset cached variables."""
         # Reinitialize all cached variables to None
         for f in fields(self):
             setattr(self, f.name, None)
     
         # Update cached n id
-        object.__setattr__(self, 'cached_n_id', n_id)
+        self.cached_n = n
 
 
 class PWEIterativeLUSolver(BasePWESolver):
     """Iterative LU-based slice-by-slice propagation solver."""
     solver_cache_class = PWEIterativeLUSolverCache
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  bc_type: BoundaryType = BoundaryType.IMPEDANCE,
                  results_dir="", use_logging=False, verbose=False, 
                  log=None, test_bcs: BoundaryConditionsTest = None):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             bc_type=bc_type,
             results_dir=results_dir,
@@ -60,7 +59,7 @@ class PWEIterativeLUSolver(BasePWESolver):
         Parameters
         ----------
         n : ndarray, optional
-            Refractive index field. If None, uses self.ptycho_object.n_true.
+            Refractive index field.
         mode : {'forward', 'adjoint', 'reverse'}
             Propagation mode.
         scan_idx : int
@@ -70,6 +69,7 @@ class PWEIterativeLUSolver(BasePWESolver):
         """
         # Create Linear System and Apply Boundary Conditions
         #A, B, b = self.pwe_finite_differences.generate_zstep_matrices()
+        self._log(f"Constructing LU factors for projection {proj_idx}, mode {mode}.")
         A, B, b = self.pwe_finite_differences._get_or_generate_step_matrices()
 
         if mode == "reverse":
@@ -82,13 +82,14 @@ class PWEIterativeLUSolver(BasePWESolver):
         self.projection_cache[proj_idx].modes[mode].A_lu_list = A_lu_list
         self.projection_cache[proj_idx].modes[mode].B_list = B_with_object_list
         self.projection_cache[proj_idx].modes[mode].b = b
+        self.projection_cache[proj_idx].modes[mode].cached_n = n
 
     def _build_lu_factors(self, A, B, mode, n, 
                           scan_idx: Optional[int] = 0):
        
         A_lu_list, B_with_object_list = [], []
 
-        object_contribution = self.ptycho_object.create_object_contribution(
+        object_contribution = self.simulation_space.create_object_contribution(
                             n=n, scan_index=scan_idx).reshape(-1, self.nz - 1)
 
         # Iterate over the z dimension
@@ -132,7 +133,7 @@ class PWEIterativeLUSolver(BasePWESolver):
         scan_idx : int
             Index of the probe position.
         n : ndarray, optional
-            Refractive index field. If None, uses self.ptycho_object.n_true.
+            Refractive index field.
         mode : {'forward', 'adjoint', 'reverse', 'forward_rotated', 'adjoint_rotated', 'reverse_rotated'}
             Propagation mode.
         rhs_block : ndarray, optional

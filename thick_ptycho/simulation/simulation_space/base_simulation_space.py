@@ -226,7 +226,6 @@ class BaseSimulationSpace(ABC):
                              self.nx)
         self.dx = self.x[1] - self.x[0]
 
-
     def _configure_probe(
         self,
         probe_diameter: float,
@@ -293,3 +292,54 @@ class BaseSimulationSpace(ABC):
     def _generate_scan_frames(self) -> List[ScanFrame]:
         """Generate scan frame information."""
         raise NotImplementedError
+    
+    # ----------------------------------------------------------------------
+    # Object contribution methods
+    # ----------------------------------------------------------------------
+    
+    @abstractmethod
+    def _get_reduced_sample(self, *args, **kwargs):
+        """Retrieve the reduced object for propagation."""
+        pass
+
+    def create_object_contribution(self,n=None, grad=False, scan_index=0):
+        """
+        Create the field of object slices in free space.
+
+        Works for 2D (x, z) and 3D (x, y, z) refractive index fields.
+
+        Parameters
+        ----------
+        n : ndarray, optional
+            Refractive index field. If None, uses self.refractive_index.
+        grad : bool, optional
+            If True, compute gradient coefficient (linear in n).
+            If False, compute propagation coefficient (quadratic in n).
+        scan_index : int, optional
+            Index for sub-sampling info in scan_frame_info.
+
+        Returns
+        -------
+        object_steps : ndarray
+            Complex-valued slices between adjacent z-layers.
+            Shape is same as n except the last axis (z) is reduced by 1.
+        """
+
+        # Use the true refractive index field if not provided
+        if n is None:
+            n = self.refractive_index_empty
+
+        # Restrict to thin sample region if requested
+        if self.solve_reduced_domain:
+            n = self._get_reduced_sample(n, scan_index)
+
+        # Compute coefficient
+        if grad:
+            coefficient = (self.k / 1j) * n
+        else:
+            coefficient = (self.k / 2j) * (n**2 - 1)
+
+        # Compute all half time-step slices along the z-axis
+        object_steps = (self.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+
+        return object_steps

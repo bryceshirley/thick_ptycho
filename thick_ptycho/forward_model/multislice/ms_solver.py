@@ -6,11 +6,10 @@ from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 class MSForwardModelSolver(BaseForwardModelSolver):
     """Angular spectrum multislice forward/backward propagation."""
 
-    def __init__(self, simulation_space, ptycho_object, ptycho_probes,
+    def __init__(self, simulation_space, ptycho_probes,
                  results_dir="", use_logging=False, verbose=False, log=None):
         super().__init__(
             simulation_space,
-            ptycho_object,
             ptycho_probes,
             results_dir=results_dir,
             use_logging=use_logging,
@@ -114,7 +113,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
         # Object refractive index distribution
         if n is None:
-            n = self.ptycho_object.n_true
+            n = self.simulation_space.refractive_index_empty
 
         # Select initial probe condition
         if probe is None:
