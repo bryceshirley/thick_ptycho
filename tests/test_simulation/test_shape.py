@@ -35,13 +35,22 @@ class SimulationSpace3D:
         self.spatial_limits = spatial_limits
         self.shape = (nx, ny, nz)
 
+@pytest.fixture
+def sim_space_2d():
+    sim = SimulationSpace2D()
+    return sim
+
+@pytest.fixture
+def sim_space_3d():
+    sim = SimulationSpace3D()
+    return sim
+
 
 # ------------------------------------------------------------------------------
 # 1. Test instantiation behaviour
 # ------------------------------------------------------------------------------
 
-def test_opticalshape_creates_1d_instance():
-    sim = SimulationSpace2D()
+def test_opticalshape_creates_1d_instance(sim_space_2d):
     shape = OpticalShape(
         centre_scale=[0.5, 0.5],
         shape="circle",
@@ -49,13 +58,12 @@ def test_opticalshape_creates_1d_instance():
         side_length_scale=0.2,
         depth_scale=0.3,
         guassian_blur=None,
-        simulation_space=sim,
+        simulation_space= sim_space_2d,
     )
     assert isinstance(shape, OpticalShape2D), "Should create OpticalShape2D for 1D centre input."
 
 
-def test_opticalshape_creates_2d_instance():
-    sim = SimulationSpace3D()
+def test_opticalshape_creates_2d_instance(sim_space_3d):
     shape = OpticalShape(
         centre_scale=[0.5, 0.5, 0.5],
         shape="cuboid",
@@ -63,7 +71,7 @@ def test_opticalshape_creates_2d_instance():
         side_length_scale=0.2,
         depth_scale=0.3,
         guassian_blur=None,
-        simulation_space=sim,
+        simulation_space=sim_space_3d,
     )
     assert isinstance(shape, OpticalShape3D), "Should create OpticalShape3D for 2D centre input."
 
@@ -81,8 +89,7 @@ def test_opticalshape_creates_2d_instance():
         ([0.5, 0.5], 0.5, 1.5),
     ],
 )
-def test_invalid_scale_values_raise_assertion(centre_scale, side_length_scale, depth_scale):
-    sim = SimulationSpace2D()
+def test_invalid_scale_values_raise_assertion(sim_space_2d, centre_scale, side_length_scale, depth_scale):
     with pytest.raises(AssertionError):
         OpticalShape(
             centre_scale=centre_scale,
@@ -91,7 +98,7 @@ def test_invalid_scale_values_raise_assertion(centre_scale, side_length_scale, d
             side_length_scale=side_length_scale,
             depth_scale=depth_scale,
             guassian_blur=None,
-            simulation_space=sim,
+            simulation_space=sim_space_2d,
         )
 
 
@@ -195,8 +202,7 @@ def test_gaussian_blur_applied_changes_field():
     assert not np.allclose(field_blur, field_no_blur), "Gaussian blur should alter field distribution."
 
 
-def test_invalid_shape_raises_valueerror():
-    sim = SimulationSpace2D()
+def test_invalid_shape_raises_valueerror(sim_space_2d):
     with pytest.raises(ValueError):
         OpticalShape(
             centre_scale=[0.5, 0.5],
@@ -205,5 +211,5 @@ def test_invalid_shape_raises_valueerror():
             side_length_scale=0.3,
             depth_scale=0.3,
             guassian_blur=None,
-            simulation_space=sim,
+            simulation_space=sim_space_2d,
         ).get_refractive_index_field()
