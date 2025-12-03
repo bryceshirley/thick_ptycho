@@ -10,22 +10,6 @@ from thick_ptycho.forward_model.pwe.operators import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 from abc import ABC, abstractmethod
 
-# ------------------------------------------------------------------
-#  Cache structure for storing precomputed variables in the solver
-# ------------------------------------------------------------------
-# @dataclass
-# class BasePWESolverCache:
-#     """Base cache structure for storing precomputed variables in PWE solvers."""
-#     cached_n_id: Optional[int] = None
-
-#     def reset(self, n_id: Optional[int] = None):
-#         """Reset cached variables."""
-#         # Reinitialize all cached variables to None
-#         for f in fields(self):
-#             setattr(self, f.name, None)
-    
-#         # Update cached n id
-#         object.__setattr__(self, 'cached_n_id', n_id)
 
 @dataclass
 class ProjectionCache:
