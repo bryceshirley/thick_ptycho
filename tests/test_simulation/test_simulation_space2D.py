@@ -2,19 +2,18 @@ import numpy as np
 import pytest
 from thick_ptycho.simulation import SimulationSpace2D
 
-from thick_ptycho.simulation.scan_frame import Limits
 
-NONDEFAULT_CONFIG_2D = dict(
-    wave_length=0.05,
-    probe_diameter=0.01,
-    spatial_limits=Limits(x=(0, 1),
-                          z=(0, 1), units="meters"),
-)
+@pytest.fixture(scope="session")
+def nondefault_config_2d(limits_2d):
+    return dict(
+        wave_length=0.05,
+        probe_diameter=0.01,
+        spatial_limits=limits_2d,
+    )
 
-
-def test_rotation():
+def test_rotation(nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         tomographic_projection_90_degree=True,
     )
     # nz overridden to nx
@@ -31,9 +30,9 @@ def test_rotation():
         (4, 3, 1.0),
     ]
 )
-def test_effective_domain_consistency(scan_points, step_size, pad):
+def test_effective_domain_consistency(scan_points, step_size, pad, nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -60,9 +59,9 @@ def test_effective_domain_consistency(scan_points, step_size, pad):
         (6, 3, 2.0),
     ]
 )
-def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad):
+def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad, nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -80,9 +79,9 @@ def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad):
     assert centres[0] == sim.effective_nx // 2
 
 
-def test_domain_limits_without_reduction():
+def test_domain_limits_without_reduction(nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         scan_points=4,
         step_size_px=3,
         pad_factor=2.0,
@@ -92,9 +91,9 @@ def test_domain_limits_without_reduction():
     assert sim.effective_nx == sim.nx
 
 
-def test_domain_limits_with_reduction():
+def test_domain_limits_with_reduction(nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         scan_points=4,
         step_size_px=3,
         pad_factor=2.0,
@@ -117,9 +116,9 @@ def test_domain_limits_with_reduction():
         (4, 4, 1.5),
     ]
 )
-def test_scan_frame_width(scan_points, step_size, pad):
+def test_scan_frame_width(scan_points, step_size, pad, nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -133,9 +132,9 @@ def test_scan_frame_width(scan_points, step_size, pad):
         assert (xmax - xmin + 1) == expected_width
 
 
-def test_single_scan_point_centering_and_bounds():
+def test_single_scan_point_centering_and_bounds(nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         solve_reduced_domain=True,
         scan_points=1,
         step_size_px=7,
@@ -147,9 +146,9 @@ def test_single_scan_point_centering_and_bounds():
     assert sim.effective_nx == sim.nx
 
 
-def test_single_scan_point_full_window():
+def test_single_scan_point_full_window(nondefault_config_2d):
     sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
+        **nondefault_config_2d,
         solve_reduced_domain=True,
         scan_points=1,
         step_size_px=7,

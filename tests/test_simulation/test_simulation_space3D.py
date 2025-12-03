@@ -2,13 +2,15 @@ import numpy as np
 import pytest
 
 from thick_ptycho.simulation import SimulationSpace3D
-from thick_ptycho.simulation.scan_frame import Limits, ScanPath
+from thick_ptycho.simulation.scan_frame import ScanPath
 
-NONDEFAULT_CONFIG_3D = dict(
-    wave_length=0.05,
-    probe_diameter=0.01,
-    spatial_limits=Limits(x=(0, 1), y=(0, 1),z=(0, 1), units="meters"),
-)
+@pytest.fixture(scope="session")
+def nondefault_config_3d(limits_3d):
+    return dict(
+        wave_length=0.05,
+        probe_diameter=0.01,
+        spatial_limits=limits_3d,
+    )
 
 # --- Utility functions ---------------------------------------------------------
 
@@ -19,14 +21,14 @@ def _extract_centres(sim):
 
 # --- Tests --------------------------------------------------------------------
 
-def test_rotation():
+def test_rotation(nondefault_config_3d):
     """
     No 90-degree tomographic projection in 3D.
     3D simulation should leave nz independent of nx.
     And num_projections should be 1.
     """
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         tomographic_projection_90_degree=True,
     )
     assert sim.nz != sim.nx
@@ -40,9 +42,9 @@ def test_rotation():
         (5, 4, 2.0),
     ]
 )
-def test_domain_square_and_effective(scan_points, step_size, pad):
+def test_domain_square_and_effective(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -67,9 +69,9 @@ def test_domain_square_and_effective(scan_points, step_size, pad):
         (4, 3, 1.6),
     ]
 )
-def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad):
+def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -94,9 +96,9 @@ def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad
     (4, 3, 1.5),
     (5, 4, 2.0),
 ])
-def test_serpentine_path_order(scan_points, step_size, pad):
+def test_serpentine_path_order(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -122,9 +124,9 @@ def test_serpentine_path_order(scan_points, step_size, pad):
     (4, 3, 1.5),
     (5, 4, 2.0),
 ])
-def test_raster_path_order(scan_points, step_size, pad):
+def test_raster_path_order(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         solve_reduced_domain=True,
         scan_points=scan_points,
         step_size_px=step_size,
@@ -145,54 +147,9 @@ def test_raster_path_order(scan_points, step_size, pad):
         assert np.all(np.diff(row_x) > 0), f"Row {row_idx} is not increasing in raster mode"
 
 
-
-# @pytest.mark.parametrize("scan_points, step_size, pad", [
-#     (4, 3, 1.5),
-# ])
-# def test_spiral_path_has_same_centres_but_reordered(scan_points, step_size, pad):
-#     serp = SimulationSpace3D(
-#         **NONDEFAULT_CONFIG_3D,
-#         solve_reduced_domain=True,
-#         scan_points=scan_points,
-#         step_size_px=step_size,
-#         pad_factor=pad,
-#         scan_path=ScanPath.SERPENTINE,
-#     )
-#     spir = SimulationSpace3D(
-#         **NONDEFAULT_CONFIG_3D,
-#         solve_reduced_domain=True,
-#         scan_points=scan_points,
-#         step_size_px=step_size,
-#         pad_factor=pad,
-#         scan_path=ScanPath.SPIRAL,
-#     )
-
-#     serp_centres = _extract_centres(serp)
-#     spir_centres = _extract_centres(spir)
-
-#     # --- Invariant 1: both scans visit the same centre coordinates ---
-#     assert set(map(tuple, serp_centres)) == set(map(tuple, spir_centres))
-
-#     # --- Invariant 2: Spiral peels inward (shrinking bounding box) ---
-#     xs, ys = spir_centres[:, 0], spir_centres[:, 1]
-
-#     # Track bounding box evolution along the spiral sequence
-#     cum_min_x = np.minimum.accumulate(xs)
-#     cum_max_x = np.maximum.accumulate(xs)
-#     cum_min_y = np.minimum.accumulate(ys)
-#     cum_max_y = np.maximum.accumulate(ys)
-
-#     # Bounding box must only get tighter, never expand again
-#     assert np.all(np.diff(cum_min_x) >= 0)
-#     assert np.all(np.diff(cum_min_y) >= 0)
-#     assert np.all(np.diff(cum_max_x) <= 0)
-#     assert np.all(np.diff(cum_max_y) <= 0)
-
-
-
-def test_single_scan_point_centering_and_full_window():
+def test_single_scan_point_centering_and_full_window(nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         solve_reduced_domain=True,
         scan_points=1,
         step_size_px=6,
@@ -209,9 +166,9 @@ def test_single_scan_point_centering_and_full_window():
     assert (ymin, ymax) == (0, sim.ny - 1)
 
 
-def test_domain_limits_without_reduction():
+def test_domain_limits_without_reduction(nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         scan_points=4,
         step_size_px=3,
         pad_factor=2.0,
@@ -222,9 +179,9 @@ def test_domain_limits_without_reduction():
     assert sim.effective_ny == sim.ny
 
 
-def test_domain_limits_with_reduction():
+def test_domain_limits_with_reduction(nondefault_config_3d):
     sim = SimulationSpace3D(
-        **NONDEFAULT_CONFIG_3D,
+        **nondefault_config_3d,
         scan_points=4,
         step_size_px=3,
         pad_factor=2.0,

@@ -8,7 +8,6 @@ from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 from thick_ptycho.forward_model import (
     PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver
 )
-from thick_ptycho.simulation.scan_frame import Limits
 from thick_ptycho.forward_model.pwe.operators.utils import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
 
@@ -60,14 +59,13 @@ def select_probe_type(bc_type):
 #  Core solver setup
 # ----------------------------------------------------------------------------------------
 
-def compute_exact_and_numerical(nx, nz, Solver, bc_type):
+def compute_exact_and_numerical(nx, nz, Solver, bc_type, limits):
     """
     Compute both analytical and numerical solutions for given grid size.
     Returns (exact_solution, numerical_solution).
     """
     k = 100
     wavelength = 2 * np.pi / k
-    limits = Limits(x=(0, 1), z=(0, 2), units="meters")
 
     probe_config = ProbeConfig(
         type=select_probe_type(bc_type),
@@ -203,7 +201,7 @@ def plot_probe_and_ew(exact, numerical, error):
 ], ids=["Iterative", "FullPinT", 
         "FullLU"
         ])
-def test_error_convergence(Solver, bc_type, request):
+def test_error_convergence(Solver, bc_type, request, limits_2d):
     """Validate second-order convergence for each solver and boundary type."""
     nx_values = [16, 32, 64]
     inf_norms = []
@@ -214,7 +212,7 @@ def test_error_convergence(Solver, bc_type, request):
     observed_rates = []
     for i, nx in enumerate(nx_values):
         nz = nx
-        exact, numerical = compute_exact_and_numerical(nx, nz, Solver, bc_type)
+        exact, numerical = compute_exact_and_numerical(nx, nz, Solver, bc_type, limits_2d)
         error = numerical - exact
         inf_norm = np.max(np.abs(error))
         inf_norms.append(inf_norm)
