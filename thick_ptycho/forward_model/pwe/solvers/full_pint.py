@@ -143,7 +143,7 @@ class PWEFullPinTSolver(BasePWESolver):
         # Construct RHS if needed (mirror LU b logic)
         if self.projection_cache[proj_idx].modes[mode].b is None and self.test_bcs is None:
             self.projection_cache[proj_idx].modes[mode].b = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
-        else:
+        elif self.test_bcs is not None:
             self.projection_cache[proj_idx].modes[mode].b = self.test_bcs.test_exact_impedance_forward_model_rhs()
 
         
