@@ -17,7 +17,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             log=log,
         )
 
-        assert simulation_space.dimension == 1, "ForwardModelMS only supports 1D samples."
+        assert self.simulation_space.dimension == 2, "ForwardModelMS only supports 2D samples."
 
         self.k = self.simulation_space.k  # Wave number
         self.dx = self.simulation_space.dx  # Pixel size in x

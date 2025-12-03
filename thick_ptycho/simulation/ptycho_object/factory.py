@@ -1,14 +1,14 @@
 """
-Factory for creating a PtychoObject1D or PtychoObject2D based on the simulation space.
+Factory for creating a PtychoObject2d or PtychoObject3d based on the simulation space.
 """
 
-from .ptycho_object_1d import PtychoObject1D
 from .ptycho_object_2d import PtychoObject2D
+from .ptycho_object_3d import PtychoObject3D
 
 
 def create_ptycho_object(simulation_space):
     """
-    Create a 1D or 2D ptychographic object depending on the simulation space.
+    Create a 2d or 3d ptychographic object depending on the simulation space.
 
     Parameters
     ----------
@@ -18,7 +18,7 @@ def create_ptycho_object(simulation_space):
 
     Returns
     -------
-    PtychoObject1D or PtychoObject2D
+    PtychoObject2d or PtychoObject3d
         The appropriate object instance for the given simulation space.
 
     Raises
@@ -28,9 +28,9 @@ def create_ptycho_object(simulation_space):
     """
     dim = getattr(simulation_space, "dimension", None)
 
-    if dim == 1:
-        return PtychoObject1D(simulation_space)
-    elif dim == 2:
+    if dim == 2:
         return PtychoObject2D(simulation_space)
+    elif dim == 3:
+        return PtychoObject3D(simulation_space)
 
     raise ValueError(f"Unsupported simulation space dimension: {dim}")

@@ -14,9 +14,9 @@ class OperatorMatrices(BoundaryConditions):
 
     def get_matrix_system(self):
         """Get the system matrices based on the boundary condition type."""
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             return self.get_matrices_1d_system()
-        elif self.simulation_space.dimension == 2:
+        elif self.simulation_space.dimension == 3:
             return self.get_matrices_2d_system()
         else:
             raise ValueError("Unsupported dimension")
@@ -126,9 +126,9 @@ class OperatorMatrices(BoundaryConditions):
 
     def get_probe_boundary_conditions_system(self):
         """Get the probe/initial RHS contributions based on the dimension."""
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             return self.get_probe_boundary_conditions_1d_system()
-        elif self.simulation_space.dimension == 2:
+        elif self.simulation_space.dimension == 3:
             return self.get_probe_boundary_conditions_2d_system()
         else:
             raise ValueError("Unsupported dimension")

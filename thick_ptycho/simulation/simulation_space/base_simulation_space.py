@@ -158,14 +158,13 @@ class BaseSimulationSpace(ABC):
         self.pad_factor = pad_factor
         self.solve_reduced_domain = solve_reduced_domain
         self._scan_frame_info: List[ScanFrame] = []
-        self.num_projections = self._determine_num_projections(
-            tomographic_projection_90_degree
-        )
+        self.tomographic_projection_90_degree = tomographic_projection_90_degree
 
         # Configure simulation geometry
         self._configure_z_axis(points_per_wavelength, nz)
         self._configure_domain()
         self._configure_probe(probe_diameter, probe_type.value, probe_focus, probe_angles)
+        self.shape = None  # To be defined in subclass
 
         # Physical medium
         self.n_medium = complex(medium)
@@ -245,7 +244,6 @@ class BaseSimulationSpace(ABC):
         self.num_angles = len(probe_angles)
 
         self.k = 2 * np.pi / self.wave_length
-        self.total_scans = self.num_angles * self.scan_points * self.num_projections
 
 
     # ----------------------------------------------------------------------
@@ -264,14 +262,20 @@ class BaseSimulationSpace(ABC):
     ) -> int:
         """Determine number of tomographic projections."""
         if not tomo_flag:
-            return 1
-        if len(self.shape) == 1:
-            return 2
-        print(
-            "Warning: 90° tomographic projection requires cubic dimensions; "
-            "proceeding with num_projections=1."
-        )
-        return 1
+            num_projections = 1
+        elif len(self.shape) == 2:
+            # Override nz for 1D case
+            self.nz = self.nx
+            self._log(f"Overriding nz to match nx(={self.nx}) for 1D case due to 90° tomographic projection.")
+            num_projections = 2
+        else:
+            num_projections = 1
+            self._log(
+                "Warning: 90° tomographic projection requires cubic dimensions; "
+                "proceeding with num_projections=1."
+            )
+        self.num_projections = num_projections
+        self.total_scans = self.num_angles * self.scan_points * self.num_projections
 
 
     # ----------------------------------------------------------------------

@@ -2,7 +2,7 @@ import numpy as np
 import time
 from typing import Optional, Union
 
-from thick_ptycho.simulation.simulation_space import SimulationSpace1D, SimulationSpace2D
+from thick_ptycho.simulation.simulation_space import SimulationSpace2D, SimulationSpace3D
 from thick_ptycho.simulation.ptycho_probe.factory import create_ptycho_probes
 from thick_ptycho.utils.io import setup_log
 
@@ -21,7 +21,7 @@ class BaseForwardModelSolver(ABC):
 
     def __init__(
         self,
-        simulation_space: Union[SimulationSpace1D, SimulationSpace2D],
+        simulation_space: Union[SimulationSpace2D, SimulationSpace3D],
         ptycho_probes: np.ndarray,
         results_dir: str = "",
         use_logging: bool = False,
@@ -194,7 +194,7 @@ class BaseForwardModelSolver(ABC):
         exit_waves = self.get_exit_waves(u=u) if exit_waves is None else exit_waves
 
         # Compute FFTs for all probes and angles
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             fft_waves = np.fft.fft(exit_waves)
         else:
             fft_waves = np.fft.fft2(exit_waves, axes=(-2, -1))

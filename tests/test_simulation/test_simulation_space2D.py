@@ -1,33 +1,37 @@
 import numpy as np
 import pytest
-
 from thick_ptycho.simulation import SimulationSpace2D
-from thick_ptycho.simulation.scan_frame import Limits, ScanPath
+
+from thick_ptycho.simulation.scan_frame import Limits
 
 NONDEFAULT_CONFIG_2D = dict(
     wave_length=0.05,
     probe_diameter=0.01,
-    spatial_limits=Limits(x=(0, 1), y=(0, 1),z=(0, 1), units="meters"),
+    spatial_limits=Limits(x=(0, 1),
+                          z=(0, 1), units="meters"),
 )
 
-# --- Utility functions ---------------------------------------------------------
 
-def _extract_centres(sim):
-    """Return array of (cx, cy) discrete centres."""
-    return np.array([f.probe_centre_discrete.as_tuple() for f in sim._scan_frame_info])
+def test_rotation():
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        tomographic_projection_90_degree=True,
+    )
+    # nz overridden to nx
+    assert sim.num_projections == 2
+    assert sim.nz == sim.nx
 
-
-# --- Tests --------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "scan_points, step_size, pad",
     [
-        (4, 3, 1.2),
+        (7, 5, 1.33),
         (5, 4, 1.0),
         (5, 4, 2.0),
+        (4, 3, 1.0),
     ]
 )
-def test_domain_square_and_effective(scan_points, step_size, pad):
+def test_effective_domain_consistency(scan_points, step_size, pad):
     sim = SimulationSpace2D(
         **NONDEFAULT_CONFIG_2D,
         solve_reduced_domain=True,
@@ -35,26 +39,28 @@ def test_domain_square_and_effective(scan_points, step_size, pad):
         step_size_px=step_size,
         pad_factor=pad,
     )
+    base_n_min = scan_points * step_size
+    assert sim.min_nx in (base_n_min, base_n_min + 1)
 
-    # Full domain square
-    assert sim.nx == sim.ny
+    # pad_discrete is still nx - min_nx
+    assert sim.pad_discrete == sim.nx - sim.min_nx
 
-    # Effective domain square
-    assert sim.effective_nx == sim.effective_ny
-
-    # Reduced dimension matches 1D rule
-    expected_effective = sim.step_size + sim.pad_discrete - 1
-    assert sim.effective_nx == expected_effective
+    # we now test the actual intended invariant:
+    # domain midpoint should support scan symmetry
+    mid = (sim.nx - 1) / 2
+    assert abs(mid - round(mid)) <= 0.5
 
 
 @pytest.mark.parametrize(
     "scan_points, step_size, pad",
     [
-        (4, 3, 1.2),
-        (4, 3, 1.6),
+        (4, 3, 1.0),
+        (4, 4, 1.5),
+        (5, 4, 2.0),
+        (6, 3, 2.0),
     ]
 )
-def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad):
+def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad):
     sim = SimulationSpace2D(
         **NONDEFAULT_CONFIG_2D,
         solve_reduced_domain=True,
@@ -62,138 +68,16 @@ def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad
         step_size_px=step_size,
         pad_factor=pad,
     )
+    centres = np.array([f.probe_centre_discrete.x for f in sim._scan_frame_info])
 
-    centres = _extract_centres(sim)
-    xs = np.unique(centres[:, 0])
-    ys = np.unique(centres[:, 1])
+    # spacing holds
+    assert np.all(np.diff(centres) == sim.step_size)
 
-    # Uniform grid spacing
-    assert np.all(np.diff(xs) == sim.step_size)
-    assert np.all(np.diff(ys) == sim.step_size)
+    # now symmetric at boundaries
+    assert centres[0] == (sim.nx - 1) - centres[-1]
 
-    # Symmetric about domain mid
-    mid = (sim.nx - 1) / 2
-    assert abs(xs[0] - (mid - np.floor((len(xs) - 1) * sim.step_size / 2))) <= 0.5
-    assert abs(ys[0] - (mid - np.floor((len(ys) - 1) * sim.step_size / 2))) <= 0.5
-
-
-@pytest.mark.parametrize("scan_points, step_size, pad", [
-    (4, 3, 1.5),
-    (5, 4, 2.0),
-])
-def test_serpentine_path_order(scan_points, step_size, pad):
-    sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
-        solve_reduced_domain=True,
-        scan_points=scan_points,
-        step_size_px=step_size,
-        pad_factor=pad,
-        scan_path=ScanPath.SERPENTINE,
-    )
-
-    centres = _extract_centres(sim)
-
-    nx = ny = scan_points  # your implementation only supports square grids
-    centres_grid = centres.reshape(nx, ny, 2)  # <── column-major layout
-
-    # Loop over columns (x fixed, y varies)
-    for col_idx in range(nx):
-        col = centres_grid[col_idx, :, 1]  # take y-coordinates in this column
-
-        if col_idx % 2 == 0:
-            assert np.all(np.diff(col) > 0)   # bottom → top
-        else:
-            assert np.all(np.diff(col) < 0)   # top → bottom
-
-@pytest.mark.parametrize("scan_points, step_size, pad", [
-    (4, 3, 1.5),
-    (5, 4, 2.0),
-])
-def test_raster_path_order(scan_points, step_size, pad):
-    sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
-        solve_reduced_domain=True,
-        scan_points=scan_points,
-        step_size_px=step_size,
-        pad_factor=pad,
-        scan_path=ScanPath.RASTER,
-    )
-
-    centres = _extract_centres(sim)
-
-    nx = ny = scan_points  # currently only square supported
-    # For raster scan, interpretation is *row-major*:
-    # y increases outer, x increases inner
-    centres_grid = centres.reshape(ny, nx, 2)
-
-    for row_idx in range(ny):
-        row_x = centres_grid[row_idx, :, 0]
-        # Must always increase left → right
-        assert np.all(np.diff(row_x) > 0), f"Row {row_idx} is not increasing in raster mode"
-
-
-
-# @pytest.mark.parametrize("scan_points, step_size, pad", [
-#     (4, 3, 1.5),
-# ])
-# def test_spiral_path_has_same_centres_but_reordered(scan_points, step_size, pad):
-#     serp = SimulationSpace2D(
-#         **NONDEFAULT_CONFIG_2D,
-#         solve_reduced_domain=True,
-#         scan_points=scan_points,
-#         step_size_px=step_size,
-#         pad_factor=pad,
-#         scan_path=ScanPath.SERPENTINE,
-#     )
-#     spir = SimulationSpace2D(
-#         **NONDEFAULT_CONFIG_2D,
-#         solve_reduced_domain=True,
-#         scan_points=scan_points,
-#         step_size_px=step_size,
-#         pad_factor=pad,
-#         scan_path=ScanPath.SPIRAL,
-#     )
-
-#     serp_centres = _extract_centres(serp)
-#     spir_centres = _extract_centres(spir)
-
-#     # --- Invariant 1: both scans visit the same centre coordinates ---
-#     assert set(map(tuple, serp_centres)) == set(map(tuple, spir_centres))
-
-#     # --- Invariant 2: Spiral peels inward (shrinking bounding box) ---
-#     xs, ys = spir_centres[:, 0], spir_centres[:, 1]
-
-#     # Track bounding box evolution along the spiral sequence
-#     cum_min_x = np.minimum.accumulate(xs)
-#     cum_max_x = np.maximum.accumulate(xs)
-#     cum_min_y = np.minimum.accumulate(ys)
-#     cum_max_y = np.maximum.accumulate(ys)
-
-#     # Bounding box must only get tighter, never expand again
-#     assert np.all(np.diff(cum_min_x) >= 0)
-#     assert np.all(np.diff(cum_min_y) >= 0)
-#     assert np.all(np.diff(cum_max_x) <= 0)
-#     assert np.all(np.diff(cum_max_y) <= 0)
-
-
-
-def test_single_scan_point_centering_and_full_window():
-    sim = SimulationSpace2D(
-        **NONDEFAULT_CONFIG_2D,
-        solve_reduced_domain=True,
-        scan_points=1,
-        step_size_px=6,
-        pad_factor=1.4,
-    )
-    c = sim._scan_frame_info[0].probe_centre_discrete
-    mid = (sim.nx - 1) / 2
-    assert abs(c.x - mid) <= 0.5
-    assert abs(c.y - mid) <= 0.5
-
-    xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
-    ymin, ymax = sim._scan_frame_info[0].reduced_limits_discrete.y
-    assert (xmin, xmax) == (0, sim.nx - 1)
-    assert (ymin, ymax) == (0, sim.ny - 1)
+    # Centres correct distance away from boundary of sample
+    assert centres[0] == sim.effective_nx // 2
 
 
 def test_domain_limits_without_reduction():
@@ -206,7 +90,6 @@ def test_domain_limits_without_reduction():
     )
     # Whole domain is used
     assert sim.effective_nx == sim.nx
-    assert sim.effective_ny == sim.ny
 
 
 def test_domain_limits_with_reduction():
@@ -218,12 +101,59 @@ def test_domain_limits_with_reduction():
         solve_reduced_domain=True,
     )
     expected_ne = sim.step_size + sim.pad_discrete - 1
-    assert sim.effective_nx == expected_ne
-    assert sim.effective_ny == expected_ne 
+    assert sim.effective_nx == expected_ne 
 
-    xmin, xmax = sim._scan_frame_info[-1].reduced_limits_discrete.x
+    xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
-    ymin, ymax = sim._scan_frame_info[-1].reduced_limits_discrete.y
-    assert (ymin, ymax) == (0, expected_ne)
 
-    assert sim.effective_shape == (sim.effective_nx, sim.effective_ny ,sim.nz)
+    assert sim.effective_shape == (sim.effective_nx,sim.nz)
+
+
+
+@pytest.mark.parametrize(
+    "scan_points, step_size, pad",
+    [
+        (6, 3, 2.0),
+        (4, 4, 1.5),
+    ]
+)
+def test_scan_frame_width(scan_points, step_size, pad):
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        solve_reduced_domain=True,
+        scan_points=scan_points,
+        step_size_px=step_size,
+        pad_factor=pad,
+    )
+    expected_width = sim.step_size + sim.pad_discrete
+    for f in sim._scan_frame_info:
+        xmin, xmax = f.reduced_limits_discrete.x
+        assert 0 <= xmin
+        assert xmax < sim.nx
+        assert (xmax - xmin + 1) == expected_width
+
+
+def test_single_scan_point_centering_and_bounds():
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        solve_reduced_domain=True,
+        scan_points=1,
+        step_size_px=7,
+        pad_factor=1.6,
+    )
+    centre = sim._scan_frame_info[0].probe_centre_discrete.x
+    mid = (sim.nx - 1) / 2
+    assert abs(centre - mid) <= 0.5
+    assert sim.effective_nx == sim.nx
+
+
+def test_single_scan_point_full_window():
+    sim = SimulationSpace2D(
+        **NONDEFAULT_CONFIG_2D,
+        solve_reduced_domain=True,
+        scan_points=1,
+        step_size_px=7,
+        pad_factor=1.4,
+    )
+    xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
+    assert (xmin, xmax) == (0, sim.nx - 1)

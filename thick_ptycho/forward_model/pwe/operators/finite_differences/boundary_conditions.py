@@ -14,7 +14,7 @@ class BoundaryConditions:
         self.k = simulation_space.k
         self.a = 1j / (2 * self.k)
 
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             self.nx = simulation_space.effective_nx
         else:
             self.dy = simulation_space.dy
@@ -26,7 +26,7 @@ class BoundaryConditions:
         r_x = (0.5 * simulation_space.dz / self.dx**2)
         self.mu_x = self.a * r_x
 
-        if simulation_space.dimension == 2:
+        if simulation_space.dimension == 3:
             r_y = (0.5 * simulation_space.dz / self.dy**2)
             self.mu_y = self.a * r_y
         else:
@@ -34,12 +34,12 @@ class BoundaryConditions:
 
         if self.bc_type == "impedance":
             self.beta_x = self.mu_x * 2 * 1j * self.k * self.dx
-            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 2 else 0
+            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 3 else 0
 
         elif self.bc_type == "impedance2":
             # include the 1st-order part too
             self.beta_x = self.mu_x * 2 * 1j * self.k * self.dx
-            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 2 else 0
+            self.beta_y = self.mu_y * 2 * 1j * self.k * self.dy if simulation_space.dimension == 3 else 0
             # 2nd-order coefficient (tangential curvature)
             self.gamma = - 1 / (2j * self.k)
 

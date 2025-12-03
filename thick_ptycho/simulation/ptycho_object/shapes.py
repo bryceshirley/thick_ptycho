@@ -9,22 +9,21 @@ from scipy.ndimage import gaussian_filter
 
 class OpticalShape:
     """
-    Interface class to create either 1D or 2D initial conditions.
+    Interface class to create either 2D or 3D initial conditions.
     """
     def __new__(cls, centre_scale, shape, refractive_index,
                  side_length_scale, depth_scale, guassian_blur,
                  simulation_space):
-        dimension = len(centre_scale) - 1
-        if dimension == 1:
-            return OpticalShape1D(centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space)
-        elif dimension == 2:
+        if simulation_space.dimension == 2:
             return OpticalShape2D(centre_scale, shape, refractive_index,
                  side_length_scale, depth_scale, guassian_blur,
                  simulation_space)
+        elif simulation_space.dimension == 3:
+            return OpticalShape3D(centre_scale, shape, refractive_index,
+                 side_length_scale, depth_scale, guassian_blur,
+                 simulation_space)
         else:
-            raise ValueError("Unsupported dimension: {}".format(dimension))
+            raise ValueError("Unsupported dimension: {}".format(simulation_space.dimension))
 
 class OpticalShapeBase:
     """Represents an optical shape in the simulation."""
@@ -105,13 +104,9 @@ class OpticalShapeBase:
         """Return the field of the object."""
         pass
 
-    # def _get_field(self):
-    #     """Return the field of a object."""
-    #     pass
 
-
-class OpticalShape1D(OpticalShapeBase):
-    """Represents an optical shape in the simulation in 1D."""
+class OpticalShape2D(OpticalShapeBase):
+    """Represents an optical shape in the simulation in 2D."""
 
     def __init__(self, centre_scale, shape, refractive_index, 
                  side_length_scale, depth_scale, guassian_blur,
@@ -263,8 +258,8 @@ class OpticalShape1D(OpticalShapeBase):
         return points
 
 
-class OpticalShape2D(OpticalShapeBase):
-    """Represents an optical shape in the simulation in 2D."""
+class OpticalShape3D(OpticalShapeBase):
+    """Represents an optical shape in the simulation in 3D."""
 
     def __init__(self, centre_scale, shape, refractive_index,
                  side_length_scale, depth_scale, guassian_blur,

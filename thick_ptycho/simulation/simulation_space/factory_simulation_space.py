@@ -3,13 +3,13 @@ Defines the physical space and scan path for a ptychographic simulation.
 """
 
 import dataclasses
-from .simulation_space_1d import SimulationSpace1D
 from .simulation_space_2d import SimulationSpace2D
+from .simulation_space_3d import SimulationSpace3D
 from ..config import SimulationConfig
 
 def create_simulation_space(config: SimulationConfig):
     """Factory function to create the appropriate simulation space class."""
-    cls = SimulationSpace1D if config.spatial_limits.y is None else SimulationSpace2D
+    cls = SimulationSpace2D if config.spatial_limits.y is None else SimulationSpace3D
     return cls(wave_length=config.probe_config.wave_length,
         probe_diameter=config.probe_config.diameter,
         probe_type=config.probe_config.type,

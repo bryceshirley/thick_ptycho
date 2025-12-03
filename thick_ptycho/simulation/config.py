@@ -126,7 +126,7 @@ class SimulationConfig:
 
     tomographic_projection_90_degree : bool, default=False
         Enables the 90° projection transform used in 2D multislice tomography.
-        Valid only when ``Nx == nz``.
+        This will overide nz to equal nx.
 
     medium : float, default=1.0
         Background refractive index of the propagation medium.

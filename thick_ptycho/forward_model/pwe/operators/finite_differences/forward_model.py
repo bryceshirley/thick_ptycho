@@ -27,7 +27,7 @@ class PWEForwardModel:
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.signal_strength = 1.0  # reserved for future scaling
 
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             self.nx = simulation_space.effective_nx
         else:
             self.nx, self.ny = simulation_space.effective_nx, simulation_space.effective_ny

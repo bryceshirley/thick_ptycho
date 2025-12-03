@@ -19,7 +19,7 @@ class BoundaryConditionsTest(BoundaryConditions):
             simulation_space.spatial_limits.x[1],
             simulation_space.effective_nx,
         )
-        if simulation_space.dimension == 2:
+        if simulation_space.dimension == 3:
             self.y = np.linspace(
                 simulation_space.spatial_limits.y[0],
                 simulation_space.spatial_limits.y[1],
@@ -55,9 +55,9 @@ class BoundaryConditionsTest(BoundaryConditions):
     # ------------------------------------------------------------------
     def get_exact_boundary_conditions_system(self, z):
         """Dispatch boundary condition generator by simulation dimension."""
-        if self.simulation_space.dimension == 1:
+        if self.simulation_space.dimension == 2:
             return self.get_exact_boundary_conditions_1d_test(z)
-        elif self.simulation_space.dimension == 2:
+        elif self.simulation_space.dimension == 3:
             return self.get_exact_boundary_conditions_2d_test(z)
         else:
             raise ValueError("Unsupported simulation dimension for BC test")
