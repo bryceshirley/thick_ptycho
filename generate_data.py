@@ -2,6 +2,7 @@ import os
 import shutil
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from thick_ptycho.forward_model import (PWEIterativeLUSolver, PWEFullPinTSolver,
                                         MSForwardModelSolver)
@@ -15,9 +16,10 @@ from thick_ptycho.simulation.simulation_space import create_simulation_space
 from thick_ptycho.utils.io import (get_git_commit_hash, load_config,
                                    results_dir_name)
 from thick_ptycho.utils.visualisations import Visualisation
+import argparse
 
 
-def main(cfg_path="config_gen_data.yaml"):
+def main(cfg_path):
     cfg = load_config(cfg_path)
     results_dir = results_dir_name()
 
@@ -30,7 +32,7 @@ def main(cfg_path="config_gen_data.yaml"):
         wave_length = float(cfg["wave_length"]),        # meters (0.635 μm). Visible light
         diameter = float(cfg["probe_diameter"]),               # [m]
         focus = float(cfg["probe_focus"]),                 # focal length [m]
-        tilts=cfg["probe_tilts"] # tilts in degrees
+        tilts=[float(x) for x in cfg["probe_tilts"]] # tilts in degrees
     )
 
     # if cfg does not have ylims
@@ -60,6 +62,7 @@ def main(cfg_path="config_gen_data.yaml"):
     )
 
     simulation_space = create_simulation_space(sim_config)
+    simulation_space.summarize()
     ptycho_object = create_ptycho_object(simulation_space)
 
     delta = float(cfg["delta"])
@@ -99,28 +102,59 @@ def main(cfg_path="config_gen_data.yaml"):
         raise ValueError(f"Unknown solver type: {solver_type}")
 
     u = forward.solve(n=ptycho_object.refractive_index)
-    data = forward.get_exit_waves(u)
-    simulation_space.viewer.plot_two_panels(data.T,
+    exit_waves = forward.get_exit_waves(u)
+
+    # Save Data Images
+    simulation_space.viewer.plot_two_panels(exit_waves.T,
                                         view="phase_amp", 
                                         title="Exit Waves",
                                         xlabel="Scan Number",
                                         ylabel="x (px)",
                                         filename="exit_waves.png")
-    if not cfg["solver"]["phase"]:
-        data = forward.get_farfield_intensities(exit_waves=data, 
-                                                 poisson_noise=cfg["solver"]["poisson_noise"])
-        simulation_space.viewer.plot_single_panel(np.fft.fftshift(data).T,
-                                            title="Far-field Intensities",
-                                            xlabel="Scan Number",
-                                            ylabel="x (px)",
-                                            filename="farfield_intensities.png")
+    data = forward.get_farfield_intensities(exit_waves=exit_waves, 
+                                                poisson_noise=cfg["solver"]["poisson_noise"])
+    simulation_space.viewer.plot_single_panel(np.fft.fftshift(data).T,
+                                        title="Far-field Intensities",
+                                        xlabel="Scan Number",
+                                        ylabel="x (px)",
+                                        filename="farfield_intensities.png")
+    
+    plt.figure(figsize=(8,4))
+    plot_num_probes = 10#simulation_space.num_probes
+    probe_indices = np.linspace(0, simulation_space.num_probes-1, plot_num_probes, dtype=int)
+    for p in probe_indices:
+        plt.plot(range(simulation_space.effective_nx), np.abs(u[0,0,p,:,0]), label=f'probe {p}')
+    plt.title("Probe amplitudes (subset)")
+    plt.xlabel("px"); plt.legend() 
+    plt.tight_layout()
+    # Save probe amplitudes plot
+    plt.savefig(os.path.join(results_dir, "probe_amplitudes.png"))
+    plt.close()
+
+    plt.figure(figsize=(8,4))
+    for p in probe_indices:
+        plt.plot(range(simulation_space.effective_nx), np.abs(u[0,0,p,:,-1]), label=f'probe {p}')
+    plt.title("Exitwave amplitudes (subset)")
+    plt.xlabel("px"); plt.legend() 
+    plt.tight_layout()
+    # Save exitwave amplitudes plot
+    plt.savefig(os.path.join(results_dir, "exitwave_amplitudes.png"))
+    plt.close()
     
     # Save data
     np.savez_compressed(
-        os.path.join(results_dir, "simulated_data.npz"),
+        os.path.join(results_dir, "simulated_exit_waves.npz"),
+        data=exit_waves,
+    )
+    np.savez_compressed(
+        os.path.join(results_dir, "simulated_farfield_intensities.npz"),
         data=data,
     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run thick ptychography simulation with configuration file.")
+    parser.add_argument("config_file", type=str, help="Path to the configuration file.")
+    args = parser.parse_args()
+
+    main(args.config_file)
