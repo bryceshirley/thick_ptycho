@@ -17,13 +17,13 @@ class BasePtychoObject(ABC):
 
     def __init__(self, simulation_space):
         self.simulation_space = simulation_space
-        self.objects = []
+        self.optical_shapes = []
         self.refractive_index = simulation_space.refractive_index_empty
 
     def build_field(self):
         """Generate total refractive index field."""
-        for obj in self.objects:
-            self.refractive_index += obj.get_refractive_index_field()
+        for shape in self.optical_shapes:
+            self.refractive_index += shape.get_refractive_index_field()
         # return self.refractive_index
 
     # Method to save refractive_index to npz file
@@ -53,7 +53,7 @@ class BasePtychoObject(ABC):
         assert 0.0 <= centre_factor[1] <= 1.0, "Centre z-factor must be in [0, 1]."
         assert 0.0 <= side_length_factor <= 1.0, "Side length factor must be in (0, 1]."
         assert 0.0 <= depth_factor <= 1.0, "Depth factor must be in (0, 1]."
-        self.objects.append(
+        self.optical_shapes.append(
             OpticalShape(
                 centre_factor,
                 shape,

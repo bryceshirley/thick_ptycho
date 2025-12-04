@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from thick_ptycho.simulation import SimulationSpace2D
-
+from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 
 @pytest.fixture(scope="session")
 def nondefault_config_2d(limits_2d):
@@ -20,6 +20,15 @@ def test_rotation(nondefault_config_2d):
     # nz overridden to nx
     assert sim.num_projections == 2
     assert sim.nz == sim.nx
+
+    # Test shape
+    assert sim.shape == (sim.nx, sim.nx)
+    ptycho_object = create_ptycho_object(sim)
+    assert ptycho_object.refractive_index.shape == (sim.nx, sim.nx)
+    ptycho_object.add_object("circle", 1.5 + 0.1j, 0.2, (0.5, 0.5), 0.1)
+    assert ptycho_object.refractive_index.shape == (sim.nx, sim.nx)
+
+
 
 
 @pytest.mark.parametrize(

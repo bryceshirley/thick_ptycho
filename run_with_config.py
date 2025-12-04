@@ -49,6 +49,7 @@ def main(cfg_path="config_gen_data.yaml"):
         solve_reduced_domain=cfg["solve_reduced_domain"],
         points_per_wavelength=cfg["points_per_wavelength"],
         spatial_limits=limits,
+        tomographic_projection_90_degree=cfg["solver"]["rotate90"],
 
         # Refractive index or Transmission Function Constant Surrounding Medium
         medium=cfg["n_medium"], # 1.0 for free space
