@@ -100,19 +100,19 @@ def main(cfg_path="config_gen_data.yaml"):
 
     u = forward.solve(n=ptycho_object.refractive_index)
     data = forward.get_exit_waves(u)
-    simulation_space.viewer.plot_two_panels(data,
+    simulation_space.viewer.plot_two_panels(data.T,
                                         view="phase_amp", 
-                                        title="Exit Waves PWE",
-                                        xlabel="z (m)",
-                                        ylabel="x (m)",
+                                        title="Exit Waves",
+                                        xlabel="Scan Number",
+                                        ylabel="x (px)",
                                         filename="exit_waves.png")
     if not cfg["solver"]["phase"]:
         data = forward.get_farfield_intensities(exit_waves=data, 
                                                  poisson_noise=cfg["solver"]["poisson_noise"])
-        simulation_space.viewer.plot_single_panel(np.fft.fftshift(data),
+        simulation_space.viewer.plot_single_panel(np.fft.fftshift(data).T,
                                             title="Far-field Intensities",
-                                            xlabel="z (m)",
-                                            ylabel="x (m)",
+                                            xlabel="Scan Number",
+                                            ylabel="x (px)",
                                             filename="farfield_intensities.png")
     
     # Save data
