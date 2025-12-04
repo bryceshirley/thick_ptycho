@@ -20,8 +20,11 @@ class SimulationSpace3D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         # 1. Geometry setup
         # ------------------------------------------------------------------
-        self.ny = self.nx  # Assume square grid for 3D
         self.dimension = 3
+        self._determine_num_projections(
+            self.tomographic_projection_90_degree
+        )
+        self.ny = self.nx  # Assume square grid for 3D
         self.shape = (self.nx,
                       self.ny,
                       self.nz)

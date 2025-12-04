@@ -152,6 +152,7 @@ class BaseSimulationSpace(ABC):
         verbose : bool, optional
             Print additional debugging and diagnostic information.
         """
+        self.dimension = None # To be set in subclass
         self.wave_length = wave_length
         self.spatial_limits = spatial_limits
 
@@ -266,7 +267,7 @@ class BaseSimulationSpace(ABC):
         """Determine number of tomographic projections."""
         if not tomo_flag:
             num_projections = 1
-        elif len(self.shape) == 2:
+        elif self.dimension == 2:
             # Override nz for 1D case
             self.nz = self.nx
             self._log(f"Overriding nz to match nx(={self.nx}) for 1D case due to 90° tomographic projection.")

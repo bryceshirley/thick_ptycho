@@ -18,11 +18,13 @@ class SimulationSpace2D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         # 1. Geometry setup
         # ------------------------------------------------------------------
+        self.dimension = 2
+        self._determine_num_projections(
+            self.tomographic_projection_90_degree
+        )
         self.shape = (self.nx, self.nz)
         # Empty refractive index field representing the background medium
         self.refractive_index_empty = np.ones(self.shape, dtype=complex) * self.n_medium
-
-        self.dimension = 2
 
         # Effective width
         self.block_size = self.effective_nx
@@ -33,9 +35,6 @@ class SimulationSpace2D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         self.num_probes = self.scan_points
         self._scan_frame_info = self._generate_scan_frames()
-        self._determine_num_projections(
-            self.tomographic_projection_90_degree
-        )
 
         # ------------------------------------------------------------------
         # 4. Visualization utility
