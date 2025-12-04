@@ -1,9 +1,10 @@
+from typing import Optional, Tuple
+
 import numpy as np
 import scipy.sparse as sp
-from scipy.special import jv
-from typing import Optional, Tuple, Union
-import scipy.sparse.linalg as spla
+
 from .operator_matrices import OperatorMatrices
+
 
 class PWEForwardModel:
     """

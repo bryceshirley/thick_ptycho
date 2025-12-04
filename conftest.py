@@ -1,6 +1,8 @@
-import pytest
 import numpy as np
+import pytest
+
 from thick_ptycho.simulation.scan_frame import Limits
+
 
 def pytest_addoption(parser):
     """Add a command-line option to control plotting."""

@@ -2,11 +2,13 @@
 2d implementation of a ptychographic sample object.
 """
 
-import numpy as np
-from .base_object import BasePtychoObject
-from typing import Tuple
+
 import cv2
+import numpy as np
 from skimage import data
+
+from .base_object import BasePtychoObject
+
 
 class PtychoObject2D(BasePtychoObject):
     """2d ptychographic object in x–z space."""

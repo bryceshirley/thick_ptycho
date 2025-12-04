@@ -1,7 +1,8 @@
+
 import numpy as np
-from typing import Optional
-from thick_ptycho.utils.io import setup_log
+
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
+from thick_ptycho.utils.io import setup_log
 
 
 class ReconstructorBase:

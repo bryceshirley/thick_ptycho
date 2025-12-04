@@ -1,21 +1,23 @@
 
-from dataclasses import dataclass, fields
+import multiprocessing as mp
 import os
+import time
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, fields
+from typing import Optional
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
-from typing import Optional, Tuple
 from scipy.fft import fft, ifft
-import time
-from concurrent.futures import ProcessPoolExecutor
-from scipy.sparse.linalg import splu, LinearOperator
+from scipy.sparse.linalg import LinearOperator, splu
 
-from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
-from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import _init_worker, _solve_block, _pintobj_matvec_exact
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
-
-import multiprocessing as mp
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import \
+    BoundaryConditionsTest
+from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
+from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import (
+    _init_worker, _pintobj_matvec_exact, _solve_block)
 
 mp.set_start_method("spawn", force=True)
 

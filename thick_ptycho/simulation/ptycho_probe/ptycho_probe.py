@@ -1,6 +1,7 @@
+from typing import Optional, Tuple, Union
+
 import numpy as np
 from scipy.special import jv
-from typing import Optional, Tuple, Union
 
 
 def u0_nm_neumann(n, m):

@@ -1,5 +1,7 @@
 import numpy as np
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_conditions import BoundaryConditions
+
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_conditions import \
+    BoundaryConditions
 
 
 class BoundaryConditionsTest(BoundaryConditions):

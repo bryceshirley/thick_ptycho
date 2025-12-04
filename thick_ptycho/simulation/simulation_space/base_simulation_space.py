@@ -76,14 +76,17 @@ Notes
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
+
 import os
-from typing import List, Tuple, Union, Optional
+from abc import ABC, abstractmethod
+from typing import List, Optional, Tuple
+
 import numpy as np
 
 from thick_ptycho.simulation.config import ProbeType
+from thick_ptycho.simulation.scan_frame import (Limits, ScanFrame,
+                                                ScanPath)
 from thick_ptycho.utils.io import setup_log
-from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits, ScanPath
 
 
 class BaseSimulationSpace(ABC):

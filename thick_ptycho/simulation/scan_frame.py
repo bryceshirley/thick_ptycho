@@ -1,7 +1,9 @@
-from typing import List, Tuple, Union, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional, Tuple, Union
+
 import numpy as np
+
 
 @dataclass
 class Point:

@@ -2,10 +2,11 @@
 Defines the physical space and scan path for a ptychographic simulation.
 """
 
-import dataclasses
+
+from ..config import SimulationConfig
 from .simulation_space_2d import SimulationSpace2D
 from .simulation_space_3d import SimulationSpace3D
-from ..config import SimulationConfig
+
 
 def create_simulation_space(config: SimulationConfig):
     """Factory function to create the appropriate simulation space class."""

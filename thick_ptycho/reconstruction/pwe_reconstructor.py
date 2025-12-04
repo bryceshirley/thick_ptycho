@@ -1,15 +1,11 @@
-import numpy as np
-import scipy.sparse.linalg as spla
-from numpy.fft import fft2, ifft2, fftshift
-
 import time
-from typing import Optional, List
+from typing import Optional
 
-from thick_ptycho.forward_model.pwe.solvers import PWEIterativeLUSolver
-from thick_ptycho.forward_model.pwe.solvers import PWEFullPinTSolver
-from thick_ptycho.forward_model.pwe.solvers import PWEFullLUSolver
-from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
+import numpy as np
+from numpy.fft import fft2, fftshift, ifft2
 
+from thick_ptycho.forward_model.pwe.solvers import (PWEFullLUSolver,
+                                                    PWEIterativeLUSolver)
 
 from .base_reconstructor import ReconstructorBase
 

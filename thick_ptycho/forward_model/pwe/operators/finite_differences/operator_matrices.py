@@ -3,6 +3,7 @@ import scipy.sparse as sp
 
 from .boundary_conditions import BoundaryConditions
 
+
 class OperatorMatrices(BoundaryConditions):
     """
     Handles boundary conditions and sets up the system matrices.

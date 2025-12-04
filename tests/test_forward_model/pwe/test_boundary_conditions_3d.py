@@ -2,14 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from thick_ptycho.simulation.config import ProbeConfig, SimulationConfig, ProbeType
-from thick_ptycho.simulation.simulation_space import create_simulation_space
-from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
-from thick_ptycho.forward_model import (
-    PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver
-)
+from thick_ptycho.forward_model import (PWEFullLUSolver, PWEFullPinTSolver,
+                                        PWEIterativeLUSolver)
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import \
+    BoundaryConditionsTest
 from thick_ptycho.forward_model.pwe.operators.utils import BoundaryType
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
+from thick_ptycho.simulation.config import (ProbeConfig, ProbeType,
+                                            SimulationConfig)
+from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
+from thick_ptycho.simulation.simulation_space import create_simulation_space
 
 # ----------------------------------------------------------------------------------------
 #  Global simulation parameters

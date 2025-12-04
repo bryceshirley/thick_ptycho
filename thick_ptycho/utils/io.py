@@ -1,8 +1,10 @@
 import logging
-from datetime import datetime
-import subprocess
-import yaml
 import os
+import subprocess
+from datetime import datetime
+
+import yaml
+
 
 def setup_log(results_dir: str = "results",
               log_file_name: str = "log.txt",

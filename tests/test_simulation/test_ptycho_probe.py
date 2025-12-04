@@ -1,7 +1,5 @@
-import pytest
 
-from thick_ptycho.simulation import create_simulation_space, SimulationConfig
-from thick_ptycho.simulation.ptycho_probe import PtychoProbes
+from thick_ptycho.simulation import SimulationConfig, create_simulation_space
 
 NONDEFAULT_CONFIG = dict(
     wave_length=0.05,

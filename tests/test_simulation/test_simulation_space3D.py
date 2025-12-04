@@ -4,6 +4,7 @@ import pytest
 from thick_ptycho.simulation import SimulationSpace3D
 from thick_ptycho.simulation.scan_frame import ScanPath
 
+
 @pytest.fixture(scope="session")
 def nondefault_config_3d(limits_3d):
     return dict(

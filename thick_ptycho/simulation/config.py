@@ -6,13 +6,13 @@ used throughout the simulation package, including probe field types,
 simulation parameters, and logging options.
 """
 
-from typing import Tuple, Optional
-from dataclasses import dataclass
 import warnings
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, Tuple
 
 from thick_ptycho.simulation.scan_frame import Limits, ScanPath
 
-from enum import Enum
 
 class ProbeType(Enum):
     """Enumeration of supported probe field types."""

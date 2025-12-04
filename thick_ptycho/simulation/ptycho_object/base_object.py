@@ -2,14 +2,12 @@
 Base class for PtychoObject1D and PtychoObject2D defining common logic.
 """
 
-from abc import ABC, abstractmethod
-from typing import Tuple
+from abc import ABC
+
 import numpy as np
-import matplotlib.pyplot as plt
-from .shapes import OpticalShape
-import tifffile as tiff
-from scipy.ndimage import zoom
 from PIL import Image
+
+from .shapes import OpticalShape
 
 
 class BasePtychoObject(ABC):

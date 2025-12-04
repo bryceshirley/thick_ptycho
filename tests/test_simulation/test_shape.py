@@ -1,7 +1,10 @@
 # test_optical_shape.py
 import numpy as np
 import pytest
-from thick_ptycho.simulation.ptycho_object import OpticalShape, OpticalShape2D, OpticalShape3D
+
+from thick_ptycho.simulation.ptycho_object import (OpticalShape,
+                                                   OpticalShape2D,
+                                                   OpticalShape3D)
 
 
 # ------------------------------------------------------------------------------

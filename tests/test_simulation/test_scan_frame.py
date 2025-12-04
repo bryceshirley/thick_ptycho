@@ -1,5 +1,7 @@
 import pytest
-from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits
+
+from thick_ptycho.simulation.scan_frame import Limits, Point, ScanFrame
+
 
 def test_pixel_limits():
     limits = Limits(x=(10, 50), units="pixels")

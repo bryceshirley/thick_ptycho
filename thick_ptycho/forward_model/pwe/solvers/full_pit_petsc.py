@@ -1,18 +1,16 @@
-import os
+import time
+from typing import Optional
+
 import numpy as np
 import scipy.sparse as sp
-from typing import Optional, Tuple
-from scipy.fft import fft, ifft
-import time
-
 # PETSc / petsc4py
 from petsc4py import PETSc
 from scipy.sparse.linalg import splu
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
-from thick_ptycho.forward_model.pwe.utils._pint_utils import (
-    _pintobj_matvec_exact,
-)
+from thick_ptycho.forward_model.pwe.utils._pint_utils import \
+    _pintobj_matvec_exact
+
 
 # ---------------------------
 # Helper: PETSc MatShell for A

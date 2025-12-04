@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BoundaryType(Enum):
     """
     Supported boundary condition types for the simulation domain.

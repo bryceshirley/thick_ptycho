@@ -1,2 +1,2 @@
-from .visualisations import Visualisation
 from .io import *
+from .visualisations import Visualisation

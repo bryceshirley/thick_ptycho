@@ -1,5 +1,7 @@
 from typing import Optional
+
 import numpy as np
+
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 
 

@@ -1,8 +1,9 @@
 import numpy as np
-from matplotlib import pyplot as plt
 
+from thick_ptycho.forward_model.multislice.ms_solver import \
+    MSForwardModelSolver
 from thick_ptycho.reconstruction.base_reconstructor import ReconstructorBase
-from thick_ptycho.forward_model.multislice.ms_solver import MSForwardModelSolver
+
 
 class ReconstructorMS(ReconstructorBase):
     """

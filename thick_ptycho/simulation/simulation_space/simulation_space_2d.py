@@ -1,10 +1,13 @@
 
 from typing import List
 
-from thick_ptycho.utils.visualisations import Visualisation
-from .base_simulation_space import BaseSimulationSpace, ScanFrame
 import numpy as np
-from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits
+
+from thick_ptycho.simulation.scan_frame import Limits, Point, ScanFrame
+from thick_ptycho.utils.visualisations import Visualisation
+
+from .base_simulation_space import BaseSimulationSpace, ScanFrame
+
 
 class SimulationSpace2D(BaseSimulationSpace):
     """2D simulation domain setup."""

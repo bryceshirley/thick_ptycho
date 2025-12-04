@@ -1,14 +1,15 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields
-import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 from typing import Optional, Tuple
 
+import numpy as np
+
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
-from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
-from abc import ABC, abstractmethod
+from thick_ptycho.forward_model.pwe.operators.finite_differences import \
+    PWEForwardModel
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import \
+    BoundaryConditionsTest
 
 
 @dataclass

@@ -1,18 +1,17 @@
 import os
+from typing import Optional, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional, Sequence, Tuple, Union
 
 try:
-    from ipywidgets import interact, IntSlider
-    import ipywidgets as widgets
+    from ipywidgets import IntSlider, interact
     _HAS_WIDGETS = True
 except Exception:
     _HAS_WIDGETS = False
 
-import os
-import numpy as np
-import matplotlib.pyplot as plt
+
+
 
 class Visualisation:
     """Common utilities for visualisation classes."""

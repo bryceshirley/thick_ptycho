@@ -1,0 +1,43 @@
+# Simulation Domain (meters)
+xlims: (0.0, 100e-6)
+#ylims: (0.0, 100e-6)
+zlims: (0.0, 75e-6)
+
+# --- Probe configuration ---
+probe_type: "AIRY_DISK"
+probe_diameter: 5e-6  # meters
+probe_focus: -5e-6 # focal length [m]
+wave_length: 6.35e-7 # meters
+probe_tilts: [-0.1, 0.0, 0.1] # radians
+
+
+# --- Scan Configuration ---
+step_size_px: 60 # pixels
+scan_points: 60 # number of scan points in one direction
+pad_factor: 2.0 # padding factor
+solve_reduced_domain: False
+
+# --- Z discretization ---
+# > Overridden if rotate90 is True since nz=nx in that case
+points_per_wavelength: 8
+# nz: 50 # Overrides points_per_wavelength if specified
+
+
+# --- Simulated Objects ---
+n_medium: 1.0 # Surrounding medium refractive index 1.0 (free space)
+gaussian_blur: 3
+sample_space_objects:
+  - { type: "circle", centre_factor: [0.3, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
+  - { type: "circle", centre_factor: [0.5, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
+  - { type: "circle", centre_factor: [0.7, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
+  - { type: "circle", centre_factor: [0.4, 0.5],  side_length_factor: 0.05, depth_factor: 0.05 }
+  - { type: "circle", centre_factor: [0.6, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
+  - { type: "circle", centre_factor: [0.3, 0.7],  side_length_factor: 0.05, depth_factor: 0.05 }
+
+# Solver configuration
+solver:
+  solver_type: "iterativePWE"
+  bc_type: "impedance"
+  poisson_noise: True
+  rotate90: True
+  phase: True

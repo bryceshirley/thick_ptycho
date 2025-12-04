@@ -1,13 +1,13 @@
-import numpy as np
 import time
+from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-from thick_ptycho.simulation.simulation_space import SimulationSpace2D, SimulationSpace3D
-from thick_ptycho.simulation.ptycho_probe.factory import create_ptycho_probes
+import numpy as np
+
+from thick_ptycho.simulation.simulation_space import (SimulationSpace2D,
+                                                      SimulationSpace3D)
 from thick_ptycho.utils.io import setup_log
 
-from abc import ABC, abstractmethod
-        
 
 class BaseForwardModelSolver(ABC):
     """

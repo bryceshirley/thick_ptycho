@@ -1,13 +1,20 @@
 import os
+import shutil
+
+from new_thick_ptycho.thick_ptycho.thick_ptycho.simulation.scan_frame import Limits
 import numpy as np
-from thick_ptycho.simulation.config import SimulationConfig, BoundaryType, ProbeType
-from thick_ptycho.simulation.simulation_space import create_simulation_space
+
+from thick_ptycho.forward_model import (PWEIterativeLUSolver, PWEFullPinTSolver,
+                                        MSForwardModelSolver)
+from thick_ptycho.forward_model.pwe.operators import BoundaryType
+from thick_ptycho.simulation.config import (ProbeConfig, ProbeType,
+                                            SimulationConfig)
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
-from thick_ptycho.forward_model import PWEIterativeLUSolver
-from thick_ptycho.utils.io import load_config, results_dir_name, get_git_commit_hash
+from thick_ptycho.simulation.simulation_space import create_simulation_space
+from thick_ptycho.utils.io import (get_git_commit_hash, load_config,
+                                   results_dir_name)
 from thick_ptycho.utils.visualisations import Visualisation
-import shutil
 
 
 def main(cfg_path="config.yaml"):
@@ -18,65 +25,79 @@ def main(cfg_path="config.yaml"):
     with open(os.path.join(results_dir, "git_commit.txt"), "w") as f:
         f.write(get_git_commit_hash() + "\n")
 
-    wavelength = float(cfg["wavelength"])
-    k0 = 2 * np.pi / wavelength
-
-    xlims = cfg["xlims"]
-    zlims = cfg["zlims"]
-    continuous_dimensions = (xlims, zlims)
-
-    # Determine NZ
-    z_range = zlims[1] - zlims[0]
-    dz = wavelength / cfg["z_step_per_wavelength"]
-    nz = int(z_range / dz)
-
-    probe_dim = cfg["probe_dimensions_px"][0]
-    min_nx = (cfg["scan_points"] - 1) * cfg["step_size_px"] + probe_dim
-    nx = max(min_nx, nz)  # ensure square for rotate90
-
-    discrete_dimensions = (nx, nz)
-
-    config = SimulationConfig(
-        continuous_dimensions=continuous_dimensions,
-        discrete_dimensions=discrete_dimensions,
-        probe_dimensions=probe_dim,
-        scan_points=cfg["scan_points"],
-        step_size=cfg["step_size_px"],
-        probe_angles=tuple(cfg["probe_angles_list"]),
-        wave_number=k0,
-        probe_diameter_scale=cfg["probe_diameter_fraction"],
-        probe_focus=cfg["probe_focus"],
-        bc_type=BoundaryType(cfg["bc_type"]),
-        probe_type=ProbeType(cfg["probe_type"]),
-        n_medium=cfg["nb"],
-        results_dir=results_dir,
+    probe_config = ProbeConfig(
+        type= ProbeType.from_string(cfg["probe_type"]),
+        wave_length = cfg["wave_length"],        # meters (0.635 μm). Visible light
+        diameter = cfg["probe_diameter"],               # [m]
+        focus = cfg["probe_focus"],                 # focal length [m]
+        tilts=cfg["probe_tilts"] # tilts in degrees
     )
 
-    simulation_space = create_simulation_space(config)
+    if cfg["ylims"] is None:
+        limits = Limits(x=cfg["xlims"], z=cfg["zlims"], units="m")
+    else:
+        limits = Limits(x=cfg["xlims"], y=cfg["ylims"], z=cfg["zlims"], units="m")
+
+    sim_config = SimulationConfig(
+        probe_config=probe_config,
+
+        # Spatial discretization
+        scan_points=cfg["scan_points"],
+        step_size_px=cfg["step_size_px"],
+        pad_factor=cfg["pad_factor"],
+        solve_reduced_domain=cfg["solve_reduced_domain"],
+        points_per_wavelength=cfg["points_per_wavelength"],
+        spatial_limits=limits,
+
+        # Refractive index or Transmission Function Constant Surrounding Medium
+        medium=cfg["n_medium"], # 1.0 for free space
+
+        # Logging and results
+        results_dir="./results",
+        use_logging=True
+    )
+
+    simulation_space = create_simulation_space(sim_config)
     ptycho_object = create_ptycho_object(simulation_space)
 
     delta = float(cfg["delta"])
     beta = float(cfg["beta"])
+    refractive_index_perturbation = complex(-delta, -beta)
 
     for obj_cfg in cfg["sample_space_objects"]:
         ptycho_object.add_object(
             obj_cfg["type"],
-            -delta - 1j * beta,
-            side_length=obj_cfg["side_length_fraction"],
-            centre=obj_cfg["centre_fraction"],
-            depth=obj_cfg["depth_fraction"],
-            gaussian_blur=cfg["gaussian_blur_px"],
+            refractive_index_perturbation,
+            side_length_factor=obj_cfg["side_length_factor"],
+            centre_factor=obj_cfg["centre_factor"],
+            depth_factor=obj_cfg["depth_factor"],
+            gaussian_blur=cfg["gaussian_blur"],
         )
 
     ptycho_object.build_field()
     ptycho_probes = create_ptycho_probes(simulation_space)
 
-    forward = PWEIterativeLUSolver(simulation_space, ptycho_object, ptycho_probes)
-    u = forward.solve()
+    solver_type = cfg["solver"]["solver_type"]
+    if solver_type != "iterativePWE":
+        forward = PWEIterativeLUSolver(simulation_space, ptycho_probes,
+                                      bc_type=cfg["solver"]["bc_type"])
+    elif solver_type == "FullPintPWE":
+        forward = PWEFullPinTSolver(simulation_space, ptycho_probes,
+                                      bc_type=cfg["solver"]["bc_type"])
+    elif solver_type == "MS":
+        forward = MSForwardModelSolver(simulation_space, ptycho_probes)
+    else:
+        raise ValueError(f"Unknown solver type: {solver_type}")
 
-    vis = Visualisation(simulation_space, results_dir)
-    vis.plot_two_panels(ptycho_object.n_true, view="phase_amp")
+    u = forward.solve(n=ptycho_object.refractive_index)
 
+    if cfg["solver"]["phase"]:
+        exit_waves = forward.get_exit_waves(u)
+    else:
+        intensities = forward.get_farfield_intensities(exit_waves=exit_waves, 
+                                                               poisson_noise=cfg["solver"]["poisson_noise"])
+
+    # simulation_space.viewer.plot_two_panels(ptycho_object.refractive_index, view="phase_amp")
 
 if __name__ == "__main__":
     main()

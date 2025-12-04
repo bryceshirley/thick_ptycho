@@ -1,12 +1,15 @@
 from dataclasses import dataclass, fields
+from typing import Optional, Tuple
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
-from typing import Optional, Tuple
 
-from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import BoundaryConditionsTest
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import \
+    BoundaryConditionsTest
+from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
+
 
 @dataclass
 class PWEIterativeLUSolverCache():

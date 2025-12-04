@@ -2,11 +2,14 @@
 
 from typing import List
 
-from thick_ptycho.utils.visualisations import Visualisation2D
-from .base_simulation_space import BaseSimulationSpace, ScanFrame
-from matplotlib import pyplot as plt
 import numpy as np
-from thick_ptycho.simulation.scan_frame import ScanFrame, Point, Limits, ScanPath
+from matplotlib import pyplot as plt
+
+from thick_ptycho.simulation.scan_frame import (Limits, Point, ScanFrame,
+                                                ScanPath)
+from thick_ptycho.utils.visualisations import Visualisation2D
+
+from .base_simulation_space import BaseSimulationSpace, ScanFrame
 
 
 class SimulationSpace3D(BaseSimulationSpace):

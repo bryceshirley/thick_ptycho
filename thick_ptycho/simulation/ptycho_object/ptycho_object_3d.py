@@ -3,8 +3,10 @@
 """
 
 import numpy as np
-from .base_object import BasePtychoObject
 from skimage import data, transform
+
+from .base_object import BasePtychoObject
+
 
 class PtychoObject3D(BasePtychoObject):
     """3D ptychographic object in x–y–z space."""
