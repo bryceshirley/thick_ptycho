@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from new_thick_ptycho.thick_ptycho.thick_ptycho.simulation.scan_frame import Limits
 import numpy as np
 
 from thick_ptycho.forward_model import (PWEIterativeLUSolver, PWEFullPinTSolver,
@@ -11,13 +10,14 @@ from thick_ptycho.simulation.config import (ProbeConfig, ProbeType,
                                             SimulationConfig)
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
+from thick_ptycho.simulation.scan_frame import Limits
 from thick_ptycho.simulation.simulation_space import create_simulation_space
 from thick_ptycho.utils.io import (get_git_commit_hash, load_config,
                                    results_dir_name)
 from thick_ptycho.utils.visualisations import Visualisation
 
 
-def main(cfg_path="config.yaml"):
+def main(cfg_path="config_gen_data.yaml"):
     cfg = load_config(cfg_path)
     results_dir = results_dir_name()
 
@@ -26,17 +26,18 @@ def main(cfg_path="config.yaml"):
         f.write(get_git_commit_hash() + "\n")
 
     probe_config = ProbeConfig(
-        type= ProbeType.from_string(cfg["probe_type"]),
-        wave_length = cfg["wave_length"],        # meters (0.635 μm). Visible light
-        diameter = cfg["probe_diameter"],               # [m]
-        focus = cfg["probe_focus"],                 # focal length [m]
+        type=ProbeType(cfg["probe_type"]),
+        wave_length = float(cfg["wave_length"]),        # meters (0.635 μm). Visible light
+        diameter = float(cfg["probe_diameter"]),               # [m]
+        focus = float(cfg["probe_focus"]),                 # focal length [m]
         tilts=cfg["probe_tilts"] # tilts in degrees
     )
 
-    if cfg["ylims"] is None:
-        limits = Limits(x=cfg["xlims"], z=cfg["zlims"], units="m")
-    else:
-        limits = Limits(x=cfg["xlims"], y=cfg["ylims"], z=cfg["zlims"], units="m")
+    # if cfg does not have ylims
+    # if cfg["ylims"] is None:
+    limits = Limits(x=tuple(float(x) for x in cfg["xlims"]), z=tuple(float(z) for z in cfg["zlims"]), units="meters")
+    # else:
+    # limits = Limits(x=cfg["xlims"], y=cfg["ylims"], z=cfg["zlims"], units="m")
 
     sim_config = SimulationConfig(
         probe_config=probe_config,
@@ -53,7 +54,7 @@ def main(cfg_path="config.yaml"):
         medium=cfg["n_medium"], # 1.0 for free space
 
         # Logging and results
-        results_dir="./results",
+        results_dir=results_dir,
         use_logging=True
     )
 
@@ -75,10 +76,17 @@ def main(cfg_path="config.yaml"):
         )
 
     ptycho_object.build_field()
+    simulation_space.viewer.plot_two_panels(ptycho_object.refractive_index,
+                                            title="True Object Refractive Index",
+                                            xlabel="z (px)",
+                                            ylabel="x (px)",
+                                            view="phase_amp",
+                                            filename= "true_object.png")
+
     ptycho_probes = create_ptycho_probes(simulation_space)
 
     solver_type = cfg["solver"]["solver_type"]
-    if solver_type != "iterativePWE":
+    if solver_type == "iterativePWE":
         forward = PWEIterativeLUSolver(simulation_space, ptycho_probes,
                                       bc_type=cfg["solver"]["bc_type"])
     elif solver_type == "FullPintPWE":
@@ -90,14 +98,28 @@ def main(cfg_path="config.yaml"):
         raise ValueError(f"Unknown solver type: {solver_type}")
 
     u = forward.solve(n=ptycho_object.refractive_index)
+    data = forward.get_exit_waves(u)
+    simulation_space.viewer.plot_two_panels(data,
+                                        view="phase_amp", 
+                                        title="Exit Waves PWE",
+                                        xlabel="z (m)",
+                                        ylabel="x (m)",
+                                        filename="exit_waves.png")
+    if not cfg["solver"]["phase"]:
+        data = forward.get_farfield_intensities(exit_waves=data, 
+                                                 poisson_noise=cfg["solver"]["poisson_noise"])
+        simulation_space.viewer.plot_single_panel(np.fft.fftshift(data),
+                                            title="Far-field Intensities",
+                                            xlabel="z (m)",
+                                            ylabel="x (m)",
+                                            filename="farfield_intensities.png")
+    
+    # Save data
+    np.savez_compressed(
+        os.path.join(results_dir, "simulated_data.npz"),
+        data=data,
+    )
 
-    if cfg["solver"]["phase"]:
-        exit_waves = forward.get_exit_waves(u)
-    else:
-        intensities = forward.get_farfield_intensities(exit_waves=exit_waves, 
-                                                               poisson_noise=cfg["solver"]["poisson_noise"])
-
-    # simulation_space.viewer.plot_two_panels(ptycho_object.refractive_index, view="phase_amp")
 
 if __name__ == "__main__":
     main()
