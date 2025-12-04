@@ -21,7 +21,7 @@ import argparse
 
 def main(cfg_path):
     cfg = load_config(cfg_path)
-    results_dir = results_dir_name()
+    results_dir = results_dir_name("sim")
 
     shutil.copy(cfg_path, os.path.join(results_dir, os.path.basename(cfg_path)))
     with open(os.path.join(results_dir, "git_commit.txt"), "w") as f:
@@ -143,12 +143,9 @@ def main(cfg_path):
     
     # Save data
     np.savez_compressed(
-        os.path.join(results_dir, "simulated_exit_waves.npz"),
-        data=exit_waves,
-    )
-    np.savez_compressed(
-        os.path.join(results_dir, "simulated_farfield_intensities.npz"),
-        data=data,
+        os.path.join(results_dir, "simulated_data.npz"),
+        intensity=data,
+        exit_waves=exit_waves,
     )
 
 

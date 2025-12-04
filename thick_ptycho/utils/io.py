@@ -60,8 +60,8 @@ def get_git_commit_hash() -> str:
     except Exception:
         return "unknown"
 
-def results_dir_name() -> str:
+def results_dir_name(dir_name: str="") -> str:
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    results_dir = os.path.join("results", timestamp)
+    results_dir = os.path.join("results", dir_name, timestamp)
     os.makedirs(results_dir, exist_ok=True)
     return results_dir 

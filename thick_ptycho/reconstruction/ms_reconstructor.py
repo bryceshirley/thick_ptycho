@@ -18,26 +18,15 @@ class ReconstructorMS(ReconstructorBase):
         simulation_space,
         data,
         phase_retrieval=True,
-        results_dir=None,
-        use_logging=False,
-        verbose=True,
     ):
         super().__init__(
             simulation_space=simulation_space,
             data=data,
             phase_retrieval=phase_retrieval,
-            results_dir=results_dir,
-            use_logging=use_logging,
-            verbose=verbose,
-            log_file_name="multislice_reconstruction_log.txt",
         )
         # Create ptychographic object and probes
         self.ms = MSForwardModelSolver(self.simulation_space,
-                                            self.ptycho_probes,
-                                            results_dir=self._results_dir,
-                                            use_logging=use_logging,
-                                            verbose=self.verbose,
-                                            log=self._log)
+                                            self.ptycho_probes)
         self.k = self.simulation_space.k
         self.nz = self.simulation_space.nz
         self.num_probes = self.simulation_space.num_probes

@@ -175,13 +175,14 @@ class BaseSimulationSpace(ABC):
 
         # Logging
         self.results_dir = results_dir
+        self.use_logging = use_logging
+        self.verbose = verbose
         self._log = setup_log(
             results_dir,
             log_file_name="simulation_space_log.txt",
             use_logging=use_logging,
             verbose=verbose,
         )
-        self.verbose = verbose
 
 
     def _configure_z_axis(self, points_per_wavelength: int, nz: Optional[int]) -> None:

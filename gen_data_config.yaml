@@ -15,7 +15,7 @@ probe_tilts: [0.0] # radians
 step_size_px: 20 # pixels
 scan_points: 50 # number of scan points in one direction
 pad_factor: 2.0 # padding factor
-solve_reduced_domain: True
+solve_reduced_domain: False
 
 # --- Z discretization ---
 # > Overridden if rotate90 is True since nz=nx in that case

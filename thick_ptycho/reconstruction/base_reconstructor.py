@@ -41,9 +41,6 @@ class ReconstructorBase:
         simulation_space,
         data,
         phase_retrieval: bool = False,
-        results_dir=None,
-        use_logging=True,
-        verbose=False,
         **kwargs,
     ):
         self.simulation_space = simulation_space
@@ -51,8 +48,8 @@ class ReconstructorBase:
         self.data = np.asarray(data)
         #assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
         self.phase_retrieval = phase_retrieval
-        self.verbose = verbose
-        self._results_dir = results_dir
+        self.verbose = simulation_space.verbose
+        self._results_dir = simulation_space.results_dir
 
         self.num_angles = self.simulation_space.num_angles
         self.num_probes = self.simulation_space.num_probes
@@ -63,10 +60,10 @@ class ReconstructorBase:
         # Logging setup
         log_name = f"{self.__class__.__name__.lower()}_log.txt"
         self._log = setup_log(
-            results_dir,
+            simulation_space.results_dir,
             log_file_name=log_name,
-            use_logging=use_logging,
-            verbose=verbose,
+            use_logging=simulation_space.use_logging,
+            verbose=simulation_space.verbose,
         )
 
         self.block_size = self.simulation_space.block_size

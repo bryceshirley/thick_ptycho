@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from numpy.fft import fft2, fftshift, ifft2
 
-from thick_ptycho.forward_model.pwe.solvers import (PWEFullLUSolver,
+from thick_ptycho.forward_model.pwe.solvers import (PWEFullPinTSolver,
                                                     PWEIterativeLUSolver)
 
 from .base_reconstructor import ReconstructorBase
@@ -36,32 +36,25 @@ class ReconstructorPWE(ReconstructorBase):
         simulation_space,
         data,
         phase_retrieval=True,
-        results_dir=None,
-        use_logging=False,
-        verbose=False,
         solver_type="iterative",
+        bc_type="impedance",
     ):
         super().__init__(
             simulation_space=simulation_space,
             data=data,
             phase_retrieval=phase_retrieval,
-            results_dir=results_dir,
-            use_logging=use_logging,
-            verbose=verbose,
-            log_file_name="multislice_reconstruction_log.txt",
         )
         # Store number of tomographic projections
 
         assert solver_type in {"full", "iterative"}, f"Invalid solver_type: {solver_type!r}"
         # Forward model selection
-        SolverClass = PWEFullLUSolver if solver_type == "full" else PWEIterativeLUSolver
+        SolverClass = PWEFullPinTSolver if solver_type == "full" else PWEIterativeLUSolver
         self.forward_model = SolverClass(simulation_space, 
                                          self.ptycho_probes,
-                                        results_dir=results_dir,
-                                        use_logging=use_logging,
-                                        verbose=verbose)
-
-        self._results_dir = results_dir
+                                         bc_type=bc_type,
+                                        results_dir=simulation_space.results_dir,
+                                        use_logging=simulation_space.use_logging,
+                                        verbose=simulation_space.verbose)
         self._log("Initializing Least Squares Solver...")
 
     def compute_forward_model(self, probes: Optional[np.ndarray] = None):
