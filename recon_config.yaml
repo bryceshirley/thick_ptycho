@@ -31,5 +31,5 @@ recon_solver:
   bc_type: "impedance"
   phase_retrieval: False
   rotate90: False
-  max_iters: 2
-  data_file_path: "results/sim/2025-12-04_18-28-44-full-domain/simulated_data.npz"
+  max_iters: 50
+  data_file_path: "results/sim/2025-12-04_18-28-44-full-domain-pwe/simulated_data.npz"
