@@ -6,7 +6,7 @@ on:
 
 jobs:
   lint:
-    name: Run Pylint
+    name: Run Ruff Linter & Formatter
     runs-on: ubuntu-latest
     
     steps:
@@ -26,7 +26,10 @@ jobs:
         run: |
           poetry install --with dev
 
-      - name: Run Pylint
+      - name: Run Ruff Checks
         run: |
-          poetry run pylint thick_ptycho/
-          poetry run pylint tests/
+          # 1. Check for formatting errors
+          poetry run ruff format . --check
+          
+          # 2. Check for linting/code quality errors
+          poetry run ruff check .
