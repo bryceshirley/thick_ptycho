@@ -37,5 +37,5 @@ skip_covered = true
 [dependency-groups]
 dev = [
     "ruff (>=0.14.7,<0.15.0)",
-    "pylint (>=3.2.5,<4.0.0)"
+    "pre-commit (>=4.5.0,<5.0.0)"
 ]
