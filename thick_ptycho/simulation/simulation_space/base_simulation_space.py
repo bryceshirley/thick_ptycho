@@ -8,7 +8,7 @@ from the scanning parameters. The same principles generalize to 2D and 3D.
 Overview
 --------
 A 1D sample domain is discretized into Nx points with spacing ``dx``.
-A probe scans the sample at scan_points (or in diagram ``n``) positions, 
+A probe scans the sample at scan_points (or in diagram ``n``) positions,
 separated by step_size_px (or in diagram ``s``) pixels.
 To ensure the full probe footprint fits inside the simulated region at
 each position, the domain must be padded on both sides.
@@ -18,11 +18,11 @@ Diagram
     x = 0                                                                  x = Nx * dx
      ____________________________________________________________________________
      |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<-- pR -->|
-                      c₁          c₂                  cₙ₋₁       cₙ              
-                      |<--  s  -->|                                             
-                 |<-- pL -->|<--  s  -->|<--  pR  -->|                          
-     |<------------  Ne  --------------->|                                       
-                |<------------------------ min_nx ------------------>|           
+                      c₁          c₂                  cₙ₋₁       cₙ
+                      |<--  s  -->|
+                 |<-- pL -->|<--  s  -->|<--  pR  -->|
+     |<------------  Ne  --------------->|
+                |<------------------------ min_nx ------------------>|
      |<------------------------------        Nx       -------------------------->|
 Where:
     cᵢ  : Scan point centers (pixel indices)
@@ -57,7 +57,7 @@ Nx : int
         Nx = int(pad_factor * min_nx)
 
 Ne : int
-    Effective . Used when solving only a reduced "effective" domain instead 
+    Effective . Used when solving only a reduced "effective" domain instead
     of the full padded space::
         padding = Nx - min_nx = (pad_factor - 1) * Nx
         Ne = step_size + padding
@@ -84,8 +84,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from thick_ptycho.simulation.config import ProbeType
-from thick_ptycho.simulation.scan_frame import (Limits, ScanFrame,
-                                                ScanPath)
+from thick_ptycho.simulation.scan_frame import Limits, ScanFrame, ScanPath
 from thick_ptycho.utils.io import setup_log
 
 
@@ -100,9 +99,9 @@ class BaseSimulationSpace(ABC):
         probe_type: ProbeType = ProbeType.AIRY_DISK,
         probe_focus: Optional[float] = 0.0,
         probe_angles: Tuple[float, ...] = (0.0,),
-        scan_points: int = 1, 
-        step_size_px: int = 10, 
-        pad_factor: float = 1, 
+        scan_points: int = 1,
+        step_size_px: int = 10,
+        pad_factor: float = 1,
         solve_reduced_domain: bool = False,
         points_per_wavelength: int = 8,
         nz: Optional[int] = None,
@@ -111,7 +110,7 @@ class BaseSimulationSpace(ABC):
         results_dir: Optional[str] = None,
         scan_path: Optional[ScanPath] = None,
         use_logging: bool = True,
-        verbose: bool = False
+        verbose: bool = False,
     ) -> None:
         """
         Initialize the base simulation space.
@@ -152,7 +151,7 @@ class BaseSimulationSpace(ABC):
         verbose : bool, optional
             Print additional debugging and diagnostic information.
         """
-        self.dimension = None # To be set in subclass
+        self.dimension = None  # To be set in subclass
         self.wave_length = wave_length
         self.spatial_limits = spatial_limits
 
@@ -167,7 +166,9 @@ class BaseSimulationSpace(ABC):
         # Configure simulation geometry
         self._configure_z_axis(points_per_wavelength, nz)
         self._configure_domain()
-        self._configure_probe(probe_diameter, probe_type.value, probe_focus, probe_angles)
+        self._configure_probe(
+            probe_diameter, probe_type.value, probe_focus, probe_angles
+        )
         self.shape = None  # To be defined in subclass
 
         # Physical medium
@@ -184,7 +185,6 @@ class BaseSimulationSpace(ABC):
             verbose=verbose,
         )
 
-
     def _configure_z_axis(self, points_per_wavelength: int, nz: Optional[int]) -> None:
         """Set up the propagation axis."""
         if nz is None:
@@ -196,7 +196,6 @@ class BaseSimulationSpace(ABC):
 
         self.z = np.linspace(*self.spatial_limits.z, self.nz)
         self.dz = self.z[1] - self.z[0]
-
 
     def _configure_domain(self) -> None:
         """Compute domain width, apply padding, enforce symmetry, set coordinates."""
@@ -225,9 +224,9 @@ class BaseSimulationSpace(ABC):
             self.effective_nx = self.nx
 
         # Coordinates
-        self.x = np.linspace(self.spatial_limits.x[0], 
-                             self.spatial_limits.x[1], 
-                             self.nx)
+        self.x = np.linspace(
+            self.spatial_limits.x[0], self.spatial_limits.x[1], self.nx
+        )
         self.dx = self.x[1] - self.x[0]
 
     def _configure_probe(
@@ -250,28 +249,27 @@ class BaseSimulationSpace(ABC):
 
         self.k = 2 * np.pi / self.wave_length
 
-
     # ----------------------------------------------------------------------
     # Helper methods
     # ----------------------------------------------------------------------
 
     def join_results_dir(self, filename: str) -> str:
         """Join filename with results directory."""
-                
+
         if self.results_dir is None:
             raise ValueError("results_dir is not set.")
         return os.path.join(self.results_dir, filename)
 
-    def _determine_num_projections(
-        self, tomo_flag: bool
-    ) -> int:
+    def _determine_num_projections(self, tomo_flag: bool) -> int:
         """Determine number of tomographic projections."""
         if not tomo_flag:
             num_projections = 1
         elif self.dimension == 2:
             # Override nz for 1D case
             self.nz = self.nx
-            self._log(f"Overriding nz to match nx(={self.nx}) for 1D case due to 90° tomographic projection.")
+            self._log(
+                f"Overriding nz to match nx(={self.nx}) for 1D case due to 90° tomographic projection."
+            )
             num_projections = 2
         else:
             num_projections = 1
@@ -281,7 +279,6 @@ class BaseSimulationSpace(ABC):
             )
         self.num_projections = num_projections
         self.total_scans = self.num_angles * self.scan_points * self.num_projections
-
 
     # ----------------------------------------------------------------------
     # Abstract and utility methods
@@ -301,17 +298,17 @@ class BaseSimulationSpace(ABC):
     def _generate_scan_frames(self) -> List[ScanFrame]:
         """Generate scan frame information."""
         raise NotImplementedError
-    
+
     # ----------------------------------------------------------------------
     # Object contribution methods
     # ----------------------------------------------------------------------
-    
+
     @abstractmethod
     def _get_reduced_sample(self, *args, **kwargs):
         """Retrieve the reduced object for propagation."""
         pass
 
-    def create_object_contribution(self,n=None, grad=False, scan_index=0):
+    def create_object_contribution(self, n=None, grad=False, scan_index=0):
         """
         Create the field of object slices in free space.
 
@@ -349,6 +346,8 @@ class BaseSimulationSpace(ABC):
             coefficient = (self.k / 2j) * (n**2 - 1)
 
         # Compute all half time-step slices along the z-axis
-        object_steps = (self.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+        object_steps = (
+            (self.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+        )
 
         return object_steps

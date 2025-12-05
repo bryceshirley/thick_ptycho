@@ -9,30 +9,64 @@ class OpticalShape:
     """
     Interface class to create either 2D or 3D initial conditions.
     """
-    def __new__(cls, centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space):
+
+    def __new__(
+        cls,
+        centre_scale,
+        shape,
+        refractive_index,
+        side_length_scale,
+        depth_scale,
+        guassian_blur,
+        simulation_space,
+    ):
         if simulation_space.dimension == 2:
-            return OpticalShape2D(centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space)
+            return OpticalShape2D(
+                centre_scale,
+                shape,
+                refractive_index,
+                side_length_scale,
+                depth_scale,
+                guassian_blur,
+                simulation_space,
+            )
         elif simulation_space.dimension == 3:
-            return OpticalShape3D(centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space)
+            return OpticalShape3D(
+                centre_scale,
+                shape,
+                refractive_index,
+                side_length_scale,
+                depth_scale,
+                guassian_blur,
+                simulation_space,
+            )
         else:
-            raise ValueError("Unsupported dimension: {}".format(simulation_space.dimension))
+            raise ValueError(
+                "Unsupported dimension: {}".format(simulation_space.dimension)
+            )
+
 
 class OpticalShapeBase:
     """Represents an optical shape in the simulation."""
-    def __init__(self, centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space):
+
+    def __init__(
+        self,
+        centre_scale,
+        shape,
+        refractive_index,
+        side_length_scale,
+        depth_scale,
+        guassian_blur,
+        simulation_space,
+    ):
         for c in centre_scale:
-            assert c <1.0 and c >0.0, "Centre scales must be between 0 and 1"
-        assert side_length_scale <1.0 and side_length_scale >0.0, "Side length scales must be between 0 and 1"
-        assert depth_scale <1.0 and depth_scale >0.0, "Depth scales must be between 0 and 1"
-        
+            assert c < 1.0 and c > 0.0, "Centre scales must be between 0 and 1"
+        assert side_length_scale < 1.0 and side_length_scale > 0.0, (
+            "Side length scales must be between 0 and 1"
+        )
+        assert depth_scale < 1.0 and depth_scale > 0.0, (
+            "Depth scales must be between 0 and 1"
+        )
 
         # Shape properties
         self.shape = shape
@@ -57,31 +91,46 @@ class OpticalShapeBase:
         self.centre_continuous = []
 
         # Convert from normalized (0–1) to absolute discrete units
-        self.discrete_side_length = int(side_length_scale*self.nx)
-        self.discrete_depth = int(depth_scale*self.nz)
-        
+        self.discrete_side_length = int(side_length_scale * self.nx)
+        self.discrete_depth = int(depth_scale * self.nz)
+
         # Convert to discrete units (pixel-based grid indexing)
         self.discrete_side_length = int(self.nx * side_length_scale)
         self.discrete_depth = int(self.nz * depth_scale)
         self.discrete_centre = []
 
         # Calculate continuous and discrete centre positions
-        for i, con_dim in  enumerate(simulation_space.spatial_limits.as_tuple()):
+        for i, con_dim in enumerate(simulation_space.spatial_limits.as_tuple()):
             start, end = con_dim
             range_dim = abs(end - start)
             self.centre_continuous.append(start + centre_scale[i] * range_dim)
 
-            self.discrete_centre.append(int(np.ceil(((self.centre_continuous[i] - start) / (end - start)) * simulation_space.shape[i])))
+            self.discrete_centre.append(
+                int(
+                    np.ceil(
+                        ((self.centre_continuous[i] - start) / (end - start))
+                        * simulation_space.shape[i]
+                    )
+                )
+            )
 
         # Bounds check of continuous object extents against the used grid extents
         self.half_w = 0.5 * side_length_continuous
         self.half_d = 0.5 * depth_continuous
         assert side_length_scale < 0.5, "Object side length scale too large"
         assert depth_scale < 0.5, "Object depth scale too large"
-        assert (self.centre_continuous[-1] - self.half_d) >= self.z[0], "Object out of bounds"
-        assert (self.centre_continuous[-1] + self.half_d) <= self.z[-1], "Object out of bounds"
-        assert (self.centre_continuous[0] - self.half_w) >= self.x[0], "Object out of bounds"
-        assert (self.centre_continuous[0] + self.half_w) <= self.x[-1], "Object out of bounds"
+        assert (self.centre_continuous[-1] - self.half_d) >= self.z[0], (
+            "Object out of bounds"
+        )
+        assert (self.centre_continuous[-1] + self.half_d) <= self.z[-1], (
+            "Object out of bounds"
+        )
+        assert (self.centre_continuous[0] - self.half_w) >= self.x[0], (
+            "Object out of bounds"
+        )
+        assert (self.centre_continuous[0] + self.half_w) <= self.x[-1], (
+            "Object out of bounds"
+        )
 
         # -----------------------------------------------
         # Ensure object fits in grid
@@ -96,8 +145,6 @@ class OpticalShapeBase:
         assert cz - self.half_d_pixels >= 0, "Object out of z-bounds"
         assert cz + self.half_d_pixels < self.nz, "Object out of z-bounds"
 
-
-
     def get_refractive_index_field(self):
         """Return the field of the object."""
         pass
@@ -106,27 +153,40 @@ class OpticalShapeBase:
 class OpticalShape2D(OpticalShapeBase):
     """Represents an optical shape in the simulation in 2D."""
 
-    def __init__(self, centre_scale, shape, refractive_index, 
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space):
-        super().__init__(centre_scale, shape, refractive_index,
-                         side_length_scale, depth_scale, guassian_blur,
-                         simulation_space)
+    def __init__(
+        self,
+        centre_scale,
+        shape,
+        refractive_index,
+        side_length_scale,
+        depth_scale,
+        guassian_blur,
+        simulation_space,
+    ):
+        super().__init__(
+            centre_scale,
+            shape,
+            refractive_index,
+            side_length_scale,
+            depth_scale,
+            guassian_blur,
+            simulation_space,
+        )
         self.discrete_centre = [
             int(round(centre_scale[0] * (self.nx - 1))),
-            int(round(centre_scale[1] * (self.nz - 1)))
+            int(round(centre_scale[1] * (self.nz - 1))),
         ]
         self.cx, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
         """Return the field of the object."""
-        if self.shape == 'rectangle':
+        if self.shape == "rectangle":
             polygon_points = self._square_points()
-        elif self.shape == 'triangle':
+        elif self.shape == "triangle":
             polygon_points = self._triangle_points()
-        elif self.shape == 'random':
+        elif self.shape == "random":
             polygon_points = self._random_shape_points(num_points=20)
-        elif self.shape == 'circle':
+        elif self.shape == "circle":
             polygon_points = None
         else:
             raise ValueError("Unsupported shape: {}".format(self.shape))
@@ -137,9 +197,7 @@ class OpticalShape2D(OpticalShapeBase):
         """Return the field of a object."""
         # Create a black image
         image_size = (self.nx, self.nz)
-        image = Image.new(
-            'RGB', image_size, color=(
-                0, 0, 0))  # Black background
+        image = Image.new("RGB", image_size, color=(0, 0, 0))  # Black background
         draw = ImageDraw.Draw(image)
 
         # Draw the shape based on the polygon_points or as a circle
@@ -149,29 +207,22 @@ class OpticalShape2D(OpticalShapeBase):
             radius1 = self.discrete_side_length / 2
             radius2 = self.discrete_depth / 2
             bbox = [
-                center[0] - radius1, center[1] - radius2,
-                center[0] + radius1, center[1] + radius2
+                center[0] - radius1,
+                center[1] - radius2,
+                center[0] + radius1,
+                center[1] + radius2,
             ]
-            draw.ellipse(bbox, outline='white', fill='white')
+            draw.ellipse(bbox, outline="white", fill="white")
         else:
             # Draw a white polygon using the calculated corners
-            draw.polygon(
-            polygon_points,
-            outline='white',
-            fill='white')  # White polygon
+            draw.polygon(polygon_points, outline="white", fill="white")  # White polygon
 
         # Convert the image to a numpy array
         image_array = np.array(image)
 
         # Convert to a binary matrix: 1 where the image is white, 0 where it is
         # black
-        binary_matrix = np.all(
-            image_array == [
-                255,
-                255,
-                255],
-            axis=-
-            1).astype(int).T
+        binary_matrix = np.all(image_array == [255, 255, 255], axis=-1).astype(int).T
 
         # Create Refractive index field with optional Gaussian blur
 
@@ -194,7 +245,7 @@ class OpticalShape2D(OpticalShapeBase):
             (self.cx - half_side_length, self.cz - half_depth),  # Top-left
             (self.cx + half_side_length, self.cz - half_depth),  # Top-right
             (self.cx + half_side_length, self.cz + half_depth),  # Bottom-right
-            (self.cx - half_side_length, self.cz + half_depth)   # Bottom-left
+            (self.cx - half_side_length, self.cz + half_depth),  # Bottom-left
         ]
 
         return square_points
@@ -221,11 +272,7 @@ class OpticalShape2D(OpticalShapeBase):
 
         return triangle_points
 
-    def _random_shape_points(
-            self,
-            num_points=12,
-            irregularity=0.9,
-            spikeyness=0.9):
+    def _random_shape_points(self, num_points=12, irregularity=0.9, spikeyness=0.9):
         """
         Generate a list of points for a smooth random polygon centered at (self.cx, self.cz).
         num_points: Number of vertices.
@@ -259,30 +306,47 @@ class OpticalShape2D(OpticalShapeBase):
 class OpticalShape3D(OpticalShapeBase):
     """Represents an optical shape in the simulation in 3D."""
 
-    def __init__(self, centre_scale, shape, refractive_index,
-                 side_length_scale, depth_scale, guassian_blur,
-                 simulation_space):
-        super().__init__(centre_scale, shape, refractive_index,
-                         side_length_scale, depth_scale, guassian_blur,
-                         simulation_space)
+    def __init__(
+        self,
+        centre_scale,
+        shape,
+        refractive_index,
+        side_length_scale,
+        depth_scale,
+        guassian_blur,
+        simulation_space,
+    ):
+        super().__init__(
+            centre_scale,
+            shape,
+            refractive_index,
+            side_length_scale,
+            depth_scale,
+            guassian_blur,
+            simulation_space,
+        )
         self.ny = simulation_space.ny
         self.y = simulation_space.y
         cy = self.discrete_centre[1]
-        
+
         # Bounds check of continuous object extents against the used grid extents
-        assert (self.centre_continuous[1] - self.half_w) >= self.y[0], "Object out of bounds"
-        assert (self.centre_continuous[1] + self.half_w) <= self.y[-1], "Object out of bounds"
+        assert (self.centre_continuous[1] - self.half_w) >= self.y[0], (
+            "Object out of bounds"
+        )
+        assert (self.centre_continuous[1] + self.half_w) <= self.y[-1], (
+            "Object out of bounds"
+        )
         assert cy - self.half_w_pixels >= 0, "Object out of y-bounds"
         assert cy + self.half_w_pixels < self.ny, "Object out of y-bounds"
         self.cx, self.cy, self.cz = self.discrete_centre
 
     def get_refractive_index_field(self):
         """Return the field of the object."""
-        if self.shape == 'cuboid':
+        if self.shape == "cuboid":
             polygon_points = self._square_points()
-        elif self.shape == 'prism':
+        elif self.shape == "prism":
             polygon_points = self._triangle_points()
-        elif self.shape == 'cylinder':
+        elif self.shape == "cylinder":
             polygon_points = None
         else:
             raise ValueError("Unsupported shape: {}".format(self.shape))
@@ -295,9 +359,7 @@ class OpticalShape3D(OpticalShapeBase):
 
         # Create a black image
         image_size = (self.nx, self.ny)
-        image = Image.new(
-            'RGB', image_size, color=(
-                0, 0, 0))  # Black background
+        image = Image.new("RGB", image_size, color=(0, 0, 0))  # Black background
         draw = ImageDraw.Draw(image)
 
         # Draw a white polygon using the calculated corners
@@ -307,29 +369,22 @@ class OpticalShape3D(OpticalShapeBase):
             center = (self.cx, self.cy)
             radius = self.discrete_side_length / 2
             bbox = [
-                center[0] - radius, center[1] - radius,
-                center[0] + radius, center[1] + radius
+                center[0] - radius,
+                center[1] - radius,
+                center[0] + radius,
+                center[1] + radius,
             ]
-            draw.ellipse(bbox, outline='white', fill='white')
+            draw.ellipse(bbox, outline="white", fill="white")
         else:
             # Draw a white polygon using the calculated corners
-            draw.polygon(
-            polygon_points,
-            outline='white',
-            fill='white')  # White polygon
+            draw.polygon(polygon_points, outline="white", fill="white")  # White polygon
 
         # Convert the image to a numpy array
         image_array = np.array(image)
 
         # Convert to a binary matrix: 1 where the image is white, 0 where it is
         # black
-        binary_matrix = np.all(
-            image_array == [
-                255,
-                255,
-                255],
-            axis=-
-            1).astype(int)
+        binary_matrix = np.all(image_array == [255, 255, 255], axis=-1).astype(int)
 
         # Reshape into a 1D array
         binary_matrix = binary_matrix.reshape(self.nx * self.ny)
@@ -360,9 +415,8 @@ class OpticalShape3D(OpticalShapeBase):
         square_points = [
             (self.cx - half_side_length, self.cy - half_side_length),  # Top-left
             (self.cx + half_side_length, self.cy - half_side_length),  # Top-right
-            (self.cx + half_side_length, self.cy +
-             half_side_length),  # Bottom-right
-            (self.cx - half_side_length, self.cy + half_side_length)   # Bottom-left
+            (self.cx + half_side_length, self.cy + half_side_length),  # Bottom-right
+            (self.cx - half_side_length, self.cy + half_side_length),  # Bottom-left
         ]
         return square_points
 

@@ -4,6 +4,7 @@ import pytest
 from thick_ptycho.simulation import SimulationSpace2D
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
 
+
 @pytest.fixture(scope="session")
 def nondefault_config_2d(limits_2d):
     return dict(
@@ -11,6 +12,7 @@ def nondefault_config_2d(limits_2d):
         probe_diameter=0.01,
         spatial_limits=limits_2d,
     )
+
 
 def test_rotation(nondefault_config_2d):
     sim = SimulationSpace2D(
@@ -29,8 +31,6 @@ def test_rotation(nondefault_config_2d):
     assert ptycho_object.refractive_index.shape == (sim.nx, sim.nx)
 
 
-
-
 @pytest.mark.parametrize(
     "scan_points, step_size, pad",
     [
@@ -38,9 +38,11 @@ def test_rotation(nondefault_config_2d):
         (5, 4, 1.0),
         (5, 4, 2.0),
         (4, 3, 1.0),
-    ]
+    ],
 )
-def test_effective_domain_consistency(scan_points, step_size, pad, nondefault_config_2d):
+def test_effective_domain_consistency(
+    scan_points, step_size, pad, nondefault_config_2d
+):
     sim = SimulationSpace2D(
         **nondefault_config_2d,
         solve_reduced_domain=True,
@@ -67,9 +69,11 @@ def test_effective_domain_consistency(scan_points, step_size, pad, nondefault_co
         (4, 4, 1.5),
         (5, 4, 2.0),
         (6, 3, 2.0),
-    ]
+    ],
 )
-def test_scan_centres_spacing_and_symmetry(scan_points, step_size, pad, nondefault_config_2d):
+def test_scan_centres_spacing_and_symmetry(
+    scan_points, step_size, pad, nondefault_config_2d
+):
     sim = SimulationSpace2D(
         **nondefault_config_2d,
         solve_reduced_domain=True,
@@ -110,13 +114,12 @@ def test_domain_limits_with_reduction(nondefault_config_2d):
         solve_reduced_domain=True,
     )
     expected_ne = sim.step_size + sim.pad_discrete - 1
-    assert sim.effective_nx == expected_ne 
+    assert sim.effective_nx == expected_ne
 
     xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
 
-    assert sim.effective_shape == (sim.effective_nx,sim.nz)
-
+    assert sim.effective_shape == (sim.effective_nx, sim.nz)
 
 
 @pytest.mark.parametrize(
@@ -124,7 +127,7 @@ def test_domain_limits_with_reduction(nondefault_config_2d):
     [
         (6, 3, 2.0),
         (4, 4, 1.5),
-    ]
+    ],
 )
 def test_scan_frame_width(scan_points, step_size, pad, nondefault_config_2d):
     sim = SimulationSpace2D(

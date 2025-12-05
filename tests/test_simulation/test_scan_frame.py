@@ -18,6 +18,7 @@ def test_pixel_limits():
     with pytest.raises(ValueError):
         Limits(x=(10, 50), units="invalid_unit")  # Invalid: unknown units
 
+
 def test_meter_limits():
     limits = Limits(x=(0.0, 0.1), units="meters")
     assert limits.x == (0.0, 0.1)
@@ -29,18 +30,20 @@ def test_meter_limits():
     with pytest.raises(ValueError):
         Limits(x=(0.0, None), units="meters")  # Invalid: non-numeric limits
 
+
 def test_as_tuple():
     limits1 = Limits(x=(0, 10), units="pixels")
     assert limits1.as_tuple() == ((0, 10),)
-    
+
     limits2 = Limits(x=(0.0, 0.1), units="meters")
     assert limits2.as_tuple() == ((0.0, 0.1),)
 
-    limits3 = Limits(x=(0, 10), y=(0,10), z=(0,10), units="pixels")
-    assert limits3.as_tuple() == ((0, 10), (0,10), (0,10))
+    limits3 = Limits(x=(0, 10), y=(0, 10), z=(0, 10), units="pixels")
+    assert limits3.as_tuple() == ((0, 10), (0, 10), (0, 10))
 
-    limit4 = Limits(x=(0.0, 0.1), z=(0.0,0.1), units="meters")
-    assert limit4.as_tuple() == ((0.0, 0.1), (0.0,0.1))
+    limit4 = Limits(x=(0.0, 0.1), z=(0.0, 0.1), units="meters")
+    assert limit4.as_tuple() == ((0.0, 0.1), (0.0, 0.1))
+
 
 def test_point_as_tuple():
     point1 = Point(x=5)
@@ -49,10 +52,10 @@ def test_point_as_tuple():
     point2 = Point(x=3.5, y=7.2)
     assert point2.as_tuple() == (3.5, 7.2)
 
+
 def test_scan_frame():
     scan_frame = ScanFrame(
-        probe_centre_continuous=Point(x=0.05),
-        probe_centre_discrete=Point(x=500)
+        probe_centre_continuous=Point(x=0.05), probe_centre_discrete=Point(x=500)
     )
     assert scan_frame.probe_centre_continuous.x == 0.05
     assert scan_frame.probe_centre_discrete.x == 500
@@ -64,9 +67,10 @@ def test_scan_frame():
     assert scan_frame.reduced_limits_discrete.x == (400, 600)
 
     with pytest.raises(ValueError):
-        scan_frame.set_reduced_limits_continuous(Limits(x=(0.06, 0.10), units="pixels"))  # Invalid units
+        scan_frame.set_reduced_limits_continuous(
+            Limits(x=(0.06, 0.10), units="pixels")
+        )  # Invalid units
     with pytest.raises(ValueError):
-        scan_frame.set_reduced_limits_discrete(Limits(x=(400, 600), units="meters"))  # Invalid limits
-
-    
-
+        scan_frame.set_reduced_limits_discrete(
+            Limits(x=(400, 600), units="meters")
+        )  # Invalid limits

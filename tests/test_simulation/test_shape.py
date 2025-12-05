@@ -2,9 +2,11 @@
 import numpy as np
 import pytest
 
-from thick_ptycho.simulation.ptycho_object import (OpticalShape,
-                                                   OpticalShape2D,
-                                                   OpticalShape3D)
+from thick_ptycho.simulation.ptycho_object import (
+    OpticalShape,
+    OpticalShape2D,
+    OpticalShape3D,
+)
 
 
 # ------------------------------------------------------------------------------
@@ -20,7 +22,9 @@ def test_opticalshape_creates_1d_instance(dummy_sim_space_2d):
         guassian_blur=None,
         simulation_space=dummy_sim_space_2d,
     )
-    assert isinstance(shape, OpticalShape2D), "Should create OpticalShape2D for 1D centre input."
+    assert isinstance(shape, OpticalShape2D), (
+        "Should create OpticalShape2D for 1D centre input."
+    )
 
 
 def test_opticalshape_creates_2d_instance(dummy_sim_space_3d):
@@ -33,12 +37,15 @@ def test_opticalshape_creates_2d_instance(dummy_sim_space_3d):
         guassian_blur=None,
         simulation_space=dummy_sim_space_3d,
     )
-    assert isinstance(shape, OpticalShape3D), "Should create OpticalShape3D for 2D centre input."
+    assert isinstance(shape, OpticalShape3D), (
+        "Should create OpticalShape3D for 2D centre input."
+    )
 
 
 # ------------------------------------------------------------------------------
 # 2. Test validation of input scales
 # ------------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "centre_scale, side_length_scale, depth_scale",
@@ -49,7 +56,9 @@ def test_opticalshape_creates_2d_instance(dummy_sim_space_3d):
         ([0.5, 0.5], 0.5, 1.5),
     ],
 )
-def test_invalid_scale_values_raise_assertion(dummy_sim_space_2d, centre_scale, side_length_scale, depth_scale):
+def test_invalid_scale_values_raise_assertion(
+    dummy_sim_space_2d, centre_scale, side_length_scale, depth_scale
+):
     with pytest.raises(AssertionError):
         OpticalShape(
             centre_scale=centre_scale,
@@ -65,6 +74,7 @@ def test_invalid_scale_values_raise_assertion(dummy_sim_space_2d, centre_scale, 
 # ------------------------------------------------------------------------------
 # 3. Test out-of-bounds object placement
 # ------------------------------------------------------------------------------
+
 
 def test_object_out_of_bounds_raises_assertion(dummy_sim_space_2d):
     # place centre in the middle but make it too large
@@ -98,6 +108,7 @@ def test_object_out_of_bounds_raises_assertion_2d(dummy_sim_space_3d):
 # 4. Tests for refractive index field generation
 # ------------------------------------------------------------------------------
 
+
 def test_field_shape_matches_simulation_space_2d(dummy_sim_space_2d):
     shape = OpticalShape(
         centre_scale=[0.5, 0.5],
@@ -127,9 +138,11 @@ def test_field_shape_matches_simulation_space_3d(dummy_sim_space_3d):
     assert n_field.shape == (64, 64, 64)
     assert np.iscomplexobj(n_field)
 
+
 # ------------------------------------------------------------------------------
 # 5. Tests for Gaussian blur application
 # ------------------------------------------------------------------------------
+
 
 def test_gaussian_blur_applied_changes_field(dummy_sim_space_2d):
     shape_blur = OpticalShape(
@@ -154,7 +167,9 @@ def test_gaussian_blur_applied_changes_field(dummy_sim_space_2d):
     field_blur = shape_blur.get_refractive_index_field()
     field_no_blur = shape_no_blur.get_refractive_index_field()
 
-    assert not np.allclose(field_blur, field_no_blur), "Gaussian blur should alter field distribution."
+    assert not np.allclose(field_blur, field_no_blur), (
+        "Gaussian blur should alter field distribution."
+    )
 
 
 def test_invalid_shape_raises_valueerror(dummy_sim_space_2d):

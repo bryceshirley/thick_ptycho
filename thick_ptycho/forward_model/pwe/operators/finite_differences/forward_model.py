@@ -22,8 +22,7 @@ class PWEForwardModel:
         If True, use sub-sampled grids per scan from `detector_frame_info`.
     """
 
-    def __init__(self, simulation_space, 
-                 bc_type: str = "impedance"):
+    def __init__(self, simulation_space, bc_type: str = "impedance"):
         self.simulation_space = simulation_space
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.signal_strength = 1.0  # reserved for future scaling
@@ -31,16 +30,18 @@ class PWEForwardModel:
         if self.simulation_space.dimension == 2:
             self.nx = simulation_space.effective_nx
         else:
-            self.nx, self.ny = simulation_space.effective_nx, simulation_space.effective_ny
+            self.nx, self.ny = (
+                simulation_space.effective_nx,
+                simulation_space.effective_ny,
+            )
 
         self.block_size = self.simulation_space.block_size
 
         # Boundary conditions operator
         self.differiential_operator_matrices = OperatorMatrices(
-            self.simulation_space, 
-            bc_type=bc_type
-            )
-        
+            self.simulation_space, bc_type=bc_type
+        )
+
         # Caching control
         self.enable_caching = not self.solve_reduced_domain
         self._cache = {"AB_step": None, "b_step": None} if self.enable_caching else None
@@ -68,12 +69,12 @@ class PWEForwardModel:
             self._cache["b_step"] = b_step
 
         return A_step, B_step, b_step
-    
+
     def reset_cache(self):
         """Clear cached matrices if caching is enabled."""
         if self.enable_caching:
             self._cache = {"AB_step": None, "b_step": None}
-    
+
     def generate_zstep_matrices(
         self, probe: Optional[np.ndarray] = None
     ) -> Tuple[sp.csr_matrix, sp.csr_matrix, np.ndarray]:
@@ -82,14 +83,20 @@ class PWEForwardModel:
         """
         self.differiential_operator_matrices.probe = probe
         A_step, B_step = self.differiential_operator_matrices.get_matrix_system()
-        b_step = self.differiential_operator_matrices.get_probe_boundary_conditions_system()
+        b_step = (
+            self.differiential_operator_matrices.get_probe_boundary_conditions_system()
+        )
         self.differiential_operator_matrices.reset_probe()
         return A_step, B_step, b_step
-    
+
     # Precompute b0 for all probes
     def precompute_b0(self, probes: np.ndarray):
         """Precompute b0 for all probes when caching is enabled."""
-        if not self.enable_caching or self.simulation_space.dimension != 1 or self.solve_reduced_domain:
+        if (
+            not self.enable_caching
+            or self.simulation_space.dimension != 1
+            or self.solve_reduced_domain
+        ):
             # No precomputation in reduced domain
             return
 
@@ -102,22 +109,18 @@ class PWEForwardModel:
         b0_mat = B_step @ probes.T  # (block_size, num_probes_total)
         self.b0 = b0_mat.T + b_step
 
-
     # ------------------------- forward model ---------------------------
     def setup_homogeneous_forward_model_lhs(self, probe: Optional[np.ndarray] = None):
         """
         Construct the homogeneous (free-space) LHS block-tridiagonal system.
         """
         A_step, B_step, _ = self._get_or_generate_step_matrices(probe)
-        #A_step, B_step, _ = self.generate_zstep_matrices()
+        # A_step, B_step, _ = self.generate_zstep_matrices()
         nz = self.simulation_space.nz
-        return (
-            sp.kron(sp.eye(nz - 1, format="csr"), A_step, format="csr")
-            - sp.kron(
-                sp.diags([1], [-1], shape=(nz - 1, nz - 1), format="csr"),
-                B_step,
-                format="csr",
-            )
+        return sp.kron(sp.eye(nz - 1, format="csr"), A_step, format="csr") - sp.kron(
+            sp.diags([1], [-1], shape=(nz - 1, nz - 1), format="csr"),
+            B_step,
+            format="csr",
         )
 
     def setup_homogeneous_forward_model_rhs(self, probe: Optional[np.ndarray] = None):
@@ -127,7 +130,9 @@ class PWEForwardModel:
         _, _, b_step = self._get_or_generate_step_matrices(probe)
         return np.tile(b_step, self.simulation_space.nz - 1)
 
-    def setup_inhomogeneous_forward_model(self, n=None, grad: bool = False, scan_index: int = 0):
+    def setup_inhomogeneous_forward_model(
+        self, n=None, grad: bool = False, scan_index: int = 0
+    ):
         """
         Create the diagonal inhomogeneous forward model operator.
 
@@ -175,29 +180,35 @@ class PWEForwardModel:
             b0 = self.b0[scan_index, :]
         else:
             _, B_step, b_step = self._get_or_generate_step_matrices(probe)
-            
+
             if probe is None:
                 probe_vec = np.zeros(self.block_size)
             else:
                 probe_vec = probe.flatten()
-            
+
             b0 = B_step @ probe_vec + b_step
 
         return np.concatenate(
-            (b0, np.zeros(self.block_size * (self.simulation_space.nz - 2),))
+            (
+                b0,
+                np.zeros(
+                    self.block_size * (self.simulation_space.nz - 2),
+                ),
+            )
         )
-        
 
-    def return_forward_model_matrix(self, probe: Optional[np.ndarray] = None,
-                                    n: np.ndarray = None, scan_index: int = 0) -> np.ndarray:
+    def return_forward_model_matrix(
+        self,
+        probe: Optional[np.ndarray] = None,
+        n: np.ndarray = None,
+        scan_index: int = 0,
+    ) -> np.ndarray:
         """Return the forward model matrix for a given scan index."""
         # Create the inhomogeneous forward model matrix
-        A_homogeneous = (
-            self.setup_homogeneous_forward_model_lhs(
-                probe=probe)
-        )
+        A_homogeneous = self.setup_homogeneous_forward_model_lhs(probe=probe)
 
-        Ck = self.setup_inhomogeneous_forward_model(
-            n=n, scan_index=scan_index)
+        Ck = self.setup_inhomogeneous_forward_model(n=n, scan_index=scan_index)
 
-        return (A_homogeneous - Ck).tocsc()  # Convert to Compressed Sparse Column format for efficiency
+        return (
+            A_homogeneous - Ck
+        ).tocsc()  # Convert to Compressed Sparse Column format for efficiency

@@ -25,14 +25,21 @@ class OperatorMatrices(BoundaryConditions):
     def report_bc_effect(self):
         """Utility: returns (A_row0, A_rowN, B_row0, B_rowN) dense for inspection."""
         Ax, Bx = self.get_matrices_1d_system()
-        return Ax.getrow(0).toarray(), Ax.getrow(-1).toarray(), Bx.getrow(0).toarray(), Bx.getrow(-1).toarray()
+        return (
+            Ax.getrow(0).toarray(),
+            Ax.getrow(-1).toarray(),
+            Bx.getrow(0).toarray(),
+            Bx.getrow(-1).toarray(),
+        )
 
     # --- 2D builders ----
     def _create_1D_laplacian(self):
         e = np.ones(self.nx, dtype=complex)
         K = sp.diags(
             [self.mu_x * e, -2 * (self.mu_x + self.mu_y) * e, self.mu_x * e],
-            offsets=[-1, 0, 1], shape=(self.nx, self.nx), dtype=complex
+            offsets=[-1, 0, 1],
+            shape=(self.nx, self.nx),
+            dtype=complex,
         ).tolil()  # Convert once to LIL for efficient row assignment
 
         return K.tocsr()  # Convert back to CSR for efficient arithmetic
@@ -64,7 +71,6 @@ class OperatorMatrices(BoundaryConditions):
         return Kx
         return Kx
 
-    
     # --- 2D builders ----
     def _create_2D_laplacian(self, Ax, Bx):
         """
@@ -78,12 +84,20 @@ class OperatorMatrices(BoundaryConditions):
         """
         Ix = sp.eye(self.nx)
         Iy = sp.eye(self.ny)
-        Axy = sp.kron(
-            Iy, Ax) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), -self.mu_y * Ix).tolil()
-        Bxy = sp.kron(
-            Iy, Bx) + sp.kron(sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), self.mu_y * Ix).tolil()
+        Axy = (
+            sp.kron(Iy, Ax)
+            + sp.kron(
+                sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), -self.mu_y * Ix
+            ).tolil()
+        )
+        Bxy = (
+            sp.kron(Iy, Bx)
+            + sp.kron(
+                sp.diags([1, 1], [-1, 1], shape=(self.ny, self.ny)), self.mu_y * Ix
+            ).tolil()
+        )
         return Axy.tocsr(), Bxy.tocsr()
-    
+
     def get_matrices_2d_system(self):
         """Set up matrices based on the boundary condition type."""
         # Get 1D system matrices first with BCs applied
@@ -91,7 +105,7 @@ class OperatorMatrices(BoundaryConditions):
 
         # Create 2D Laplacian
         Axy, Bxy = self._create_2D_laplacian(Ax, Bx)
-        
+
         # Apply 2D boundary conditions
         if self.bc_type == "dirichlet":
             return self._apply_2D_dirichlet(Axy, Bxy)
@@ -103,12 +117,13 @@ class OperatorMatrices(BoundaryConditions):
 
         if self.bc_type == "impedance":
             return self._apply_2D_impedance(Axy, Bxy)
-        
+
         elif self.bc_type == "impedance2":
             return self._apply_2D_impedance2(Axy, Bxy)
         else:
             raise ValueError(
-                "Invalid boundary condition type. Please choose from dirichlet, neumann or dirichlet.")
+                "Invalid boundary condition type. Please choose from dirichlet, neumann or dirichlet."
+            )
 
     # ---- Non-Zero Boundary Probe Handling ----
     @property
@@ -141,15 +156,15 @@ class OperatorMatrices(BoundaryConditions):
         if self.probe is None:
             return ubc.flatten()
         if self.bc_type == "dirichlet":
-            ubc[1]  += 2 * self.mu_x * self.probe[0]
+            ubc[1] += 2 * self.mu_x * self.probe[0]
             ubc[-2] += 2 * self.mu_x * self.probe[-1]
 
         elif self.bc_type == "impedance":
-            ubc[0]  -= 2 * self.beta_x * self.probe[0]
+            ubc[0] -= 2 * self.beta_x * self.probe[0]
             ubc[-1] -= 2 * self.beta_x * self.probe[-1]
 
         return ubc.flatten()
-        
+
     def get_probe_boundary_conditions_2d_system(self):
         """Apply the probe/initial condition to the boundaries."""
         ubc = np.zeros((self.nx, self.ny), dtype=complex)
@@ -172,4 +187,3 @@ class OperatorMatrices(BoundaryConditions):
             return ubc.flatten()
 
         return ubc.flatten()
-    

@@ -6,15 +6,15 @@ import numpy as np
 
 try:
     from ipywidgets import IntSlider, interact
+
     _HAS_WIDGETS = True
 except Exception:
     _HAS_WIDGETS = False
 
 
-
-
 class Visualisation:
     """Common utilities for visualisation classes."""
+
     def __init__(self, simulation_space, results_dir=None):
         self.simulation_space = simulation_space
         self.results_dir = os.fspath(results_dir) if results_dir else None
@@ -34,7 +34,9 @@ class Visualisation:
 
     def _view_and_title(self, solution, view: str, title: str) -> Tuple[str, str]:
         """Return modified title and solution based on view type."""
-        assert view in ("phase_amp", "real_imag"), "view must be 'phase_amp' or 'real_imag'"
+        assert view in ("phase_amp", "real_imag"), (
+            "view must be 'phase_amp' or 'real_imag'"
+        )
         if view == "phase_amp":
             data1 = self.phase(solution)
             data2 = np.abs(solution)
@@ -47,11 +49,19 @@ class Visualisation:
             title2 = title + " Imaginary"
         return data1, data2, title1, title2
 
-    def plot_two_panels(self, data, view="phase_amp",title="",
-                        xlabel=None, ylabel=None,
-                        filename=None, extent=None, aspect='auto',
-                        colorbar_limits_left=None,
-                        colorbar_limits_right=None):
+    def plot_two_panels(
+        self,
+        data,
+        view="phase_amp",
+        title="",
+        xlabel=None,
+        ylabel=None,
+        filename=None,
+        extent=None,
+        aspect="auto",
+        colorbar_limits_left=None,
+        colorbar_limits_right=None,
+    ):
         """Return figure and axes for phase/amp or real/imag view.
         Parameters
         ----------
@@ -60,7 +70,7 @@ class Visualisation:
         view : {'phase_amp', 'real_imag'}
             Determines whether to plot (phase, amplitude) or (real, imaginary).
         filename : str, optional
-            If provided, saves the figure to this file. 
+            If provided, saves the figure to this file.
         extent : list, optional for continuous axes
             Extent for imshow [xmin, xmax, ymin, ymax].
         aspect : str or float
@@ -86,7 +96,7 @@ class Visualisation:
         # update colorbar limits if provided
         if colorbar_limits_left is not None:
             im0.set_clim(colorbar_limits_left)
-        
+
         if colorbar_limits_right is not None:
             im1.set_clim(colorbar_limits_right)
 
@@ -104,17 +114,22 @@ class Visualisation:
         axs[1].set_xlabel(xlabel)
         axs[1].set_ylabel(ylabel)
 
-
         fig.tight_layout()
         if filename:
             self._save_if_needed(fig, filename)
         return fig, axs
 
-    def plot_single_panel(self, data, title="",
-                          xlabel=None, ylabel=None,
-                          filename=None, extent=None, aspect='auto'):
-        """Return figure and axes for single panel plot.
-        """
+    def plot_single_panel(
+        self,
+        data,
+        title="",
+        xlabel=None,
+        ylabel=None,
+        filename=None,
+        extent=None,
+        aspect="auto",
+    ):
+        """Return figure and axes for single panel plot."""
         fig, ax = plt.subplots(figsize=(6, 5))
         im0 = ax.imshow(np.abs(data), cmap="viridis", origin="lower")
         ax.set_aspect(aspect)
@@ -128,9 +143,10 @@ class Visualisation:
         if filename:
             self._save_if_needed(fig, filename)
         return fig, ax
-          
 
-    def plot_residual(self, residuals, title="Residual History", loglog=True, filename=None):
+    def plot_residual(
+        self, residuals, title="Residual History", loglog=True, filename=None
+    ):
         """Plot residual history over iterations.
         Paramaters
         ----------
@@ -141,7 +157,7 @@ class Visualisation:
         loglog : bool
             Whether to use log-log scale.
         filename : str, optional
-            If provided, saves the figure to this file. 
+            If provided, saves the figure to this file.
         """
         r = np.asarray(residuals)
         if r.size == 0:
@@ -160,7 +176,7 @@ class Visualisation:
         if filename:
             self._save_if_needed(fig, filename)
         return fig, ax
-    
+
 
 class Visualisation2D(Visualisation):
     """
@@ -188,12 +204,16 @@ class Visualisation2D(Visualisation):
     # ------------------------------------------------------------------
     # Grid plot for multiple probes
     # ------------------------------------------------------------------
-    def plot_grid(self, solution: np.ndarray, *,
-                  view: str = "phase_amp",
-                  title: str = "",
-                  z_step: int = 0,
-                  filename: Optional[str] = None,
-                  axis_ticks: str = "real") -> Tuple[plt.Figure, np.ndarray, plt.Figure, np.ndarray]:
+    def plot_grid(
+        self,
+        solution: np.ndarray,
+        *,
+        view: str = "phase_amp",
+        title: str = "",
+        z_step: int = 0,
+        filename: Optional[str] = None,
+        axis_ticks: str = "real",
+    ) -> Tuple[plt.Figure, np.ndarray, plt.Figure, np.ndarray]:
         """
         Display a grid of probe slices (phase+amplitude or real+imag).
         Intended for multi-probe simulations.
@@ -217,18 +237,33 @@ class Visualisation2D(Visualisation):
         """
         assert solution.ndim == 4, "solution must be a 4D array [num_probes, x, y, z]"
         assert 0 <= z_step < solution.shape[3], "z_step out of bounds"
-        assert title is not None or isinstance(title, str), "title must be a string or None"
+        assert title is not None or isinstance(title, str), (
+            "title must be a string or None"
+        )
         assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
-        extent = [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]] if axis_ticks == "real" else None
+        extent = (
+            [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]]
+            if axis_ticks == "real"
+            else None
+        )
 
         rows = cols = int(self.simulation_space.scan_points)
         fig1, axes1 = plt.subplots(rows, cols, figsize=(15, 12), squeeze=False)
         fig2, axes2 = plt.subplots(rows, cols, figsize=(15, 12), squeeze=False)
 
-        data1, data2, t1, t2 = self._view_and_title(solution[:, :, :, z_step],
-                                                     view, title)
-        t1 += f"\n at z={self.z[z_step]:.2f}" if axis_ticks == "real" else f"\n at z-step = {z_step}"
-        t2 += f"\n at z={self.z[z_step]:.2f}" if axis_ticks == "real" else f"\n at z-slice = {z_step}"
+        data1, data2, t1, t2 = self._view_and_title(
+            solution[:, :, :, z_step], view, title
+        )
+        t1 += (
+            f"\n at z={self.z[z_step]:.2f}"
+            if axis_ticks == "real"
+            else f"\n at z-step = {z_step}"
+        )
+        t2 += (
+            f"\n at z={self.z[z_step]:.2f}"
+            if axis_ticks == "real"
+            else f"\n at z-slice = {z_step}"
+        )
 
         im1 = im2 = None
         num_probes = solution.shape[0]
@@ -236,8 +271,12 @@ class Visualisation2D(Visualisation):
             r, c = divmod(idx, cols)
             if r % 2:  # zig-zag order for scanning
                 c = cols - 1 - c
-            im1 = axes1[r, c].imshow(data1[idx], origin="lower", cmap="viridis", extent=extent)
-            im2 = axes2[r, c].imshow(data2[idx], origin="lower", cmap="viridis", extent=extent)
+            im1 = axes1[r, c].imshow(
+                data1[idx], origin="lower", cmap="viridis", extent=extent
+            )
+            im2 = axes2[r, c].imshow(
+                data2[idx], origin="lower", cmap="viridis", extent=extent
+            )
             axes1[r, c].set_title(f"Scan {idx}")
             axes2[r, c].set_title(f"Scan {idx}")
 
@@ -248,7 +287,8 @@ class Visualisation2D(Visualisation):
 
         fig1.suptitle(f"{t1} Grid", fontsize=14)
         fig2.suptitle(f"{t2} Grid", fontsize=14)
-        fig1.tight_layout(); fig2.tight_layout()
+        fig1.tight_layout()
+        fig2.tight_layout()
 
         self._save_if_needed(fig1, filename or f"grid_{t1.lower()}.png")
         self._save_if_needed(fig2, filename or f"grid_{t2.lower()}.png")
@@ -258,11 +298,15 @@ class Visualisation2D(Visualisation):
     # ------------------------------------------------------------------
     # Interactive z-slice widget
     # ------------------------------------------------------------------
-    def build_slider_widget(self, solution: np.ndarray, *,
-                            view: str = "phase_amp",
-                            mode: str = "forward",
-                            title: Optional[str] = None,
-                            axis_ticks: str = "real"):
+    def build_slider_widget(
+        self,
+        solution: np.ndarray,
+        *,
+        view: str = "phase_amp",
+        mode: str = "forward",
+        title: Optional[str] = None,
+        axis_ticks: str = "real",
+    ):
         """
         Interactive slider for visualising z-slices of a 3D field.
 
@@ -281,18 +325,23 @@ class Visualisation2D(Visualisation):
             Whether to label axes with real units or pixel indices.
         """
         assert solution.ndim == 3, "solution must be a 3D array"
-        assert title is not None or isinstance(title, str), "title must be a string or None"
+        assert title is not None or isinstance(title, str), (
+            "title must be a string or None"
+        )
         assert mode in ("forward", "reverse"), "mode must be 'forward' or 'reverse'"
         assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
 
-        extent = [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]] if axis_ticks == "real" else None
+        extent = (
+            [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]]
+            if axis_ticks == "real"
+            else None
+        )
         if title in (None, ""):
             title = f" ({mode})"
 
         len_z = solution.shape[2]
 
-        data1, data2, title1, title2 = self._view_and_title(solution,
-                                                     view, title)
+        data1, data2, title1, title2 = self._view_and_title(solution, view, title)
 
         vmin1, vmax1 = np.min(data1), np.max(data1)
         vmin2, vmax2 = np.min(data2), np.max(data2)
@@ -300,22 +349,41 @@ class Visualisation2D(Visualisation):
         def update(frame):
             fig, axs = plt.subplots(1, 2, figsize=(12, 6))
             z_frame = self.z[-(frame + 1)] if mode == "reverse" else self.z[frame]
-            z_title = f"\n at z={self.z[z_frame]:.2f}" if axis_ticks == "real" else f"\n at z-step = {z_frame}"
-            im0 = axs[0].imshow(data1[:, :, frame], cmap='viridis', origin='lower',
-                                 extent=extent,
-                                 vmin=vmin1, vmax=vmax1)
-            axs[0].set_title(f'{title1}{z_title}')
-            axs[0].set_xlabel('X'); axs[0].set_ylabel('Y')
+            z_title = (
+                f"\n at z={self.z[z_frame]:.2f}"
+                if axis_ticks == "real"
+                else f"\n at z-step = {z_frame}"
+            )
+            im0 = axs[0].imshow(
+                data1[:, :, frame],
+                cmap="viridis",
+                origin="lower",
+                extent=extent,
+                vmin=vmin1,
+                vmax=vmax1,
+            )
+            axs[0].set_title(f"{title1}{z_title}")
+            axs[0].set_xlabel("X")
+            axs[0].set_ylabel("Y")
             fig.colorbar(im0, ax=axs[0])
 
-            im1 = axs[1].imshow(data2[:, :, frame], cmap='viridis', origin='lower',
-                                 extent=extent,
-                                 vmin=vmin2, vmax=vmax2)
-            axs[1].set_title(f'{title2}{z_title}')
-            axs[1].set_xlabel('X'); axs[1].set_ylabel('Y')
+            im1 = axs[1].imshow(
+                data2[:, :, frame],
+                cmap="viridis",
+                origin="lower",
+                extent=extent,
+                vmin=vmin2,
+                vmax=vmax2,
+            )
+            axs[1].set_title(f"{title2}{z_title}")
+            axs[1].set_xlabel("X")
+            axs[1].set_ylabel("Y")
             fig.colorbar(im1, ax=axs[1])
 
             fig.tight_layout()
             plt.show()
 
-        interact(update, frame=IntSlider(min=0, max=len_z - 1, step=1, value=0, description="slice"))
+        interact(
+            update,
+            frame=IntSlider(min=0, max=len_z - 1, step=1, value=0, description="slice"),
+        )

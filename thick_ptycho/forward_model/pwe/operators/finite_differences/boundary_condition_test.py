@@ -1,7 +1,8 @@
 import numpy as np
 
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_conditions import \
-    BoundaryConditions
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_conditions import (
+    BoundaryConditions,
+)
 
 
 class BoundaryConditionsTest(BoundaryConditions):
@@ -34,7 +35,11 @@ class BoundaryConditionsTest(BoundaryConditions):
     @staticmethod
     def u_nm(a, n, m):
         """Return analytic 2D mode solution u_{n,m}(x,y,z)."""
-        return lambda x, y, z: np.exp(-a * ((n ** 2 + m ** 2) * np.pi ** 2) * z) * np.cos(n * np.pi * x) * np.cos(m * np.pi * y)
+        return (
+            lambda x, y, z: np.exp(-a * ((n**2 + m**2) * np.pi**2) * z)
+            * np.cos(n * np.pi * x)
+            * np.cos(m * np.pi * y)
+        )
 
     def u_exact_neuman_1d(self):
         """Exact analytic 1D solution (sum of modes)."""

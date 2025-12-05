@@ -6,6 +6,7 @@ class BoundaryType(Enum):
     Supported boundary condition types for the simulation domain.
     Not required for Multislice Solver.
     """
+
     DIRICHLET = "dirichlet"
     NEUMANN = "neumann"
     IMPEDANCE = "impedance"

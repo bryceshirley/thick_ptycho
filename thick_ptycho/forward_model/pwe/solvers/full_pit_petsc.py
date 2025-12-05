@@ -3,13 +3,13 @@ from typing import Optional
 
 import numpy as np
 import scipy.sparse as sp
+
 # PETSc / petsc4py
 from petsc4py import PETSc
 from scipy.sparse.linalg import splu
 
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
-from thick_ptycho.forward_model.pwe.utils._pint_utils import \
-    _pintobj_matvec_exact
+from thick_ptycho.forward_model.pwe.utils._pint_utils import _pintobj_matvec_exact
 
 
 # ---------------------------
@@ -26,7 +26,6 @@ class _AOperatorShell:
         self.N = N
         self.dtype = dtype
 
-
     def mult(self, A: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
         # x, y are PETSc vectors of length L*N
         x_arr = x.getArray(readonly=True)
@@ -35,6 +34,7 @@ class _AOperatorShell:
         y_arr[...] = out
         y.restoreArray()
         x.restoreArray()
+
     # def mult(self, A: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
     #     # Use your exact block-structure matvec with Fortran ordering:
     #     x_arr = x.getArray(readonly=True)
@@ -71,7 +71,9 @@ class _PiTPreconditioner:
     recovered as x = R y after the KSP solve.
     """
 
-    def __init__(self, A_step: sp.csr_matrix, B_step: sp.csr_matrix, C: np.ndarray, alpha: float):
+    def __init__(
+        self, A_step: sp.csr_matrix, B_step: sp.csr_matrix, C: np.ndarray, alpha: float
+    ):
         assert sp.isspmatrix(A_step) and sp.isspmatrix(B_step)
         self.dtype = np.complex128
         self.alpha = float(alpha)
@@ -82,7 +84,7 @@ class _PiTPreconditioner:
 
         # Average C over z and build A_bar, B_bar
         C_avg = np.mean(C, axis=1)  # (N,)
-        C_bar = sp.diags(C_avg, 0, format='csr')
+        C_bar = sp.diags(C_avg, 0, format="csr")
 
         self.A_bar = (A_step - C_bar).tocsr().astype(self.dtype)
         self.B_bar = (B_step + C_bar).tocsr().astype(self.dtype)
@@ -95,7 +97,10 @@ class _PiTPreconditioner:
 
         # Pre-factorize blocks: LU of (A_bar - z B_bar)
         # We keep SciPy LUs but could be replaced by PETSc factorizations if matrices are large
-        self._lus = [splu((self.A_bar - (z * self.B_bar)).astype(self.dtype)) for z in self.omegas]
+        self._lus = [
+            splu((self.A_bar - (z * self.B_bar)).astype(self.dtype))
+            for z in self.omegas
+        ]
 
     # ---- PETSc PCShell hooks ----
     def setUp(self, pc: PETSc.PC):  # optional hook
@@ -119,11 +124,11 @@ class _PiTPreconditioner:
         V = np.asarray(v, dtype=self.dtype).reshape(L, N)  # (L, N)
         # Move to (N, L) for axis-1 FFTs with gamma scaling
         V = V.T  # (N, L)
-        V_hat = np.fft.ifft(self.gamma[None, :] * V, axis=1, norm='ortho')
+        V_hat = np.fft.ifft(self.gamma[None, :] * V, axis=1, norm="ortho")
         # Solve each block system
         for j in range(L):
             V_hat[:, j] = self._lus[j].solve(V_hat[:, j])
-        Y = np.fft.fft(V_hat, axis=1, norm='ortho') / self.gamma[None, :]
+        Y = np.fft.fft(V_hat, axis=1, norm="ortho") / self.gamma[None, :]
         # Back to (L, N) then ravel
         Y = Y.T
         return Y.reshape(L * N)
@@ -146,9 +151,17 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
       replaced with PETSc factorizations or iterative inner solves.
     """
 
-    def __init__(self, simulation_space, ptycho_probes,
-                 results_dir="", use_logging=False, verbose=False, log=None,
-                 alpha: float = 1e-6, atol: float = 1e-6):
+    def __init__(
+        self,
+        simulation_space,
+        ptycho_probes,
+        results_dir="",
+        use_logging=False,
+        verbose=False,
+        log=None,
+        alpha: float = 1e-6,
+        atol: float = 1e-6,
+    ):
         super().__init__(
             simulation_space,
             ptycho_probes,
@@ -174,7 +187,9 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
     # ------------------------------
     # Preconditioner / operator prep
     # ------------------------------
-    def _get_or_construct_pit(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
+    def _get_or_construct_pit(
+        self, n: Optional[np.ndarray] = None, mode: str = "forward"
+    ):
         assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}
         if n is None:
             n = self.simulation_space.refractive_index_empty
@@ -198,23 +213,25 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
             L = self.nz - 1
 
             # Object contribution (Nx, L)
-            C = self.simulation_space.create_object_contribution(n=n).reshape(-1, L).astype(np.complex128)
+            C = (
+                self.simulation_space.create_object_contribution(n=n)
+                .reshape(-1, L)
+                .astype(np.complex128)
+            )
 
             A_csr = A_step.tocsr()  # ensure A_step is already complex128 upstream
             B_csr = B_step.tocsr()
             C_eff = C.reshape(-1, L)  # C should also already be complex128
 
-
             # Adjoint handling: conjugate-transpose blocks + reverse z + conjugate C
             if mode in {"adjoint", "adjoint_rotated"}:
                 A_eff = A_csr.conj().T
                 B_eff = B_csr.conj().T
-                C_eff = np.flip(C.conj(), axis=1).reshape(-1, L) 
+                C_eff = np.flip(C.conj(), axis=1).reshape(-1, L)
             else:
                 A_eff = A_csr
                 B_eff = B_csr
                 C_eff = C.reshape(-1, L)  # C should also already be complex128
-
 
             # Build MatShell for A and PCShell for R
             size = Nx * L
@@ -225,23 +242,29 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
             print("Setting up PETSc MatShell for A...", flush=True)
             ctx = _AOperatorShell(A_eff, B_eff, np.asfortranarray(C_eff), L=L, N=Nx)
             print("Binding PETSc MatShell context...", flush=True)
-            A_shell = PETSc.Mat().createPython([size, size], context=ctx, comm=PETSc.COMM_SELF)
+            A_shell = PETSc.Mat().createPython(
+                [size, size], context=ctx, comm=PETSc.COMM_SELF
+            )
             A_shell.setUp()
             print("MatShell ready.", flush=True)
 
             # Right preconditioner context R
             print("Setting up PETSc PCShell for PiT preconditioner...", flush=True)
-            pc_ctx = _PiTPreconditioner(A_step=A_csr, B_step=B_csr, C=C, alpha=self.alpha)
+            pc_ctx = _PiTPreconditioner(
+                A_step=A_csr, B_step=B_csr, C=C, alpha=self.alpha
+            )
 
             self.pit_cache[projection_key] = (A_shell, pc_ctx)
 
         if self.b_cache is None:
-            self.b_cache = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+            self.b_cache = (
+                self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+            )
 
         return self.pit_cache, self.b_cache
 
     def prepare_solver(self, n: Optional[np.ndarray] = None, mode: str = "forward"):
-        #assert not getattr(self, "solve_reduced_domain", False), "Full-system solver does not support thin-sample approximation."
+        # assert not getattr(self, "solve_reduced_domain", False), "Full-system solver does not support thin-sample approximation."
         assert mode in {"forward", "adjoint", "forward_rotated", "adjoint_rotated"}
         return self._get_or_construct_pit(n=n, mode=mode)
 
@@ -282,13 +305,19 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
         t_setup0 = time.perf_counter()
         pit_cache, b_hom = self._get_or_construct_pit(n=n, mode=mode)
 
-        projection_key = "projection_1" if mode in {"forward_rotated", "adjoint_rotated"} else "projection_0"
+        projection_key = (
+            "projection_1"
+            if mode in {"forward_rotated", "adjoint_rotated"}
+            else "projection_0"
+        )
         A_shell, pc_ctx = pit_cache[projection_key]
 
         if rhs_block is not None:
             b_np = rhs_block
         else:
-            probe_contrib = self.pwe_finite_differences.probe_contribution(scan_index=scan_idx, probe=probe)
+            probe_contrib = self.pwe_finite_differences.probe_contribution(
+                scan_index=scan_idx, probe=probe
+            )
             b_np = b_hom + probe_contrib
 
         b_np = b_np.astype(np.complex128)
@@ -315,6 +344,7 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
 
         def monitor(ksp_obj, its, rnorm):
             print(f"  Iter {its:3d} | Precond residual: {rnorm:.3e}", flush=True)
+
         ksp.setMonitor(monitor)
 
         t0 = time.perf_counter()
@@ -323,7 +353,10 @@ class PWEFullPinTSolverPETSc(BasePWESolver):
 
         its = ksp.getIterationNumber()
         reason = ksp.getConvergedReason()
-        print(f"PETSc GMRES time: {t1 - t0:.2f}s | iters={its} | reason={reason}", flush=True)
+        print(
+            f"PETSc GMRES time: {t1 - t0:.2f}s | iters={its} | reason={reason}",
+            flush=True,
+        )
 
         # Recover original variable: x = R y
         y_np = y.getArray(readonly=True).copy()

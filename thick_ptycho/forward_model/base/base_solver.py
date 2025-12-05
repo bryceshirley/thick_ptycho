@@ -4,8 +4,10 @@ from typing import Optional, Union
 
 import numpy as np
 
-from thick_ptycho.simulation.simulation_space import (SimulationSpace2D,
-                                                      SimulationSpace3D)
+from thick_ptycho.simulation.simulation_space import (
+    SimulationSpace2D,
+    SimulationSpace3D,
+)
 from thick_ptycho.utils.io import setup_log
 
 
@@ -36,7 +38,9 @@ class BaseForwardModelSolver(ABC):
             self.results_dir = simulation_space.results_dir
 
         # Logger
-        self._log = log or setup_log(results_dir, "solver_log.txt", use_logging, verbose)
+        self._log = log or setup_log(
+            results_dir, "solver_log.txt", use_logging, verbose
+        )
 
         # Determine step frame dimensions
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
@@ -59,15 +63,19 @@ class BaseForwardModelSolver(ABC):
     def reset_cache(self):
         """Reset any cached variables in the solver."""
         pass
-        
+
     # ------------------------------------------------------------------
     # Common solving interface
     # ------------------------------------------------------------------
 
-    def solve(self, n: Optional[np.ndarray] = None, mode: str = "forward",
-              rhs_block: Optional[np.ndarray] = None,
-              probes: Optional[np.ndarray] = None,
-              **kwargs) -> np.ndarray:
+    def solve(
+        self,
+        n: Optional[np.ndarray] = None,
+        mode: str = "forward",
+        rhs_block: Optional[np.ndarray] = None,
+        probes: Optional[np.ndarray] = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
         Main multi-angle, multi-probe solving loop.
         Subclasses must define `_solve_single_probe(angle_idx, probe_idx, n, **kwargs)`.
@@ -82,14 +90,14 @@ class BaseForwardModelSolver(ABC):
             Optional RHS vector for reusing precomputed blocks.
         initial_condition : ndarray, optional
             Initial probe condition to use instead of default.
-        
+
         Returns
         -------
         u : ndarray
             Complex propagated field, shape
             (num_projections, num_angles, num_probes, nx[,ny], nz).
         """
-        assert mode in {"forward", "adjoint","reverse"}, f"Invalid mode: {mode!r}"  
+        assert mode in {"forward", "adjoint", "reverse"}, f"Invalid mode: {mode!r}"
         # Initialize solution grid with initial condition
         u = self._create_solution_grid()
 
@@ -107,10 +115,12 @@ class BaseForwardModelSolver(ABC):
                         start = time.time()
                     # Solve for single probe
                     u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
-                        scan_idx=scan_idx, proj_idx=proj_idx,
-                        n=n, mode=mode, 
+                        scan_idx=scan_idx,
+                        proj_idx=proj_idx,
+                        n=n,
+                        mode=mode,
                         rhs_block=rhs_block,
-                        probe=probes[angle_idx, scan_idx, :]
+                        probe=probes[angle_idx, scan_idx, :],
                     ).reshape(*self.effective_shape)
 
                     if self.solve_reduced_domain:
@@ -118,19 +128,24 @@ class BaseForwardModelSolver(ABC):
                     # Log time taken for each probe if verbose is True
                     if self.verbose:
                         self._log(
-                            f"[{self.solver_type}] solved probe {scan_idx+1}/{self.num_probes} "
+                            f"[{self.solver_type}] solved probe {scan_idx + 1}/{self.num_probes} "
                             f"at angle {angle} in {time.time() - start:.2f}s"
                         )
         return u
-    
+
     # ------------------------------------------------------------------
     #  Single probe solving (to be implemented by subclasses)
     # ------------------------------------------------------------------
-        
 
     @abstractmethod
-    def _solve_single_probe(self, angle_idx: int, probe_idx: int,
-                             n=None, mode: str = "forward", initial: np.ndarray = None) -> np.ndarray:
+    def _solve_single_probe(
+        self,
+        angle_idx: int,
+        probe_idx: int,
+        n=None,
+        mode: str = "forward",
+        initial: np.ndarray = None,
+    ) -> np.ndarray:
         """Override in subclasses."""
         raise NotImplementedError
 
@@ -143,7 +158,12 @@ class BaseForwardModelSolver(ABC):
             (num_projections, num_angles, num_probes, nx[,ny], nz).
         """
         return np.zeros(
-            (self.num_projections, self.num_angles, self.num_probes, *self.effective_shape),
+            (
+                self.num_projections,
+                self.num_angles,
+                self.num_probes,
+                *self.effective_shape,
+            ),
             dtype=complex,
         )
 
@@ -166,9 +186,9 @@ class BaseForwardModelSolver(ABC):
             Exit wave field at detector plane (z = nz - 1)
             Shape: (num_angles, num_probes, *effective_shape)
         """
-        return u[..., -1].reshape((self.simulation_space.total_scans, 
-                       self.simulation_space.block_size))
-
+        return u[..., -1].reshape(
+            (self.simulation_space.total_scans, self.simulation_space.block_size)
+        )
 
     def get_farfield_intensities(
         self,
@@ -204,5 +224,6 @@ class BaseForwardModelSolver(ABC):
         # Add noise
         if poisson_noise:
             intensities = np.random.poisson(intensities)
-        return intensities.reshape((self.simulation_space.total_scans, 
-                       self.simulation_space.block_size))
+        return intensities.reshape(
+            (self.simulation_space.total_scans, self.simulation_space.block_size)
+        )

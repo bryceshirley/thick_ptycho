@@ -56,7 +56,12 @@ class PtychoProbes:
         self.simulation_space = simulation_space
 
         if self.probe_diameter is not None:
-            for i, lim in enumerate([self.simulation_space.spatial_limits.x, self.simulation_space.spatial_limits.y]):
+            for i, lim in enumerate(
+                [
+                    self.simulation_space.spatial_limits.x,
+                    self.simulation_space.spatial_limits.y,
+                ]
+            ):
                 if lim is None:
                     continue
                 start, end = lim
@@ -89,14 +94,21 @@ class PtychoProbes:
         probes = self.create_empty_probe_stack()
         for a_idx, tilt in enumerate(self.probe_tilts):
             for s_idx in range(self.num_probes):
-                probes[a_idx, s_idx, ...] = self.make_single_probe(                    
+                probes[a_idx, s_idx, ...] = self.make_single_probe(
                     scan=s_idx,
                     probe_tilt=tilt,
                 )
         return probes
 
     def create_empty_probe_stack(self):
-        return np.zeros((self.num_tilts, self.num_probes, *self.simulation_space.effective_shape[:-1]), dtype=complex)
+        return np.zeros(
+            (
+                self.num_tilts,
+                self.num_probes,
+                *self.simulation_space.effective_shape[:-1],
+            ),
+            dtype=complex,
+        )
 
     def make_single_probe(
         self,
@@ -145,7 +157,7 @@ class PtychoProbes:
             radius = max(self.probe_diameter / 2.0, 1e-12)
         else:
             radius = None
-        
+
         field = self._build_profile(probe_type, coord, center, radius)
 
         # Phase terms
@@ -199,8 +211,10 @@ class PtychoProbes:
 
         x_mesh, y_mesh = coord
         cx, cy = center
-        phase = np.exp(1j * (k * (x_mesh - cx) * np.sin(tilt_x) +
-                             k * (y_mesh - cy) * np.sin(tilt_y)))
+        phase = np.exp(
+            1j
+            * (k * (x_mesh - cx) * np.sin(tilt_x) + k * (y_mesh - cy) * np.sin(tilt_y))
+        )
         return field * phase
 
     def add_quadratic_focus(
@@ -258,7 +272,9 @@ class PtychoProbes:
             return self._constant(coord)
 
         if probe_type == "gaussian":
-            return self._gaussian(coord, center, sd=(radius)/3) # at 3*sd a gaussian is ~0.01
+            return self._gaussian(
+                coord, center, sd=(radius) / 3
+            )  # at 3*sd a gaussian is ~0.01
 
         if probe_type == "sinusoidal":
             return self._sinusoidal(coord)
@@ -280,7 +296,7 @@ class PtychoProbes:
 
         if probe_type == "blurred_disk":
             return self._blurred_disk(coord, center, radius)
-        
+
         raise ValueError(f"Unknown probe_type: {probe_type}")
 
     def _constant(self, coord):
@@ -295,12 +311,12 @@ class PtychoProbes:
             (x,) = coord
             cx = center
             dx = (x - cx) / sd
-            return np.exp(-0.5 * dx ** 2).astype(complex)
+            return np.exp(-0.5 * dx**2).astype(complex)
         x, y = coord
         cx, cy = center
         dx = (x - cx) / sd
         dy = (y - cy) / sd
-        return np.exp(-0.5 * (dx ** 2 + dy ** 2)).astype(complex)
+        return np.exp(-0.5 * (dx**2 + dy**2)).astype(complex)
 
     def _sinusoidal(self, coord):
         if self.simulation_space.dimension == 2:
@@ -320,28 +336,32 @@ class PtychoProbes:
         # np.sin(n * np.pi * x) * np.sin(m * np.pi * y)
         if self.simulation_space.dimension == 2:
             (x,) = coord
-            return (u0_nm_dirichlet(1, 1)(x, 0.5)+
-                    0.5 * u0_nm_dirichlet(5, 5)(x, 0.5) +
-                    0.2 * u0_nm_dirichlet(9, 9)(x, 0.5)).astype(complex)
+            return (
+                u0_nm_dirichlet(1, 1)(x, 0.5)
+                + 0.5 * u0_nm_dirichlet(5, 5)(x, 0.5)
+                + 0.2 * u0_nm_dirichlet(9, 9)(x, 0.5)
+            ).astype(complex)
         x, y = coord
         return (
-            u0_nm_dirichlet(1, 1)(x, y) +
-            0.5 * u0_nm_dirichlet(5, 5)(x, y) +
-            0.2 * u0_nm_dirichlet(9, 9)(x, y)
+            u0_nm_dirichlet(1, 1)(x, y)
+            + 0.5 * u0_nm_dirichlet(5, 5)(x, y)
+            + 0.2 * u0_nm_dirichlet(9, 9)(x, y)
         ).astype(complex)
 
     def _neumann_test(self, coord):
         if self.simulation_space.dimension == 2:
             (x,) = coord
-            return (u0_nm_neumann(1, 1)(x, 0) +
-                    0.5 * u0_nm_neumann(2, 2)(x, 0) +
-                    0.2 * u0_nm_neumann(5, 5)(x, 0)
-                 ).astype(complex)
+            return (
+                u0_nm_neumann(1, 1)(x, 0)
+                + 0.5 * u0_nm_neumann(2, 2)(x, 0)
+                + 0.2 * u0_nm_neumann(5, 5)(x, 0)
+            ).astype(complex)
         x, y = coord
-        return (u0_nm_neumann(1, 1)(x, y) +
-                0.5 * u0_nm_neumann(2, 2)(x, y) +
-                0.2 * u0_nm_neumann(5, 5)(x, y)
-                ).astype(complex)
+        return (
+            u0_nm_neumann(1, 1)(x, y)
+            + 0.5 * u0_nm_neumann(2, 2)(x, y)
+            + 0.2 * u0_nm_neumann(5, 5)(x, y)
+        ).astype(complex)
 
     def _airy_disk(self, coord, center, radius):
         # Amp only (intensity version commonly uses [2 J1(ξ)/ξ]^2; here amplitude)
@@ -378,13 +398,13 @@ class PtychoProbes:
             (x,) = coord
             r = np.abs(x - center)
             pix_area = self.simulation_space.dx
-            area = (2 * radius)
+            area = 2 * radius
         else:
             x, y = coord
             cx, cy = center
             r = np.hypot(x - cx, y - cy)
             pix_area = self.simulation_space.dx * self.simulation_space.dy
-            area = np.pi * radius ** 2
+            area = np.pi * radius**2
 
         portion_blur = self.disk_edge_blur
         inner = radius - portion_blur * radius
@@ -395,22 +415,28 @@ class PtychoProbes:
 
         # Normalize approximate energy to match ideal disk
         target = area / pix_area
-        s = np.sqrt(target / (amp ** 2).sum())
+        s = np.sqrt(target / (amp**2).sum())
         return (amp * s).astype(complex)
 
     def _get_coordinates(self, scan: int) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Return (x,) in 1D or (x_mesh, y_mesh) in 2D with 'ij' indexing."""
         if self.simulation_space.dimension == 2:
             if self.solve_reduced_domain:
-                x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
+                x_min, x_max = self.simulation_space.scan_frame_info[
+                    scan
+                ].reduced_limits_continuous.x
                 x = np.linspace(x_min, x_max, self.simulation_space.effective_nx)
             else:
                 x = self.simulation_space.x
             return (x,)
         # 2D
         if self.solve_reduced_domain:
-            x_min, x_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.x
-            y_min, y_max = self.simulation_space.scan_frame_info[scan].reduced_limits_continuous.y
+            x_min, x_max = self.simulation_space.scan_frame_info[
+                scan
+            ].reduced_limits_continuous.x
+            y_min, y_max = self.simulation_space.scan_frame_info[
+                scan
+            ].reduced_limits_continuous.y
             x = np.linspace(x_min, x_max, self.simulation_space.effective_nx)
             y = np.linspace(y_min, y_max, self.simulation_space.effective_ny)
         else:
@@ -419,10 +445,11 @@ class PtychoProbes:
 
     def _get_center(self, scan: int) -> Union[float, Tuple[float, float]]:
         """Return probe center (cx) in 1D or (cx, cy) in 2D."""
-        return self.simulation_space.scan_frame_info[scan].probe_centre_continuous.as_tuple()
+        return self.simulation_space.scan_frame_info[
+            scan
+        ].probe_centre_continuous.as_tuple()
 
     def _normalize_tilts(
-            
         self, probe_tilt: Union[float, Tuple[float, float]]
     ) -> Tuple[float, float]:
         """Return (tilt_x, tilt_y) for 1D/2D convenience."""

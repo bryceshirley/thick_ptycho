@@ -1,4 +1,3 @@
-
 import numpy as np
 
 from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
@@ -46,7 +45,7 @@ class ReconstructorBase:
         self.simulation_space = simulation_space
         self.ptycho_probes = create_ptycho_probes(simulation_space)
         self.data = np.asarray(data)
-        #assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
+        # assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
         self.phase_retrieval = phase_retrieval
         self.verbose = simulation_space.verbose
         self._results_dir = simulation_space.results_dir
@@ -90,37 +89,37 @@ class ReconstructorBase:
         np.ndarray
             The complex-valued exit wave error, same shape as uk.
         """
-        #exit_waves = uk[:, -self.block_size:]
+        # exit_waves = uk[:, -self.block_size:]
         exit_wave_error = np.zeros_like(self.convert_to_tensor_form(uk), dtype=complex)
-        exit_waves = self.convert_to_tensor_form(uk)[...,-1].reshape(self.total_scans, 
-                                                                     self.block_size)
+        exit_waves = self.convert_to_tensor_form(uk)[..., -1].reshape(
+            self.total_scans, self.block_size
+        )
 
         if self.phase_retrieval:
             emodel = self._apply_phase_retrieval_constraint(exit_waves)
-            exit_wave_error[..., :, -1] = (exit_waves - emodel).reshape(self.num_projections,
-                                                                           self.num_angles,
-                                                                           self.num_probes,
-                                                                             self.block_size)
-
+            exit_wave_error[..., :, -1] = (exit_waves - emodel).reshape(
+                self.num_projections, self.num_angles, self.num_probes, self.block_size
+            )
 
             if getattr(self, "_results_dir", None):
                 # Optional visualization of pre/post phase retrieval
                 self.simulation_space.viewer.plot_two_panels(
-                    exit_waves, view="phase_amp",
+                    exit_waves,
+                    view="phase_amp",
                     filename="exit_phase_amp_old.png",
                     title="Old Exit Wave",
-                    xlabel="x", ylabel="Image #"
+                    xlabel="x",
+                    ylabel="Image #",
                 )
 
         else:  # Known Phase
-            exit_wave_error[..., :, -1] = (exit_waves - self.data).reshape(self.num_projections,
-                                                                           self.num_angles,
-                                                                           self.num_probes,
-                                                                             self.block_size)
+            exit_wave_error[..., :, -1] = (exit_waves - self.data).reshape(
+                self.num_projections, self.num_angles, self.num_probes, self.block_size
+            )
 
         return exit_wave_error
-    
-    def convert_to_tensor_form(self,u):
+
+    def convert_to_tensor_form(self, u):
         """
         Reverse the block flattening process.
 
@@ -131,7 +130,13 @@ class ReconstructorBase:
         ndarray: Unflattened array of shape (num_angles, num_probes, block_size, nz - 1)
         """
         # Step 1: Reshape to (num_probes, nz - 1, block_size)
-        reshaped = u.reshape(self.num_projections,self.num_angles, self.num_probes, self.nz-1, self.block_size)
+        reshaped = u.reshape(
+            self.num_projections,
+            self.num_angles,
+            self.num_probes,
+            self.nz - 1,
+            self.block_size,
+        )
 
         # Step 2: Transpose to (num_probes, num_probes, nx, nz - 1)
         return reshaped.transpose(0, 1, 2, 4, 3)
@@ -147,17 +152,20 @@ class ReconstructorBase:
         ndarray: Block-formatted array. (total_scans, nx*nz)
         """
         # 2. Remove initial condition
-        u = u[:, :, :, :, 1:]  # shape: (projection_number, num_angles, num_probes, block_size, nz - 1)
+        u = u[
+            :, :, :, :, 1:
+        ]  # shape: (projection_number, num_angles, num_probes, block_size, nz - 1)
 
         # 3. Transpose axes
-        u = u.transpose(0, 1, 2, 4, 3) # shape: (projection_number, num_angles, num_probes, nz - 1, block_size)
+        u = u.transpose(
+            0, 1, 2, 4, 3
+        )  # shape: (projection_number, num_angles, num_probes, nz - 1, block_size)
 
         # 4. Flatten last two dims
         # shape: (total_scans, block_size * (nz - 1))
         u = u.reshape(self.total_scans, -1)
 
         return u
-
 
     def _apply_phase_retrieval_constraint(self, exit_waves: np.ndarray) -> np.ndarray:
         """
@@ -203,4 +211,6 @@ class ReconstructorBase:
 
     def reconstruct(self, *args, **kwargs):
         """Subclasses must implement their reconstruction logic here."""
-        raise NotImplementedError("Subclasses must implement the 'reconstruct()' or 'solve()' method.")
+        raise NotImplementedError(
+            "Subclasses must implement the 'reconstruct()' or 'solve()' method."
+        )

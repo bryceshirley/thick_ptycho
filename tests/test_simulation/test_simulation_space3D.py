@@ -13,7 +13,9 @@ def nondefault_config_3d(limits_3d):
         spatial_limits=limits_3d,
     )
 
+
 # --- Utility functions ---------------------------------------------------------
+
 
 def _extract_centres(sim):
     """Return array of (cx, cy) discrete centres."""
@@ -21,6 +23,7 @@ def _extract_centres(sim):
 
 
 # --- Tests --------------------------------------------------------------------
+
 
 def test_rotation(nondefault_config_3d):
     """
@@ -35,13 +38,14 @@ def test_rotation(nondefault_config_3d):
     assert sim.nz != sim.nx
     assert sim.num_projections == 1
 
+
 @pytest.mark.parametrize(
     "scan_points, step_size, pad",
     [
         (4, 3, 1.2),
         (5, 4, 1.0),
         (5, 4, 2.0),
-    ]
+    ],
 )
 def test_domain_square_and_effective(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
@@ -68,9 +72,11 @@ def test_domain_square_and_effective(scan_points, step_size, pad, nondefault_con
     [
         (4, 3, 1.2),
         (4, 3, 1.6),
-    ]
+    ],
 )
-def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad, nondefault_config_3d):
+def test_centres_form_uniform_grid_and_are_symmetric(
+    scan_points, step_size, pad, nondefault_config_3d
+):
     sim = SimulationSpace3D(
         **nondefault_config_3d,
         solve_reduced_domain=True,
@@ -93,10 +99,13 @@ def test_centres_form_uniform_grid_and_are_symmetric(scan_points, step_size, pad
     assert abs(ys[0] - (mid - np.floor((len(ys) - 1) * sim.step_size / 2))) <= 0.5
 
 
-@pytest.mark.parametrize("scan_points, step_size, pad", [
-    (4, 3, 1.5),
-    (5, 4, 2.0),
-])
+@pytest.mark.parametrize(
+    "scan_points, step_size, pad",
+    [
+        (4, 3, 1.5),
+        (5, 4, 2.0),
+    ],
+)
 def test_serpentine_path_order(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
         **nondefault_config_3d,
@@ -117,14 +126,18 @@ def test_serpentine_path_order(scan_points, step_size, pad, nondefault_config_3d
         col = centres_grid[col_idx, :, 1]  # take y-coordinates in this column
 
         if col_idx % 2 == 0:
-            assert np.all(np.diff(col) > 0)   # bottom → top
+            assert np.all(np.diff(col) > 0)  # bottom → top
         else:
-            assert np.all(np.diff(col) < 0)   # top → bottom
+            assert np.all(np.diff(col) < 0)  # top → bottom
 
-@pytest.mark.parametrize("scan_points, step_size, pad", [
-    (4, 3, 1.5),
-    (5, 4, 2.0),
-])
+
+@pytest.mark.parametrize(
+    "scan_points, step_size, pad",
+    [
+        (4, 3, 1.5),
+        (5, 4, 2.0),
+    ],
+)
 def test_raster_path_order(scan_points, step_size, pad, nondefault_config_3d):
     sim = SimulationSpace3D(
         **nondefault_config_3d,
@@ -145,7 +158,9 @@ def test_raster_path_order(scan_points, step_size, pad, nondefault_config_3d):
     for row_idx in range(ny):
         row_x = centres_grid[row_idx, :, 0]
         # Must always increase left → right
-        assert np.all(np.diff(row_x) > 0), f"Row {row_idx} is not increasing in raster mode"
+        assert np.all(np.diff(row_x) > 0), (
+            f"Row {row_idx} is not increasing in raster mode"
+        )
 
 
 def test_single_scan_point_centering_and_full_window(nondefault_config_3d):
@@ -190,11 +205,11 @@ def test_domain_limits_with_reduction(nondefault_config_3d):
     )
     expected_ne = sim.step_size + sim.pad_discrete - 1
     assert sim.effective_nx == expected_ne
-    assert sim.effective_ny == expected_ne 
+    assert sim.effective_ny == expected_ne
 
     xmin, xmax = sim._scan_frame_info[-1].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, expected_ne)
     ymin, ymax = sim._scan_frame_info[-1].reduced_limits_discrete.y
     assert (ymin, ymax) == (0, expected_ne)
 
-    assert sim.effective_shape == (sim.effective_nx, sim.effective_ny ,sim.nz)
+    assert sim.effective_shape == (sim.effective_nx, sim.effective_ny, sim.nz)

@@ -37,8 +37,15 @@ class BasePtychoObject(ABC):
         self.simulation_space._log(f"Saving refractive index field to {file_path}")
         np.save(file_path, self.refractive_index)
 
-    def add_object(self, shape: str, refractive_index: complex, side_length_factor: float,
-                   centre_factor: tuple, depth_factor: float, gaussian_blur=None):
+    def add_object(
+        self,
+        shape: str,
+        refractive_index: complex,
+        side_length_factor: float,
+        centre_factor: tuple,
+        depth_factor: float,
+        gaussian_blur=None,
+    ):
         """
         Add an optical object to the simulation.
 
@@ -61,9 +68,13 @@ class BasePtychoObject(ABC):
                 side_length_factor,
                 depth_factor,
                 gaussian_blur,
-                self.simulation_space))
+                self.simulation_space,
+            )
+        )
 
-    def load_image(self, file_path: str, real_perturbation=1e-4, imaginary_perturbation=1e-6):
+    def load_image(
+        self, file_path: str, real_perturbation=1e-4, imaginary_perturbation=1e-6
+    ):
         """
         Load a refractive index field from a TIFF image and rescale to (nx, nz).
 
@@ -73,11 +84,11 @@ class BasePtychoObject(ABC):
         """
 
         # Load and force grayscale (if TIFF has multiple channels)
-        img = Image.open(file_path).convert('L')
+        img = Image.open(file_path).convert("L")
 
         # Target resolution
-        nx = self.simulation_space.nx     # number of x-pixels (height)
-        nz = self.simulation_space.nz     # number of slices (width)
+        nx = self.simulation_space.nx  # number of x-pixels (height)
+        nz = self.simulation_space.nz  # number of slices (width)
 
         # PIL resize expects (width, height)
         img_resized = img.resize((nz, nx), resample=Image.BILINEAR)
@@ -98,7 +109,9 @@ class BasePtychoObject(ABC):
         )
         return self.refractive_index
 
-    def load_sample_object_from_file(self, filepath: str, real_perturbation=1e-4, imaginary_perturbation=1e-6):
+    def load_sample_object_from_file(
+        self, filepath: str, real_perturbation=1e-4, imaginary_perturbation=1e-6
+    ):
         """
         Load a refractive index field from a .npy file.
 
@@ -113,8 +126,14 @@ class BasePtychoObject(ABC):
         """
         loaded_n = np.load(filepath)
         if loaded_n.shape != self.refractive_index.shape:
-            raise ValueError("Loaded sample shape does not match simulation space shape.")
+            raise ValueError(
+                "Loaded sample shape does not match simulation space shape."
+            )
 
         # Normalize the refractive index field and rescale it
         refractive_index = (loaded_n - np.mean(loaded_n)) / np.std(loaded_n) + 1
-        self.refractive_index = self.simulation_space.n_medium - (real_perturbation * refractive_index) - (imaginary_perturbation * 1j * refractive_index)
+        self.refractive_index = (
+            self.simulation_space.n_medium
+            - (real_perturbation * refractive_index)
+            - (imaginary_perturbation * 1j * refractive_index)
+        )

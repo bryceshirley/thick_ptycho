@@ -1,7 +1,6 @@
 import numpy as np
 
-from thick_ptycho.forward_model.multislice.ms_solver import \
-    MSForwardModelSolver
+from thick_ptycho.forward_model.multislice.ms_solver import MSForwardModelSolver
 from thick_ptycho.reconstruction.base_reconstructor import ReconstructorBase
 
 
@@ -25,8 +24,7 @@ class ReconstructorMS(ReconstructorBase):
             phase_retrieval=phase_retrieval,
         )
         # Create ptychographic object and probes
-        self.ms = MSForwardModelSolver(self.simulation_space,
-                                            self.ptycho_probes)
+        self.ms = MSForwardModelSolver(self.simulation_space, self.ptycho_probes)
         self.k = self.simulation_space.k
         self.nz = self.simulation_space.nz
         self.num_probes = self.simulation_space.num_probes
@@ -61,7 +59,9 @@ class ReconstructorMS(ReconstructorBase):
         loss_history : list[float]
             Mean loss value per epoch.
         """
-        n_est = self.n_medium * np.ones((self.simulation_space.nx, self.nz), dtype=complex)
+        n_est = self.n_medium * np.ones(
+            (self.simulation_space.nx, self.nz), dtype=complex
+        )
         obj_est = np.ones((self.simulation_space.nx, self.nz), dtype=complex)
         loss_history = []
 
@@ -73,19 +73,25 @@ class ReconstructorMS(ReconstructorBase):
             for p in range(self.num_probes):
                 # Forward propagate probe p through current object estimate
                 if simulate_refractive_index:
-                    psi_slices = self.ms._solve_single_probe(n=n_est, scan_idx=p,
-                                                         probe=probes[p])  # shape (nx, nz)
+                    psi_slices = self.ms._solve_single_probe(
+                        n=n_est, scan_idx=p, probe=probes[p]
+                    )  # shape (nx, nz)
                 else:
-                    psi_slices = self.ms._solve_single_probe(obj=obj_est, scan_idx=p,
-                                                         probe=probes[p])  # shape (nx, nz)
+                    psi_slices = self.ms._solve_single_probe(
+                        obj=obj_est, scan_idx=p, probe=probes[p]
+                    )  # shape (nx, nz)
                 # Compute loss at detector plane
                 Psi_det = np.fft.fft(psi_slices[:, -1])
                 target_amp = np.sqrt(self.data[p, :])
-                loss_total += np.sum((np.abs(Psi_det) - np.abs(target_amp))**2) / (np.sum(np.abs(target_amp)**2) + 1e-12)
-                
-                 # Inverse FFT → corrected field at detector plane
-                psi_corr = self._apply_modulus_constraint(psi_slices[:, -1], self.data[p, :])
-    
+                loss_total += np.sum((np.abs(Psi_det) - np.abs(target_amp)) ** 2) / (
+                    np.sum(np.abs(target_amp) ** 2) + 1e-12
+                )
+
+                # Inverse FFT → corrected field at detector plane
+                psi_corr = self._apply_modulus_constraint(
+                    psi_slices[:, -1], self.data[p, :]
+                )
+
                 # Backpropagate corrections slice-by-slice
                 psi_back = psi_corr
                 for z in reversed(range(self.nz)):
@@ -104,13 +110,22 @@ class ReconstructorMS(ReconstructorBase):
 
                     # Update object (small step; do NOT decay too fast)
                     if simulate_refractive_index:
-                        n_est[:, z] = self._update_object_n(n_est[:, z], psi_slices[:, z], dpsi_z, alpha_obj/(it+1))
+                        n_est[:, z] = self._update_object_n(
+                            n_est[:, z], psi_slices[:, z], dpsi_z, alpha_obj / (it + 1)
+                        )
                     else:
-                        obj_est[:, z] = self._update_object_obj(obj_est[:, z], psi_slices[:, z], dpsi_z, alpha_obj/(it+1))   
+                        obj_est[:, z] = self._update_object_obj(
+                            obj_est[:, z],
+                            psi_slices[:, z],
+                            dpsi_z,
+                            alpha_obj / (it + 1),
+                        )
 
             loss_history.append(loss_total / self.num_probes)
             if self.verbose:
-                self._log(f"[Iter {it+1:03d}] Mean Loss = {loss_total/self.num_probes:}")
+                self._log(
+                    f"[Iter {it + 1:03d}] Mean Loss = {loss_total / self.num_probes:}"
+                )
         if simulate_refractive_index:
             return n_est, loss_history
         else:
@@ -120,10 +135,8 @@ class ReconstructorMS(ReconstructorBase):
         X = np.fft.fft(x, axis=0)
         nx = x.shape[0]
         freqs = np.fft.fftfreq(nx)
-        H = np.exp(-(freqs**2)/(2*sigma**2))
+        H = np.exp(-(freqs**2) / (2 * sigma**2))
         return np.fft.ifft(X * H[:, None], axis=0)
-
-        
 
     # -------------------------------------------------------------------------
     # Internal numerical routines
@@ -136,7 +149,7 @@ class ReconstructorMS(ReconstructorBase):
             phase = fmodel / (np.abs(fmodel) + 1e-12)
             f_updated = np.sqrt(detector_data) * phase
             return np.fft.ifft(f_updated)
-        
+
             # # Forward FFT
 
             # fmodel = np.fft.fft(Psi, axis=-1)
@@ -158,7 +171,6 @@ class ReconstructorMS(ReconstructorBase):
         else:
             return detector_data
 
-
     # def _update_object(f, g, dpsi, alpha, eps=1e-12):
     #     # Standard 3PIE object update: normalized by |Sz|^2 locally
     #     denom = np.maximum(np.max(np.abs(g) ** 2), eps)
@@ -170,13 +182,13 @@ class ReconstructorMS(ReconstructorBase):
         """
 
         # Gradient term (Maiden 2012 Eq. 3 numerators)
-        grad = np.conj(psi_i) * dpsi     # same structure as O-update
+        grad = np.conj(psi_i) * dpsi  # same structure as O-update
 
         # Global normalization (stability recommended in paper)
-        scale = np.max(np.abs(psi_i)**2) + eps
+        scale = np.max(np.abs(psi_i) ** 2) + eps
 
         # Refractive index update derived from: dO = i k dz O * dn
-        dobj_slice = (alpha_obj ) * (grad / scale)
+        dobj_slice = (alpha_obj) * (grad / scale)
 
         # Apply update
         n_slice = n_slice + dobj_slice / (1j * self.k * self.dz)
@@ -190,17 +202,14 @@ class ReconstructorMS(ReconstructorBase):
         """
 
         # Gradient term (Maiden 2012 Eq. 3 numerators)
-        grad = np.conj(psi_i) * dpsi     # same structure as O-update
+        grad = np.conj(psi_i) * dpsi  # same structure as O-update
 
         # Global normalization (stability recommended in paper)
-        scale = np.max(np.abs(psi_i)**2) + eps
+        scale = np.max(np.abs(psi_i) ** 2) + eps
 
         # Refractive index update derived from: dO = i k dz O * dn
-        dobj_slice = (alpha_obj ) * (grad / scale)
+        dobj_slice = (alpha_obj) * (grad / scale)
 
         # Apply update
         obj_slice = obj_slice + dobj_slice
         return obj_slice
-
-
-

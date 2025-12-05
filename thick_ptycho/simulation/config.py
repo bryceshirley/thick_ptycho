@@ -16,6 +16,7 @@ from thick_ptycho.simulation.scan_frame import Limits, ScanPath
 
 class ProbeType(Enum):
     """Enumeration of supported probe field types."""
+
     CONSTANT = "constant"
     GAUSSIAN = "gaussian"
     SINUSOIDAL = "sinusoidal"
@@ -30,8 +31,9 @@ class ProbeType(Enum):
     def list(cls):
         """Return a list of all probe type names."""
         return [p.value for p in cls]
-    
-@dataclass(frozen=True,slots=True)
+
+
+@dataclass(frozen=True, slots=True)
 class ProbeConfig:
     """
     Configuration object defining the probe geometry and optical parameters
@@ -47,11 +49,12 @@ class ProbeConfig:
         discretization into pixel units).
     focus : float, optional
         Focal length used for curved probe illumination. ``0.0`` corresponds
-        to a planar probe.  
+        to a planar probe.
     tilts : tuple of float, default=(0.0,)
         List of probe tilt angles in degrees. Multiple angles enables
         tilt-series or tomographic ptychography.
     """
+
     wave_length: float
     type: ProbeType = ProbeType.AIRY_DISK
     diameter: float = None
@@ -62,14 +65,17 @@ class ProbeConfig:
         """Validate configuration parameters after initialization."""
         # If only 1 scan point, reduced-domain setting has no effect → warn, don't fail.
         if self.type.value not in ProbeType.list():
-            raise ValueError(f"Invalid probe type: {self.type}. Must be one of {ProbeType.list()}.")
+            raise ValueError(
+                f"Invalid probe type: {self.type}. Must be one of {ProbeType.list()}."
+            )
         if self.diameter is not None:
             if self.diameter <= 0:
                 raise ValueError("diameter must be positive.")
         if self.wave_length <= 0:
             raise ValueError("wave_length must be a positive value.")
 
-@dataclass(frozen=True,slots=True)
+
+@dataclass(frozen=True, slots=True)
 class SimulationConfig:
     """
     Configuration object defining the spatial discretization, probe geometry,
@@ -140,17 +146,18 @@ class SimulationConfig:
     verbose : bool, default=False
         Enable runtime printing and progress reporting.
     """
+
     probe_config: ProbeConfig
-    spatial_limits: Limits # with limits.units in meters
-    scan_points: int = 1 # number of scan points in one dimension greater than 0
-    step_size_px: int = 1 # in pixels greater than 0 for more than 1 scan point
-    pad_factor: float = 1 # Must be >= 1.0
+    spatial_limits: Limits  # with limits.units in meters
+    scan_points: int = 1  # number of scan points in one dimension greater than 0
+    step_size_px: int = 1  # in pixels greater than 0 for more than 1 scan point
+    pad_factor: float = 1  # Must be >= 1.0
     solve_reduced_domain: bool = False
     points_per_wavelength: Optional[int] = 8
-    nz: Optional[int] = None 
+    nz: Optional[int] = None
     tomographic_projection_90_degree: Optional[bool] = False
     scan_path: Optional[ScanPath] = None
-    medium: float = 1.0 # 1.0 for free space
+    medium: float = 1.0  # 1.0 for free space
     results_dir: Optional[str] = None
     use_logging: bool = True
     verbose: bool = False
@@ -168,7 +175,9 @@ class SimulationConfig:
         if self.scan_points < 1:
             raise ValueError("scan_points must be greater than 0")
         if self.step_size_px < 1 and self.scan_points > 1:
-            raise ValueError("step_size_px must be greater than 0 for multiple scan points")
+            raise ValueError(
+                "step_size_px must be greater than 0 for multiple scan points"
+            )
         if self.points_per_wavelength < 1:
             raise ValueError("points_per_wavelength must be >= 1")
         if self.spatial_limits.units != "meters":
@@ -182,7 +191,9 @@ class SimulationConfig:
         if self.verbose and not isinstance(self.verbose, bool):
             raise ValueError("verbose must be a boolean value.")
         if self.tomographic_projection_90_degree and self.spatial_limits.y is not None:
-            raise ValueError("tomographic_projection_90_degree is only valid for 2D simulations.")
+            raise ValueError(
+                "tomographic_projection_90_degree is only valid for 2D simulations."
+            )
         if self.points_per_wavelength is None and self.nz is None:
             raise ValueError("Either points_per_wavelength or nz must be specified.")
         if self.points_per_wavelength is not None and self.points_per_wavelength <= 0:

@@ -6,10 +6,10 @@ import numpy as np
 
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
-from thick_ptycho.forward_model.pwe.operators.finite_differences import \
-    PWEForwardModel
-from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import \
-    BoundaryConditionsTest
+from thick_ptycho.forward_model.pwe.operators.finite_differences import PWEForwardModel
+from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import (
+    BoundaryConditionsTest,
+)
 
 
 @dataclass
@@ -21,7 +21,7 @@ class ProjectionCache:
 
     def reset(self, cache_cls):
         self.modes = {m: cache_cls() for m in ("forward", "adjoint", "reverse")}
-    
+
     def reset_mode(self, mode: str):
         self.modes[mode] = type(self.modes[mode])()
 
@@ -31,11 +31,20 @@ class ProjectionCache:
 # ------------------------------------------------------------------
 class BasePWESolver(BaseForwardModelSolver, ABC):
     """Iterative LU-based slice-by-slice propagation solver."""
+
     solver_cache_class: type = None
-    def __init__(self, simulation_space, ptycho_probes,
-                 bc_type: BoundaryType = BoundaryType.IMPEDANCE,
-                 results_dir="", use_logging=False, verbose=True, log=None,
-                 test_bcs: BoundaryConditionsTest = None):
+
+    def __init__(
+        self,
+        simulation_space,
+        ptycho_probes,
+        bc_type: BoundaryType = BoundaryType.IMPEDANCE,
+        results_dir="",
+        use_logging=False,
+        verbose=True,
+        log=None,
+        test_bcs: BoundaryConditionsTest = None,
+    ):
         super().__init__(
             simulation_space,
             ptycho_probes,
@@ -48,11 +57,10 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         self.test_bcs = test_bcs
 
         self.bc_type = bc_type
-        self.pwe_finite_differences = PWEForwardModel(simulation_space,
-                                                      bc_type=bc_type)
+        self.pwe_finite_differences = PWEForwardModel(simulation_space, bc_type=bc_type)
         self.block_size = self.pwe_finite_differences.block_size
 
-        # Projection handling (for tomographic cases) 
+        # Projection handling (for tomographic cases)
         self.create_projection_cache()
 
     # ------------------------------------------------------------------
@@ -62,7 +70,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
     def _solve_single_probe_impl(self, scan_idx, proj_idx, probe, mode, rhs_block):
         """Subclasses must implement the actual single-probe solver."""
         raise NotImplementedError
-    
+
     def create_projection_cache(self):
         """Create projection cache for multiple projections."""
         self.projection_cache = []
@@ -70,16 +78,20 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
             self.projection_cache.append(ProjectionCache(self.solver_cache_class))
 
     @abstractmethod
-    def _construct_solve_cache(self, n: np.ndarray, mode: str="forward", scan_idx: int=0, proj_idx: int=0):
+    def _construct_solve_cache(
+        self, n: np.ndarray, mode: str = "forward", scan_idx: int = 0, proj_idx: int = 0
+    ):
         """
-        Subclasses must implement this to perform the expensive computation 
+        Subclasses must implement this to perform the expensive computation
         (e.g., building LU factors, PiT operators)
         """
         raise NotImplementedError
 
-    def _get_or_construct_cache(self, n: Optional[np.ndarray], mode: str, proj_idx: int=0, scan_idx: int=0):
+    def _get_or_construct_cache(
+        self, n: Optional[np.ndarray], mode: str, proj_idx: int = 0, scan_idx: int = 0
+    ):
         """
-        Generic function to check the cache, reset it if 'n' has changed, 
+        Generic function to check the cache, reset it if 'n' has changed,
         call the specific construction logic, and return the populated cache instance.
         """
         assert mode in self.projection_cache[proj_idx].modes, f"Invalid mode: {mode!r}"
@@ -97,26 +109,27 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         )
 
         # Rebuild cache if missing values
-        if cache.cached_n is None or uninitialized or self.simulation_space.solve_reduced_domain:
+        if (
+            cache.cached_n is None
+            or uninitialized
+            or self.simulation_space.solve_reduced_domain
+        ):
             # Build solver matrices
             self._construct_solve_cache(
-                n=n,
-                mode=mode,
-                proj_idx=proj_idx,
-                scan_idx=scan_idx
+                n=n, mode=mode, proj_idx=proj_idx, scan_idx=scan_idx
             )
-    
-    def prepare_solver_caches(self, n: np.ndarray,modes: Tuple[str]=("forward","adjoint")):
+
+    def prepare_solver_caches(
+        self, n: np.ndarray, modes: Tuple[str] = ("forward", "adjoint")
+    ):
         """Prepare solver caches for all projections & modes used."""
         for proj_idx in range(self.num_projections):
             for mode in modes:
-                self._construct_solve_cache(
-                    n=n,
-                    proj_idx=proj_idx,
-                    mode=mode
-                )
+                self._construct_solve_cache(n=n, proj_idx=proj_idx, mode=mode)
 
-    def get_projected_obj(self, n: np.ndarray, mode: str = "forward", proj_idx: int = 0) -> Optional[np.ndarray]:
+    def get_projected_obj(
+        self, n: np.ndarray, mode: str = "forward", proj_idx: int = 0
+    ) -> Optional[np.ndarray]:
         """Get cached projection matrix for given projection index.
         Also handles rotation of n for different projections."""
         # Rotate n if needed
@@ -126,7 +139,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
             return np.rot90(n, k=1)
         else:
             raise ValueError(f"Invalid projection index: {proj_idx}")
-        
+
     def reset_cache(self):
         """Reset all cached variables (e.g., LU factors)."""
         for i in range(self.num_projections):
@@ -134,12 +147,12 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
 
     def _solve_single_probe(
         self,
-        scan_idx: int=0,
-        proj_idx: int=0,
+        scan_idx: int = 0,
+        proj_idx: int = 0,
         probe: Optional[np.ndarray] = None,
         n: Optional[np.ndarray] = None,
         mode: str = "forward",
-        rhs_block: Optional[np.ndarray] = None
+        rhs_block: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Solve for a single probe's field using the full block-tridiagonal system.
@@ -166,7 +179,9 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         """
 
         # Select (and/or construct) cache (e.g., LU factors or PiT Preconditioners)
-        self._get_or_construct_cache(n=n, mode=mode, scan_idx=scan_idx, proj_idx=proj_idx)
+        self._get_or_construct_cache(
+            n=n, mode=mode, scan_idx=scan_idx, proj_idx=proj_idx
+        )
 
         # Actual solving logic to be implemented in subclasses
         return self._solve_single_probe_impl(
@@ -176,12 +191,12 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
             mode=mode,
             rhs_block=rhs_block,
         )
-    
+
     @abstractmethod
     def _solve_single_probe_impl(
         self,
-        scan_idx: int=0,
-        proj_idx: int=0,
+        scan_idx: int = 0,
+        proj_idx: int = 0,
         probe: Optional[np.ndarray] = None,
         mode: str = "forward",
         rhs_block: Optional[np.ndarray] = None,
@@ -189,7 +204,7 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         """Override in subclasses."""
         raise NotImplementedError
 
-    def get_gradient(self,n: np.ndarray) -> np.ndarray:
+    def get_gradient(self, n: np.ndarray) -> np.ndarray:
         """
         Compute the gradient of the forward model with respect to the refractive index.
 
@@ -204,4 +219,5 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
             Gradient of the forward model with respect to n.
         """
         return self.pwe_finite_differences.setup_inhomogeneous_forward_model(
-             n=n, grad=True)
+            n=n, grad=True
+        )

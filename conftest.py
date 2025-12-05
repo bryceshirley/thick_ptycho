@@ -7,27 +7,39 @@ from thick_ptycho.simulation.scan_frame import Limits
 def pytest_addoption(parser):
     """Add a command-line option to control plotting."""
     parser.addoption(
-        "--plot", action="store_true", default=False, help="Enable plotting of convergence plots"
+        "--plot",
+        action="store_true",
+        default=False,
+        help="Enable plotting of convergence plots",
     )
     parser.addoption(
-        "--plot_error", action="store_true", default=False, help="Enable plotting of error"
+        "--plot_error",
+        action="store_true",
+        default=False,
+        help="Enable plotting of error",
     )
     parser.addoption(
-        "--plot_probe_and_ew", action="store_true", default=False, help="Enable plotting of probe and exit wave amplitudes"
+        "--plot_probe_and_ew",
+        action="store_true",
+        default=False,
+        help="Enable plotting of probe and exit wave amplitudes",
     )
+
 
 @pytest.fixture(scope="session")
 def limits_3d():
-    return Limits(x=(0, 1),y=(0, 1),z=(0, 2), units="meters")
+    return Limits(x=(0, 1), y=(0, 1), z=(0, 2), units="meters")
+
 
 @pytest.fixture(scope="session")
 def limits_2d():
-    return Limits(x=(0, 1),z=(0, 2), units="meters")
+    return Limits(x=(0, 1), z=(0, 2), units="meters")
 
 
 class DummySimulationSpace2D:
     """Dummy 1D simulation space for testing OpticalShape2D."""
-    def __init__(self,spatial_limits, nx=64, nz=64):
+
+    def __init__(self, spatial_limits, nx=64, nz=64):
         self.nx = nx
         self.nz = nz
         self.x = np.linspace(*spatial_limits.x, nx)
@@ -40,7 +52,8 @@ class DummySimulationSpace2D:
 
 class DummySimulationSpace3D:
     """Dummy 2D simulation space for testing OpticalShape3D."""
-    def __init__(self,spatial_limits, nx=64, ny=64, nz=64):
+
+    def __init__(self, spatial_limits, nx=64, ny=64, nz=64):
         self.nx = nx
         self.ny = ny
         self.nz = nz
@@ -51,10 +64,12 @@ class DummySimulationSpace3D:
         self.spatial_limits = spatial_limits
         self.shape = (nx, ny, nz)
 
+
 @pytest.fixture(scope="session")
 def dummy_sim_space_2d(limits_2d):
     sim = DummySimulationSpace2D(spatial_limits=limits_2d)
     return sim
+
 
 @pytest.fixture(scope="session")
 def dummy_sim_space_3d(limits_3d):

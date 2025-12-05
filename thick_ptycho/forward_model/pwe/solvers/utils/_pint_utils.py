@@ -1,4 +1,3 @@
-
 import numpy as np
 import scipy.sparse.linalg as spla
 
@@ -6,6 +5,7 @@ import scipy.sparse.linalg as spla
 _WORKER_A_BAR = None
 _WORKER_B_BAR = None
 _WORKER_OMEGAS = None
+
 
 def _init_worker(A_bar, B_bar, omegas):
     global _WORKER_A_BAR, _WORKER_B_BAR, _WORKER_OMEGAS
@@ -32,7 +32,7 @@ def _pintobj_matvec_exact(A_csr, B_csr, C, L, v):
     Nx = A_csr.shape[0]
 
     # IMPORTANT: columns are z-slices ⇒ Fortran order
-    V = np.reshape(v, (Nx, L), order='F')
+    V = np.reshape(v, (Nx, L), order="F")
 
     # Diagonal blocks: Ai[j] V[:, j] = (A - diag(C[:,j])) V[:,j]
     U = (A_csr @ V) - (C * V)
@@ -41,4 +41,4 @@ def _pintobj_matvec_exact(A_csr, B_csr, C, L, v):
     U[:, 1:] += -(B_csr @ V[:, :-1] + C[:, 1:] * V[:, :-1])
 
     # Flatten back in the SAME ordering
-    return np.reshape(U, (Nx * L,), order='F')
+    return np.reshape(U, (Nx * L,), order="F")
