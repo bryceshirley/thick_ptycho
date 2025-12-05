@@ -26,14 +26,6 @@ dependencies = [
     "pytest-cov (>=7.0.0,<8.0.0)",
 ]
 
-[dependency-groups]
-dev = [
-    "ruff (>=0.14.7,<0.15.0)",
-    "pylint (>=3.2.5,<4.0.0)"
-]
-
-
-
 [tool.setuptools.packages.find]
 where = ["thick_ptycho"]
 
@@ -44,5 +36,6 @@ skip_covered = true
 
 [dependency-groups]
 dev = [
-    "ruff (>=0.14.7,<0.15.0)"
+    "ruff (>=0.14.7,<0.15.0)",
+    "pylint (>=3.2.5,<4.0.0)"
 ]
