@@ -1,14 +1,14 @@
 name: Python Linter
 
 on:
-    push:
-    pull_request:
+  push:
+  pull_request:
 
 jobs:
-    lint:
-        name: Run Pylint
-        runs-on: ubuntu-latest
-
+  lint:
+    name: Run Pylint
+    runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
