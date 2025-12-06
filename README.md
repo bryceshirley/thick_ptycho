@@ -1,10 +1,9 @@
 # thick_ptycho: Thick Sample Ptychography Simulations
 
 **thick_ptycho** is a Python project for simulating and reconstructing thick-sample 
-ptychography. It includes solvers for the forward 
-model in 2D, and 3D using a finite difference scheme to solve the paraxial wave
-equation, as well as reconstruction algorithms such as least squares
-minimization of simplified thick-sample ptychography model.
+ptychography. It supports various forward models including multislice and Paraxial
+approximations, and provides tools for generating synthetic data and performing
+reconstructions.
 
 ---
 
@@ -22,6 +21,38 @@ minimization of simplified thick-sample ptychography model.
    ```bash
    uv sync --extra dev
    ```
+
+---
+
+## Generating Simulation Data
+
+Use the `generate_data.py` script to create simulation data based on a configuration file.
+
+```bash
+uv run python generate_data.py gen_data_config.yaml
+```
+
+This will generate simulated ptychographic data and save it to `./results/sim/{timestamp}/`.
+
+---
+
+## Running Reconstructions
+
+Use the `run_reconstruction.py` script to perform reconstructions using a configuration file.
+
+```bash
+uv run python run_reconstruction.py recon_config.yaml
+```
+
+This will perform the reconstruction and save results to `./results/recon/{timestamp}/`.
+
+---
+
+## Notebooks
+
+Several Jupyter notebooks are provided in the `notebooks/` directory to demonstrate
+various features and use cases of the package, including 2D and 3D simulations
+and reconstructions using different solvers such as multislice and Paraxial.
 
 ---
 

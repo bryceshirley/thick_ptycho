@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -105,8 +106,13 @@ def main(cfg_path):
     else:
         raise ValueError(f"Unknown solver type: {solver_type}")
 
+    simulation_space._log("Starting forward simulation...")
+    time_start = time.time()
     u = forward.solve(n=ptycho_object.refractive_index)
     exit_waves = forward.get_exit_waves(u)
+    simulation_space._log(
+        f"Forward simulation took {time.time() - time_start:.2f} seconds."
+    )
 
     # Save Data Images
     simulation_space.viewer.plot_two_panels(
@@ -168,6 +174,7 @@ def main(cfg_path):
         intensity=data,
         exit_waves=exit_waves,
     )
+    simulation_space._log(f"Simulated data saved to {results_dir}/simulated_data.npz")
 
 
 if __name__ == "__main__":

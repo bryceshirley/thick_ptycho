@@ -45,22 +45,25 @@ class SimulationSpace2D(BaseSimulationSpace):
         # Print summary of the scan
         continuous_stepsize = self.step_size * self.dx
 
-        self._log("=== Scan Summary (Continuous) ===")
+        self._log("=== Scan Summary ===")
         self._log(
             f"  Sample space (x-range): {self.spatial_limits.x[1] - self.spatial_limits.x[0]:.3e} m"
         )
         self._log(
             f"  Sample space (z-range): {self.spatial_limits.z[1] - self.spatial_limits.z[0]:.3e} m"
         )
-        self._log(f"  Sample Pixels:          {self.nx}")
+        self._log(f"  Sample Pixels:          {self.nx} px")
+        self._log(f"  Step size:              {self.step_size} px")
         self._log(f"  Number of scan points:  {self.scan_points}")
         self._log(f"  Steps in z:             {self.nz}")
         if self.solve_reduced_domain:
             self._log(f"  Solve reduced domain:   {self.effective_nx} px")
+            if self.scan_points > 1:
+                self._log(f"  Max Overlap Pixels:     {self.nx - self.min_nx} px")
         if self.probe_diameter is not None:
             overlap = self.probe_diameter - continuous_stepsize
             self._log(f"  Probe diameter:         {self.probe_diameter:.3e} m")
-            self._log(f"  Probe Pixels:          {int(self.probe_diameter_pixels)} px")
+            self._log(f"  Probe Pixels:           {int(self.probe_diameter_pixels)} px")
             if self.scan_points > 1:
                 self._log(f"  Max Overlap:            {overlap:.3e} m")
                 self._log(

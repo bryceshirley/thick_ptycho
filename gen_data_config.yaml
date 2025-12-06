@@ -8,13 +8,13 @@ probe_type: "airy_disk"
 probe_diameter: 5e-6  # meters
 probe_focus: -3e-6 # focal length [m]
 wave_length: 6.35e-7 # meters
-probe_tilts: [0.0] # radians
+probe_tilts: [-0.15, 0.0, 0.15] # radians
 
 
 # --- Scan Configuration ---
-step_size_px: 20 # pixels
+step_size_px: 10 # pixels
 scan_points: 50 # number of scan points in one direction
-pad_factor: 2.0 # padding factor
+pad_factor: 1.5 # padding factor
 solve_reduced_domain: False
 
 # --- Z discretization ---
@@ -30,10 +30,10 @@ beta: 0.01
 delta: 0.01
 sample_space_objects:
   - { type: "circle", centre_factor: [0.3, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
-  - { type: "circle", centre_factor: [0.5, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
+  #- { type: "circle", centre_factor: [0.5, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
   - { type: "circle", centre_factor: [0.7, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
-  - { type: "circle", centre_factor: [0.4, 0.5],  side_length_factor: 0.05, depth_factor: 0.05 }
-  - { type: "circle", centre_factor: [0.6, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
+  # - { type: "circle", centre_factor: [0.4, 0.5],  side_length_factor: 0.05, depth_factor: 0.05 }
+  #- { type: "circle", centre_factor: [0.6, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
   - { type: "circle", centre_factor: [0.3, 0.7],  side_length_factor: 0.05, depth_factor: 0.05 }
 
 # Solver configuration
@@ -41,4 +41,4 @@ solver:
   solver_type: "iterativePWE"
   bc_type: "impedance"
   poisson_noise: True
-  rotate90: False
+  rotate90: True

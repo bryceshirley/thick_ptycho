@@ -111,12 +111,34 @@ class ReconstructorPWE(ReconstructorBase):
                     g_base = grad_A @ uk[idx]
 
                     # 4) Accumulate gradient (real and imaginary parts separately)
-                    grad_real -= (g_base.conj() * backprop).real
-                    grad_imag -= ((1j * g_base).conj() * backprop).real
+                    grad_update_re = (g_base.conj() * backprop).real
+                    grad_update_im = ((1j * g_base).conj() * backprop).real
+
+                    # 5) Inverse-rotate the gradient update if proj_idx > 0
+                    if proj_idx == 1:
+                        grad_update_re = self.rotate_back(grad_update_re)
+                        grad_update_im = self.rotate_back(grad_update_im)
+
+                    # 6) Accumulate gradient
+                    grad_real -= grad_update_re
+                    grad_imag -= grad_update_im
 
                     idx += 1
 
         return grad_real, grad_imag
+
+    def rotate_back(self, field):
+        """
+        Rotate the field back by 90 degrees counter-clockwise.
+        When the object rotation is used we have nx x nz object
+        with nx = nz.
+
+        This takes in a flattened field of shape (nx * (nz - 1),)
+        and returns the rotated flattened field of the same shape.
+        """
+        full_space = np.zeros((self.nz, self.nx), dtype=float)
+        full_space[:, 1:] = field.reshape((self.nz - 1, self.nx)).T
+        return np.rot90(full_space, k=-1)[:, 1:].T.ravel()
 
     def compute_alphak(self, u, grad_A, grad_E, d):
         """
@@ -151,6 +173,11 @@ class ReconstructorPWE(ReconstructorBase):
                         mode="forward",
                         n=self.nk,
                     )
+
+                    # (nz, nx) field → drop the first z-plane → flatten
+                    if proj_idx == 1:
+                        # Rotate back if proj_idx > 0
+                        delta_u = np.rot90(delta_u, k=-1)
 
                     # (nz, nx) field → drop the first z-plane → flatten
                     delta_u = delta_u[:, 1:].T.ravel()
@@ -243,6 +270,7 @@ class ReconstructorPWE(ReconstructorBase):
 
         for i in range(max_iters):
             time_start = time.time()
+            self._log(f"Iteration {i + 1}/{max_iters}")
             # Compute the Forward Model
             uk, grad_Ak = self.compute_forward_model(probes=probesk)
 
@@ -255,7 +283,6 @@ class ReconstructorPWE(ReconstructorBase):
                 break
 
             # Output the current iteration information
-            self._log(f"Iteration {i + 1}/{max_iters}")
             self._log(f"    RMSE: {residual[i]}")
 
             # Compute the gradient of the least squares problem
