@@ -26,9 +26,9 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             log=log,
         )
 
-        assert self.simulation_space.dimension == 2, (
-            "ForwardModelMS only supports 2D samples."
-        )
+        assert (
+            self.simulation_space.dimension == 2
+        ), "ForwardModelMS only supports 2D samples."
 
         self.k = self.simulation_space.k  # Wave number
         self.dx = self.simulation_space.dx  # Pixel size in x
@@ -123,9 +123,12 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         wavefield_through_slices : ndarray
             Complex-valued wavefield at each slice along z. Shape (nx, nz).
         """
-        assert mode in {"forward", "backward", "forward_rotated", "reverse_rotated"}, (
-            f"Invalid mode: {mode}"
-        )
+        assert mode in {
+            "forward",
+            "backward",
+            "forward_rotated",
+            "reverse_rotated",
+        }, f"Invalid mode: {mode}"
 
         if mode in {"forward_rotated", "reverse_rotated"}:
             n = self.rotate_n(n)

@@ -4,6 +4,8 @@
 results/*
 */*.npy
 */*.npz
+thick_ptycho.egg-info/
+thick_ptycho/_version.py
 
 ## Backup files
 *~

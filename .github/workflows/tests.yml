@@ -13,6 +13,7 @@ on:
       - 'thick_ptycho/**'
       - 'tests/**'
       - 'pyproject.toml'
+      
 jobs:
   test:
     name: Run Pytest
@@ -28,14 +29,26 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Poetry
-        run: |
-          pip install poetry
+      - name: Cache uv executable
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}/bin/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
 
-      - name: Install dependencies
-        run: |
-          poetry install
+      - name: Install uv
+        run: pip install uv
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') || hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      - name: Install dependencies via uv sync
+        run: uv sync --extra dev
 
       - name: Run tests
         run: |
-          poetry run pytest
+          uv run pytest

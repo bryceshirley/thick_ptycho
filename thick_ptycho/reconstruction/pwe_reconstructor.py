@@ -48,9 +48,10 @@ class ReconstructorPWE(ReconstructorBase):
         )
         # Store number of tomographic projections
 
-        assert solver_type in {"full", "iterative"}, (
-            f"Invalid solver_type: {solver_type!r}"
-        )
+        assert solver_type in {
+            "full",
+            "iterative",
+        }, f"Invalid solver_type: {solver_type!r}"
         # Forward model selection
         SolverClass = (
             PWEFullPinTSolver if solver_type == "full" else PWEIterativeLUSolver
@@ -260,9 +261,10 @@ class ReconstructorPWE(ReconstructorBase):
             self._log(f"    RMSE: {residual[i]}")
 
             # Compute the gradient of the least squares problem
-            grad_least_squares_real, grad_least_squares_imag = (
-                self.compute_grad_least_squares(exit_wave_error, uk, grad_Ak)
-            )
+            (
+                grad_least_squares_real,
+                grad_least_squares_imag,
+            ) = self.compute_grad_least_squares(exit_wave_error, uk, grad_Ak)
 
             # Set direction for first iteration Conjugate Gradient
             if i == 0:
@@ -328,9 +330,9 @@ class ReconstructorPWE(ReconstructorBase):
         """
         Solve the forward model for the probes in reversed time.
         """
-        assert not self.phase_retrieval, (
-            "Phase retrieval mode not supported for probe solving."
-        )
+        assert (
+            not self.phase_retrieval
+        ), "Phase retrieval mode not supported for probe solving."
         self.forward_model.prepare_solver(n=self.nk, mode="reverse")
 
         uk_reverse = self.forward_model.solve(

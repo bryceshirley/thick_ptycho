@@ -7,7 +7,7 @@ utilities for thick-sample ptychographic imaging.
 
 __version__ = "0.1.0"
 
-from .forward_model import  PWEFullPinTSolver, PWEIterativeLUSolver
+from .forward_model import PWEFullPinTSolver, PWEIterativeLUSolver
 from .forward_model.multislice.ms_solver import MSForwardModelSolver
 from .reconstruction import ms_reconstructor, pwe_reconstructor
 from .simulation import ptycho_object, ptycho_probe, simulation_space

@@ -34,9 +34,10 @@ class Visualisation:
 
     def _view_and_title(self, solution, view: str, title: str) -> Tuple[str, str]:
         """Return modified title and solution based on view type."""
-        assert view in ("phase_amp", "real_imag"), (
-            "view must be 'phase_amp' or 'real_imag'"
-        )
+        assert view in (
+            "phase_amp",
+            "real_imag",
+        ), "view must be 'phase_amp' or 'real_imag'"
         if view == "phase_amp":
             data1 = self.phase(solution)
             data2 = np.abs(solution)
@@ -237,9 +238,9 @@ class Visualisation3D(Visualisation):
         """
         assert solution.ndim == 4, "solution must be a 4D array [num_probes, x, y, z]"
         assert 0 <= z_step < solution.shape[3], "z_step out of bounds"
-        assert title is not None or isinstance(title, str), (
-            "title must be a string or None"
-        )
+        assert title is not None or isinstance(
+            title, str
+        ), "title must be a string or None"
         assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
         extent = (
             [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]]
@@ -325,9 +326,9 @@ class Visualisation3D(Visualisation):
             Whether to label axes with real units or pixel indices.
         """
         assert solution.ndim == 3, "solution must be a 3D array"
-        assert title is not None or isinstance(title, str), (
-            "title must be a string or None"
-        )
+        assert title is not None or isinstance(
+            title, str
+        ), "title must be a string or None"
         assert mode in ("forward", "reverse"), "mode must be 'forward' or 'reverse'"
         assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
 
