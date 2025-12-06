@@ -21,7 +21,7 @@ dependencies = [
     "tifffile >=2025.3.30",
     "notebook",
     "ipykernel",
-    "scikit-image >=0.24,<0.25",
+    "scikit-image >=0.24,<0.26",
     "astropy >=7.1.0,<8.0.0",
     "ffmpeg-python >=0.2.0,<0.3.0",
     "opencv-python-headless>=4.12.0.88",
