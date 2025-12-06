@@ -1,27 +1,29 @@
-
-# Discretization of the Simulation Domain (1D Example)
+"""
+Discretization of the Simulation Domain (1D Example)
+===================================================
 
 This section explains how the discrete simulation grid is constructed
 from the scanning parameters. The same principles generalize to 2D and 3D.
 
-## Overview
-
+Overview
+--------
 A 1D sample domain is discretized into Nx points with spacing ``dx``.
-A probe scans the sample at scan_points (or in diagram ``n``) positions, 
+A probe scans the sample at scan_points (or in diagram ``n``) positions,
 separated by step_size_px (or in diagram ``s``) pixels.
 To ensure the full probe footprint fits inside the simulated region at
 each position, the domain must be padded on both sides.
 
-## Diagram
-`` 
+Diagram
+-------
     x = 0                                                                  x = Nx * dx
-     ______________________________________________________________________________
-     |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<--  pR  -->|
-     |          c₀          c₁          c₂  ...            cₙ₋₂    cₙ₋₁            |
-     |          |<------------------------ min_nx ------------------>|            |
-     |<------------------------------        Nx       ---------------------- ---->|
-     |<--      Ne      -->|
-``
+     ____________________________________________________________________________
+     |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<-- pR -->|
+                      c₁          c₂                  cₙ₋₁       cₙ
+                      |<--  s  -->|
+                 |<-- pL -->|<--  s  -->|<--  pR  -->|
+                 |<------------  Ne  --------------->|
+                |<------------------------ min_nx ------------------>|
+     |<------------------------------        Nx       -------------------------->|
 Where:
     cᵢ  : Scan point centers (pixel indices)
     s   : Step size between consecutive scan points (pixels)
@@ -31,8 +33,8 @@ Where:
     pL, pR : Padding widths on the left and right sides (pL = pR)
     Ne  : Effective padding region width (pL + pR)
 
-## Key Quantities
-
+Key Quantities
+--------------
 step_size_px : int
     Step size between scan positions, measured in pixels.
 
@@ -42,7 +44,7 @@ scan_points : int
 min_nx : int
     Minimum required simulation width to contain all scan positions.
     Computed as::
-        min_nx = (scan_points - 1) * step_size_px
+        min_nx = scan_points * step_size_px
 
 pad_factor : float, >= 1.0
     Controls how much total padding to add around the scanned region.
@@ -52,21 +54,28 @@ Nx : int
     Total number of grid points in the simulation domain, including padding.
     Computed as::
 
-        Nx = int(pad_factor * min_nx)
+        Nx = int(pad_factor * min_nx) = int(pad_factor * scan_points * step_size_px)
 
 Ne : int
-    Effective padding region width (pL + pR). Used when solving only
-    a reduced "effective" domain instead of the full padded space::
+    Effective . Used when solving only a reduced "effective" domain instead
+    of the full padded space::
+        padding = Nx - min_nx = Nx - (scan_points * step_size_px)
+        Ne = step_size_px + padding
 
-        Ne = Nx - min_nx
-        Ne = (pad_factor - 1) * min_nx
-        (and pL = pR = Ne / 2)
+        alternatively,
+        padding = int(pad_factor*step_size) = max_overlap of scan frames
+        => Nx = scan_points * step_size_px + padding 
+
+        ~~----|----~~
+                 ~~----|----~~      
+
+        padding is also the maximum overlap.
 
 dx : float
     Spatial step in meters (physical pixel size).
 
-## Notes
-
+Notes
+-----
 - A larger `pad_factor` reduces boundary artifacts and improves numerical stability,
   but increases memory and computational cost.
 - Increasing `step_size_px` increases the resolution of the scan.

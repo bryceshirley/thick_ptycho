@@ -12,7 +12,6 @@ from .forward_model.multislice.ms_solver import MSForwardModelSolver
 from .reconstruction import ms_reconstructor, pwe_reconstructor
 from .simulation import ptycho_object, ptycho_probe, simulation_space
 from .simulation.config import ProbeType, SimulationConfig
-from .utils import *
 
 __all__ = [
     "SimulationConfig",
@@ -25,5 +24,4 @@ __all__ = [
     "PWEIterativeLUSolver",
     "ms_reconstructor",
     "pwe_reconstructor",
-    "utils",
 ]

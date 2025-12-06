@@ -385,14 +385,14 @@ class ReconstructorPWE(ReconstructorBase):
 
         return np.real(ifft2(fft2(phi) * fftshift(W)))
 
-    def global_object_update(self, O, lam_amp, sigma_phase):
+    def global_object_update(self, transmission_obj, lam_amp, sigma_phase):
         """
-        Apply amplitude TV + phase low-pass to the complex object O.
+        Apply amplitude TV + phase low-pass to the complex object transmission_obj.
         """
 
         # Separate amplitude & phase
-        A = np.abs(O)
-        Phi = np.angle(O)
+        A = np.abs(transmission_obj)
+        Phi = np.angle(transmission_obj)
 
         # Denoise amplitude using TV
         if lam_amp > 0.0:
