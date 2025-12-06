@@ -4,9 +4,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from thick_ptycho.simulation.scan_frame import Limits, Point, ScanFrame, ScanPath
-from thick_ptycho.utils.visualisations import Visualisation2D
+from thick_ptycho.utils.visualisations import Visualisation3D
 
-from .base_simulation_space import BaseSimulationSpace, ScanFrame
+from .base_simulation_space import BaseSimulationSpace
 
 
 class SimulationSpace3D(BaseSimulationSpace):
@@ -53,7 +53,7 @@ class SimulationSpace3D(BaseSimulationSpace):
         # ------------------------------------------------------------------
         # 5. Visualization utility
         # ------------------------------------------------------------------
-        self.viewer = Visualisation2D(self, results_dir=self.results_dir)
+        self.viewer = Visualisation3D(self, results_dir=self.results_dir)
 
     def summarize(self):
         """

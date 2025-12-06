@@ -1,7 +1,7 @@
-from .config import *
+from .config import ProbeConfig, SimulationConfig, ProbeType, BoundaryType
 from .ptycho_object import create_ptycho_object
 from .ptycho_probe import PtychoProbes, create_ptycho_probes
-from .scan_frame import *
+from .scan_frame import Limits
 from .simulation_space import (
     SimulationSpace2D,
     SimulationSpace3D,
@@ -19,4 +19,5 @@ __all__ = [
     "SimulationConfig",
     "ProbeConfig",
     "PtychoProbes",
+    "Limits",
 ]

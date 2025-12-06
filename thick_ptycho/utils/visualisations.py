@@ -178,7 +178,7 @@ class Visualisation:
         return fig, ax
 
 
-class Visualisation2D(Visualisation):
+class Visualisation3D(Visualisation):
     """
     3D visualisation tools for multi-probe ptychography simulations.
 

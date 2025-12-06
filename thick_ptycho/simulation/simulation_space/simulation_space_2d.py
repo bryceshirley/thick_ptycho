@@ -5,7 +5,7 @@ import numpy as np
 from thick_ptycho.simulation.scan_frame import Limits, Point, ScanFrame
 from thick_ptycho.utils.visualisations import Visualisation
 
-from .base_simulation_space import BaseSimulationSpace, ScanFrame
+from .base_simulation_space import BaseSimulationSpace
 
 
 class SimulationSpace2D(BaseSimulationSpace):
