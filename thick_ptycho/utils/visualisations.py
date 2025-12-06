@@ -34,10 +34,8 @@ class Visualisation:
 
     def _view_and_title(self, solution, view: str, title: str) -> Tuple[str, str]:
         """Return modified title and solution based on view type."""
-        assert view in (
-            "phase_amp",
-            "real_imag",
-        ), "view must be 'phase_amp' or 'real_imag'"
+        if view not in ("phase_amp", "real_imag"):
+            raise ValueError("view must be 'phase_amp' or 'real_imag'")
         if view == "phase_amp":
             data1 = self.phase(solution)
             data2 = np.abs(solution)
@@ -236,12 +234,14 @@ class Visualisation3D(Visualisation):
         -------
         (fig1, axes1, fig2, axes2)
         """
-        assert solution.ndim == 4, "solution must be a 4D array [num_probes, x, y, z]"
-        assert 0 <= z_step < solution.shape[3], "z_step out of bounds"
-        assert title is not None or isinstance(
-            title, str
-        ), "title must be a string or None"
-        assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
+        if solution.ndim != 4:
+            raise ValueError("solution must be a 4D array [num_probes, x, y, z]")
+        if not (0 <= z_step < solution.shape[3]):
+            raise ValueError("z_step out of bounds")
+        if title is not None and not isinstance(title, str):
+            raise ValueError("title must be a string or None")
+        if axis_ticks not in ("real", "pixels"):
+            raise ValueError("axis_ticks must be 'real' or 'pixels'")
         extent = (
             [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]]
             if axis_ticks == "real"
@@ -325,12 +325,14 @@ class Visualisation3D(Visualisation):
         axis_ticks : {'real', 'pixels'}
             Whether to label axes with real units or pixel indices.
         """
-        assert solution.ndim == 3, "solution must be a 3D array"
-        assert title is not None or isinstance(
-            title, str
-        ), "title must be a string or None"
-        assert mode in ("forward", "reverse"), "mode must be 'forward' or 'reverse'"
-        assert axis_ticks in ("real", "pixels"), "axis_ticks must be 'real' or 'pixels'"
+        if solution.ndim != 3:
+            raise ValueError("solution must be a 3D array")
+        if title is not None and not isinstance(title, str):
+            raise ValueError("title must be a string or None")
+        if mode not in ("forward", "reverse"):
+            raise ValueError("mode must be 'forward' or 'reverse'")
+        if axis_ticks not in ("real", "pixels"):
+            raise ValueError("axis_ticks must be 'real' or 'pixels'")
 
         extent = (
             [self.x_lims[0], self.x_lims[1], self.y_lims[0], self.y_lims[1]]

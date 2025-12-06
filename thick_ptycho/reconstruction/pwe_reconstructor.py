@@ -47,11 +47,9 @@ class ReconstructorPWE(ReconstructorBase):
             phase_retrieval=phase_retrieval,
         )
         # Store number of tomographic projections
+        if solver_type not in {"full", "iterative"}:
+            raise ValueError(f"Invalid solver_type: {solver_type!r}")
 
-        assert solver_type in {
-            "full",
-            "iterative",
-        }, f"Invalid solver_type: {solver_type!r}"
         # Forward model selection
         SolverClass = (
             PWEFullPinTSolver if solver_type == "full" else PWEIterativeLUSolver
@@ -330,9 +328,10 @@ class ReconstructorPWE(ReconstructorBase):
         """
         Solve the forward model for the probes in reversed time.
         """
-        assert (
-            not self.phase_retrieval
-        ), "Phase retrieval mode not supported for probe solving."
+        if not self.phase_retrieval:
+            raise NotImplementedError(
+                "Probe solving only implemented for phase retrieval mode."
+            )
         self.forward_model.prepare_solver(n=self.nk, mode="reverse")
 
         uk_reverse = self.forward_model.solve(

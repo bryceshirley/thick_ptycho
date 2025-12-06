@@ -25,10 +25,10 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             verbose=verbose,
             log=log,
         )
-
-        assert (
-            self.simulation_space.dimension == 2
-        ), "ForwardModelMS only supports 2D samples."
+        if self.simulation_space.dimension == 3:
+            raise NotImplementedError(
+                "3D simulation space is not yet implemented for MSForwardModelSolver."
+            )
 
         self.k = self.simulation_space.k  # Wave number
         self.dx = self.simulation_space.dx  # Pixel size in x
