@@ -1,4 +1,4 @@
-from .config import ProbeConfig, SimulationConfig, ProbeType
+from .config import ProbeConfig, ProbeType, SimulationConfig
 from .ptycho_object import create_ptycho_object
 from .ptycho_probe import PtychoProbes, create_ptycho_probes
 from .scan_frame import Limits

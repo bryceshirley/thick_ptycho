@@ -1,13 +1,14 @@
+import argparse
 import os
 import shutil
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from thick_ptycho.forward_model import (
-    PWEIterativeLUSolver,
-    PWEFullPinTSolver,
     MSForwardModelSolver,
+    PWEFullPinTSolver,
+    PWEIterativeLUSolver,
 )
 from thick_ptycho.simulation.config import ProbeConfig, ProbeType, SimulationConfig
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
@@ -15,7 +16,6 @@ from thick_ptycho.simulation.ptycho_probe import create_ptycho_probes
 from thick_ptycho.simulation.scan_frame import Limits
 from thick_ptycho.simulation.simulation_space import create_simulation_space
 from thick_ptycho.utils.io import get_git_commit_hash, load_config, results_dir_name
-import argparse
 
 
 def main(cfg_path):
