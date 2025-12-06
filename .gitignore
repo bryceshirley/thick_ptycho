@@ -69,6 +69,7 @@ thick_ptycho/_version.py
 
 ## Python cache
 **/__pycache__
+*/__pycache__/*
 
 ## Jupyter notebook .tiff outputs
 *.tiff
