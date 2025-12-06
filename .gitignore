@@ -6,6 +6,9 @@ results/*
 */*.npz
 thick_ptycho.egg-info/
 thick_ptycho/_version.py
+.ruff_cache/
+uv.lock
+
 
 ## Backup files
 *~
