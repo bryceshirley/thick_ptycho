@@ -1,0 +1,50 @@
+name: Python Linter
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    name: Run Ruff Linter & Formatter
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          # Caches the uv executable itself, which is installed by pip
+          path: ${{ env.pythonLocation }}/bin/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          # Caches the entire .venv directory
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') || hashFiles('pyproject.toml') }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      - name: Install dependencies via uv sync
+        run: uv sync --extra dev
+
+      - name: Run Ruff Checks
+        run: |
+          
+          # 1. Check for formatting errors
+          uv run ruff format . --check
+          
+          # 2. Check for linting/code quality errors
+          uv run ruff check .

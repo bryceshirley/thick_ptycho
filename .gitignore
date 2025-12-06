@@ -1,7 +1,11 @@
 ##########################################################
 ## Use this list to detail files you wish git to ignore ##
 ##########################################################
-
+results/*
+*/*.npy
+*/*.npz
+thick_ptycho.egg-info/
+thick_ptycho/_version.py
 
 ## Backup files
 *~
@@ -61,6 +65,7 @@
 
 ## Numpy files
 */results/
+*/petsc/
 
 ## Python cache
 **/__pycache__

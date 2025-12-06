@@ -1,20 +1,9 @@
 # thick_ptycho: Thick Sample Ptychography Simulations
 
 **thick_ptycho** is a Python project for simulating and reconstructing thick-sample 
-ptychography. It includes solvers for the forward 
-model in 2D, and 3D using a finite difference scheme to solve the paraxial wave
-equation, as well as reconstruction algorithms such as least squares
-minimization of simplified thick-sample ptychography model.
-
----
-
-## Jupyter Notebooks
-
-* `1_sample_space_3d.ipynb` - This tutorial demonstrates how to use `thick_ptycho` to set up or load in a sample space.
-* `2_forward_model_3d.ipynb` — This tutorial demonstrates how to use `thick_ptycho` to set up and solve a 3D forward problem with multiple probes, both iteratively and as a full system.
-* `3_ptychography_simple_example.ipynb` — This tutorial uses EPie reconstructions assuming the simulated data is of a thin sample.
-* `4_forward_model_2d.ipynb` — This tutorial demonstrates how to use `thick_ptycho` to set up and solve a 2D forward problem with multiple probes, both iteratively and as a full system.
-* `5_least_squares_1d.ipynb` — This tutorial demonstrates how to use `thick_ptycho` to set up and solve a least_squares problem to reconstuct a thick sample.
+ptychography. It supports various forward models including multislice and Paraxial
+approximations, and provides tools for generating synthetic data and performing
+reconstructions.
 
 ---
 
@@ -27,59 +16,43 @@ minimization of simplified thick-sample ptychography model.
    cd thick_ptycho
    ```
 
-2. **Install dependencies (requires poetry to be installed)**:
+2. **Install dependencies (requires [uv to be installed](https://docs.astral.sh/uv/getting-started/installation/))**:
 
    ```bash
-   poetry install
+   uv sync --extra dev
    ```
 
-3. **Activate the virtual environment. The following command prints the activate command to run**:
-
-   ```bash
-   poetry env activate
-   ```
-
-4. **Activate Kernel for Jupyter Notebooks:**
-
-   ```bash
-   poetry run ipython kernel install --name "thick_ptycho" --user
-   ```
 ---
 
-## Project Structure
+## Generating Simulation Data
 
+Use the `generate_data.py` script to create simulation data based on a configuration file.
+
+```bash
+uv run python generate_data.py gen_data_config.yaml
 ```
-thick_ptycho/
-├── README.md                     # Project documentation
-├── conftest.py                   # Test configuration
-├── notebooks/                    # Jupyter notebooks for demonstrations
-│   ├── 1_sample_space_3d.ipynb
-│   ├── 2_forward_model_3d.ipynb
-│   ├── 3_ptychography_simple_example.ipynb
-│   ├── 4_forward_model_2d.ipynb
-│   ├── 5_least_squares_1d.ipynb
-│   ├── results/                  # Output folder for notebook results
-│   └── utils.py                  # Helper Functions for 2_ptychography_simple_example
-├── pyproject.toml                # Build system and dependency configuration
-├── tests/                        # Tests for convergence of forward model
-│   ├── test_solver_backward_*.py
-│   ├── test_solver_dirichlet_*.py
-│   ├── test_solver_impedance_*.py
-│   └── test_solver_neumann_*.py
-└── thick_ptycho/                   # Core Python package
-    ├── forward_model/            # Forward modeling for wave propagation
-    │   ├── boundary_conditions.py
-    │   ├── initial_conditions.py
-    │   ├── linear_system.py
-    │   └── solver.py
-    ├── reconstruction/           # Reconstruction algorithms
-    │   └── least_squares.py
-    ├── sample_space/             # Sample, object and scan path constructions
-    │   ├── optical_objects.py
-    │   └── sample_space.py
-    └── utils/
-        └── visualisations.py     # Visualisation of results
+
+This will generate simulated ptychographic data and save it to `./results/sim/{timestamp}/`.
+
+---
+
+## Running Reconstructions
+
+Use the `run_reconstruction.py` script to perform reconstructions using a configuration file.
+
+```bash
+uv run python run_reconstruction.py recon_config.yaml
 ```
+
+This will perform the reconstruction and save results to `./results/recon/{timestamp}/`.
+
+---
+
+## Notebooks
+
+Several Jupyter notebooks are provided in the `notebooks/` directory to demonstrate
+various features and use cases of the package, including 2D and 3D simulations
+and reconstructions using different solvers such as multislice and Paraxial.
 
 ---
 
@@ -87,26 +60,14 @@ thick_ptycho/
 
 Tests are located in the `tests/` directory and cover a wide range of solver configurations.
 
-To run convergence tests (e.g., 2D Neumann BCs):
-
 ```bash
-poetry run pytest -s tests/test_solver_neumann_2d.py
-```
-
-For convergence plots
-```bash
-poetry run pytest -s tests/test_solver_neumann_2d.py --plot
-```
-
-Select specific tests (Iterations is the fastest)
-```bash
-poetry run pytest -s tests/test_solver_neumann_2d.py -k "[Iterations-thick]"
+uv run pytest
 ```
 
 For coverage reports:
 
 ```bash
-poetry run pytest --cov=thick_ptycho tests/
+uv run pytest --cov=thick_ptycho
 ```
 
 ---

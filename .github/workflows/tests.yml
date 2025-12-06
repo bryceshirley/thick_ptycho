@@ -1,0 +1,54 @@
+name: Python Tests
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tests.yml'
+      - 'thick_ptycho/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+  pull_request:
+    paths:
+      - '.github/workflows/tests.yml'
+      - 'thick_ptycho/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      
+jobs:
+  test:
+    name: Run Pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache uv executable
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}/bin/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') || hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      - name: Install dependencies via uv sync
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: |
+          uv run pytest
