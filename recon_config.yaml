@@ -8,14 +8,14 @@ probe_type: "airy_disk"
 probe_diameter: 5e-6  # meters
 probe_focus: -3e-6 # focal length [m]
 wave_length: 6.35e-7 # meters
-probe_tilts: [-0.15, 0.0, 0.15] # radians
+probe_tilts: [0.0] # radians
 
 
 # --- Scan Configuration ---
 step_size_px: 10 # pixels
 scan_points: 50 # number of scan points in one direction
 pad_factor: 1.5 # padding factor
-solve_reduced_domain: False
+solve_reduced_domain: True
 
 # --- Z discretization ---
 # > Overridden if rotate90 is True since nz=nx in that case
@@ -30,6 +30,6 @@ recon_solver:
   solver_type: "PWE"
   bc_type: "impedance"
   phase_retrieval: False
-  rotate90: True
+  rotate90: False
   max_iters: 2
-  data_file_path: "results/sim/2025-12-06_18-11-24/simulated_data.npz"
+  data_file_path: "results/sim/2025-12-08_16-14-15/simulated_data.npz"
