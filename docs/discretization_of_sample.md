@@ -1,18 +1,20 @@
-# Discretization of the Simulation Domain (1D Example)
+"""
+Discretization of the Simulation Domain (1D Example)
+===================================================
 
 This section explains how the discrete simulation grid is constructed
 from the scanning parameters. The same principles generalize to 2D and 3D.
 
-## Overview
-
+Overview
+--------
 A 1D sample domain is discretized into Nx points with spacing ``dx``.
 A probe scans the sample at scan_points (or in diagram ``n``) positions,
 separated by step_size_px (or in diagram ``s``) pixels.
 To ensure the full probe footprint fits inside the simulated region at
 each position, the domain must be padded on both sides.
 
-## Diagram
-
+Diagram
+-------
     x = 0                                                                  x = Nx * dx
      ____________________________________________________________________________
      |<-- pL -->|<--  s  -->|<--  s  -->|   ...  |<-- s -->|<-- s -->|<-- pR -->|
@@ -31,8 +33,8 @@ Where:
     pL, pR : Padding widths on the left and right sides (pL = pR)
     Ne  : Effective padding region width (pL + pR)
 
-### Key Quantities
-
+Key Quantities
+--------------
 step_size_px : int
     Step size between scan positions, measured in pixels.
 
@@ -60,7 +62,7 @@ Ne : int
         padding = Nx - min_nx = Nx - (scan_points * step_size_px)
         Ne = step_size_px + padding
 
-        alternatively, future refactoring:
+        alternatively,
         padding = int(pad_factor*step_size) = max_overlap of scan frames
         => Nx = scan_points * step_size_px + padding 
 
@@ -72,13 +74,12 @@ Ne : int
 dx : float
     Spatial step in meters (physical pixel size).
 
-### Notes
-
+Notes
+-----
 - A larger `pad_factor` reduces boundary artifacts and improves numerical stability,
   but increases memory and computational cost.
 - Increasing `step_size_px` increases the resolution of the scan.
 - When performing iterative reconstruction methods (e.g., PWE or MS),
   the effective domain width ``Ne`` may be used to accelerate computation considering
   a smaller region of interest.
-- The discretization parameters should be chosen based on the physical
-  dimensions of the sample and the probe characteristics to ensure accurate simulation results.
+"""

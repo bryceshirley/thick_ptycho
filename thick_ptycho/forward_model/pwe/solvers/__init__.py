@@ -3,12 +3,12 @@ from .full_lu import PWEFullLUSolver
 from .full_pint import PWEFullPinTSolver
 from .iterative_lu import PWEIterativeLUSolver
 
-from .full_pit_petsc import PWEPetscFullPinTSolver
+# from .full_pit_petsc import PWEFullPinTSolverPETSc
 
 __all__ = [
     "BasePWESolver",
     "PWEIterativeLUSolver",
     "PWEFullPinTSolver",
     "PWEFullLUSolver",
-    "PWEPetscFullPinTSolver",
+    # "PWEFullPinTSolverPETSc",
 ]

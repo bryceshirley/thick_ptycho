@@ -6,7 +6,6 @@ from thick_ptycho.forward_model import (
     PWEFullLUSolver,
     PWEFullPinTSolver,
     PWEIterativeLUSolver,
-    PWEPetscFullPinTSolver,
 )
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import (
     BoundaryConditionsTest,
@@ -227,8 +226,8 @@ def plot_probe_and_ew(exact, numerical, error):
 )
 @pytest.mark.parametrize(
     "Solver",
-    [PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver, PWEPetscFullPinTSolver],
-    ids=["Iterative", "FullPinT", "FullLU", "FullPinTPetsc"],
+    [PWEIterativeLUSolver, PWEFullPinTSolver, PWEFullLUSolver],
+    ids=["Iterative", "FullPinT", "FullLU"],
 )
 def test_error_convergence(Solver, bc_type, request, limits_2d):
     """Validate second-order convergence for each solver and boundary type."""
@@ -266,10 +265,10 @@ def test_error_convergence(Solver, bc_type, request, limits_2d):
         plot_probe_and_ew(exact, numerical, error)
 
     # Assertions: monotonic decrease & second-order rate
-    assert all(
-        inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))
-    ), f"Error did not decrease monotonically: {inf_norms}"
+    assert all(inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))), (
+        f"Error did not decrease monotonically: {inf_norms}"
+    )
     avg_rate = np.mean(observed_rates[-3:])
-    assert (
-        1.5 <= avg_rate <= 2.5
-    ), f"Expected ~2nd order convergence, got {avg_rate:.2f}"
+    assert 1.5 <= avg_rate <= 2.5, (
+        f"Expected ~2nd order convergence, got {avg_rate:.2f}"
+    )

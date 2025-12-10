@@ -10,7 +10,7 @@ from .pwe.solvers.full_lu import PWEFullLUSolver
 from .pwe.solvers.full_pint import PWEFullPinTSolver
 from .pwe.solvers.iterative_lu import PWEIterativeLUSolver
 
-from .pwe.solvers.full_pit_petsc import PWEPetscFullPinTSolver
+# from .pwe.solvers.full_pit_petsc import PWEFullPinTSolverPETSc
 
 __all__ = [
     "BasePWESolver",
@@ -20,5 +20,5 @@ __all__ = [
     "PWEFullLUSolver",
     "PWEForwardModel",
     "MSForwardModelSolver",
-    "PWEPetscFullPinTSolver",
+    # "PWEFullPinTSolverPETSc",
 ]

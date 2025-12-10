@@ -64,11 +64,6 @@ class ReconstructorPWE(ReconstructorBase):
         )
         self._log("Initializing Least Squares Solver...")
 
-        if self.num_projections > 1 and simulation_space.solve_reduced_domain:
-            raise NotImplementedError(
-                "Tomographic projections with reduced domain is not supported."
-            )
-
     def compute_forward_model(self, probes: Optional[np.ndarray] = None):
         """Compute the forward model for the current object and gradient."""
         # Prepare solver caches for all projections & modes
@@ -120,44 +115,17 @@ class ReconstructorPWE(ReconstructorBase):
                     grad_update_im = ((1j * g_base).conj() * backprop).real
 
                     # 5) Inverse-rotate the gradient update if proj_idx > 0
-                    if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
+                    if proj_idx == 1:
                         grad_update_re = self.rotate_back(grad_update_re)
                         grad_update_im = self.rotate_back(grad_update_im)
 
                     # 6) Accumulate gradient
-                    grad_real = self.accumulate_gradient(
-                        grad_update_re, scan_idx, grad_real
-                    )
-                    grad_imag = self.accumulate_gradient(
-                        grad_update_im, scan_idx, grad_imag
-                    )
+                    grad_real -= grad_update_re
+                    grad_imag -= grad_update_im
 
                     idx += 1
 
         return grad_real, grad_imag
-
-    def accumulate_gradient(self, grad_update, scan_idx, grad_total):
-        """
-        Accumulate the gradient update into the total gradient array.
-
-        Parameters:
-        grad_update (ndarray): The gradient update for the current frame.
-        scan_idx (int): Index of the current scan position.
-        grad_total (ndarray): The total gradient array to accumulate into.
-        """
-
-        if self.simulation_space.solve_reduced_domain:
-            x_min, x_max = self.simulation_space._scan_frame_info[
-                scan_idx
-            ].reduced_limits_discrete.x
-            grad_total = grad_total.reshape((self.nz - 1, self.nx)).T
-            grad_total[x_min:x_max, :] -= grad_update.reshape(
-                self.nz - 1, self.simulation_space.effective_nx
-            ).T
-            grad_total = grad_total.T.ravel()
-        else:
-            grad_total -= grad_update
-        return grad_total
 
     def rotate_back(self, field):
         """
@@ -201,15 +169,13 @@ class ReconstructorPWE(ReconstructorBase):
                         scan_idx=scan_idx,
                         proj_idx=proj_idx,
                         probe=probe,
-                        rhs_block=perturb.reshape(
-                            self.nz - 1, self.simulation_space.effective_nx
-                        ).T,
+                        rhs_block=perturb.reshape(self.nz - 1, self.nx).T,
                         mode="forward",
                         n=self.nk,
                     )
 
                     # (nz, nx) field → drop the first z-plane → flatten
-                    if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
+                    if proj_idx == 1:
                         # Rotate back if proj_idx > 0
                         delta_u = np.rot90(delta_u, k=-1)
 
@@ -285,7 +251,7 @@ class ReconstructorPWE(ReconstructorBase):
             n0 = n_initial
         else:
             n0 = (
-                np.ones(self.simulation_space.shape, dtype=complex)
+                np.ones((self.block_size, self.simulation_space.nz), dtype=complex)
                 * self.simulation_space.n_medium
             )
 

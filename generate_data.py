@@ -114,16 +114,6 @@ def main(cfg_path):
         f"Forward simulation took {time.time() - time_start:.2f} seconds."
     )
 
-    # Plot wavefield solution in the center of the volume
-    simulation_space.viewer.plot_two_panels(
-        u[0, 0, simulation_space.scan_points // 2, ...],
-        view="phase_amp",
-        title="Wavefield Solution PWE",
-        xlabel="z (m)",
-        ylabel="x (m)",
-        filename="wavefield_solution.png",
-    )
-
     # Save Data Images
     simulation_space.viewer.plot_two_panels(
         exit_waves.T,
