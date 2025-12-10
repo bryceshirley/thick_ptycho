@@ -32,18 +32,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Conda (Micromamba)
+      - name: Set up Conda (Miniconda)
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
           activate-environment: petsc_env
           python-version: '3.11'
           channels: conda-forge
-          use-mamba: true 
+          use-mamba: false
 
       - name: Install PETSc and System Dependencies
         run: |
-          mamba install -y "petsc=*=complex*" "petsc4py=*=complex*" "numpy<2.0" mpi4py compilers
+          conda install -y -c conda-forge "petsc=*=complex*" "petsc4py=*=complex*" numpy=1.26 mpi4py compilers
 
       - name: Install uv
         run: pip install uv
