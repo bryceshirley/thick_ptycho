@@ -55,6 +55,7 @@ jobs:
             matplotlib \
             scikit-image \
             astropy \
+            pytest \
             compilers
 
       # 4. Install uv
