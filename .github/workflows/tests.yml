@@ -43,7 +43,7 @@ jobs:
           channels: conda-forge
           use-mamba: true
 
-      # 3. Install PETSc and other scientific dependencies
+      # 3. Install PETSc and core scientific packages
       - name: Install PETSc and core packages
         run: |
           mamba install -y -c conda-forge \
@@ -63,8 +63,8 @@ jobs:
 
       # 5. Install thick_ptycho with dev dependencies
       - name: Install thick_ptycho (dev dependencies)
-        run: uv pip install -e ".[dev]" --no-deps
+        run: uv pip install --system -e ".[dev]" --no-deps
 
-      # 6. Run tests
+      # 6. Run tests using the system environment
       - name: Run tests
-        run: uv run pytest
+        run: uv run --system pytest
