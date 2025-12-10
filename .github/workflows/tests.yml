@@ -58,7 +58,8 @@ jobs:
           
           # Install uv and thick_ptycho dev dependencies
           pip install uv
-          uv pip install -e ".[dev]"
+          echo "numpy" > no_numpy_constraint.txt
+          uv pip install -e ".[dev]" --constraint no_numpy_constraint.txt
           echo "--- Final Runtime NumPy Check ---"
           python -c "import numpy; print(f'Runtime NumPy Version: {numpy.__version__}\nLocation: {numpy.__file__}\nExpected PETSc size: 96, Got: 88')"
           
