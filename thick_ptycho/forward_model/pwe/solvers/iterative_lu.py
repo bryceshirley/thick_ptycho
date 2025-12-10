@@ -85,8 +85,6 @@ class PWEIterativeLUSolver(BasePWESolver):
             Index of the projection (for tomographic scans).
         """
         # Create Linear System and Apply Boundary Conditions
-        # A, B, b = self.pwe_finite_differences.generate_zstep_matrices()
-        self._log(f"Constructing LU factors for projection {proj_idx}, mode {mode}.")
         A, B, b = self.pwe_finite_differences._get_or_generate_step_matrices()
 
         if mode == "reverse":
@@ -102,11 +100,13 @@ class PWEIterativeLUSolver(BasePWESolver):
         self.projection_cache[proj_idx].modes[mode].b = b
         self.projection_cache[proj_idx].modes[mode].cached_n = n
 
-    def _build_lu_factors(self, A, B, mode, n, scan_idx: Optional[int] = 0):
+    def _build_lu_factors(
+        self, A, B, mode, refractive_index_field, scan_idx: Optional[int] = 0
+    ):
         A_lu_list, B_with_object_list = [], []
 
         object_contribution = self.simulation_space.create_object_contribution(
-            n=n, scan_index=scan_idx
+            n=refractive_index_field, scan_index=scan_idx
         ).reshape(-1, self.nz - 1)
 
         # Iterate over the z dimension
