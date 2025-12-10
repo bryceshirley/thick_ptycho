@@ -67,4 +67,4 @@ jobs:
 
       # 6. Run tests using the system environment
       - name: Run tests
-        run: uv run --system pytest
+        run: pytest
