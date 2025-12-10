@@ -186,7 +186,6 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         verbose=False,
         log=None,
         alpha=1e-2,
-        num_workers=1,  # Unused in PETSc version, but kept for signature compat
         atol=1e-8,
         test_bcs: BoundaryConditionsTest = None,
     ):
