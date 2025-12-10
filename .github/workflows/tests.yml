@@ -37,25 +37,16 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
+          environment-name: petsc_env
+          python-version: '3.11'
 
       - name: Setup environment and run tests
         run: |
           # Source Conda
           source $CONDA/etc/profile.d/conda.sh
       
-          # Create petsc_env with PETSc, numpy, and other core packages
-          conda create -n petsc_env -y -c conda-forge \
-            python=3.11 \
-            numpy=1.26 \
-            "petsc=*=complex*" \
-            "petsc4py=*=complex*" \
-            mpi4py \
-            compilers \
-            scipy \
-            matplotlib \
-            scikit-image \
-            astropy \
-            pytest
+          # Create petsc_env with PETSc and petsc4py
+          conda create -n petsc_env -y -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
       
           # Activate the environment
           conda activate petsc_env
