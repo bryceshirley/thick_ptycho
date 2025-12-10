@@ -29,9 +29,11 @@ jobs:
         shell: bash -l {0} 
 
     steps:
+      # 1. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # 2. Set up Conda environment with PETSc
       - name: Set up Conda (Micromamba)
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -41,25 +43,28 @@ jobs:
           channels: conda-forge
           use-mamba: true
 
-      - name: Install All Python/System Dependencies
-        # Install ALL scientific dependencies in one mamba command.
+      # 3. Install PETSc and other scientific dependencies
+      - name: Install PETSc and core packages
         run: |
           mamba install -y -c conda-forge \
             "petsc=*=complex*" \
             "petsc4py=*=complex*" \
+            mpi4py \
             numpy=1.26 \
             scipy \
             matplotlib \
             scikit-image \
             astropy \
-            mpi4py \
             compilers
-          
+
+      # 4. Install uv
       - name: Install uv
         run: pip install uv
 
-      - name: Install Remaining Package Dependencies
-        run: uv pip install --system -e ".[dev]" --no-deps
+      # 5. Install thick_ptycho with dev dependencies
+      - name: Install thick_ptycho (dev dependencies)
+        run: uv pip install -e ".[dev]" --no-deps
 
+      # 6. Run tests
       - name: Run tests
-        run: uv run --with dev pytest
+        run: uv run pytest
