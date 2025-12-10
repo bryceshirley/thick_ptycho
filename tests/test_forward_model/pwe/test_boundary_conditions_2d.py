@@ -266,10 +266,10 @@ def test_error_convergence(Solver, bc_type, request, limits_2d):
         plot_probe_and_ew(exact, numerical, error)
 
     # Assertions: monotonic decrease & second-order rate
-    assert all(
-        inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))
-    ), f"Error did not decrease monotonically: {inf_norms}"
+    e_message = f"Error did not decrease monotonically: {inf_norms}"
+    converged = [inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))]
+
+    assert all(converged), e_message
     avg_rate = np.mean(observed_rates[-3:])
-    assert (
-        1.5 <= avg_rate <= 2.5
-    ), f"Expected ~2nd order convergence, got {avg_rate:.2f}"
+    e_message = f"Expected ~2nd order convergence, got {avg_rate:.2f}"
+    assert 1.5 <= avg_rate <= 2.5, e_message

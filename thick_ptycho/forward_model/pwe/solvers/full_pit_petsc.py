@@ -160,9 +160,7 @@ class PWEFullPinTSolverCache:
     # Store PETSc Mat and PC contexts/shells
     A_shell_ctx: Optional[PWEGlobalOperatorShell] = None
     M_shell_ctx: Optional[PiTPreconditionerShell] = None
-    b: Optional[
-        np.ndarray
-    ] = None  # Keeping b as numpy for easy arithmetic before solving
+    b: Optional[np.ndarray] = None
 
     def reset(self, n: Optional[np.ndarray] = None):
         for f in fields(self):
