@@ -53,6 +53,7 @@ jobs:
           
           # 4. Install uv and thick_ptycho dev dependencies 
           pip install uv
+          uv sync --extra dev
           uv pip install -e ".[dev]"
           
           # Run tests
