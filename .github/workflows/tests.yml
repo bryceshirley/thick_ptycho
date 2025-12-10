@@ -64,7 +64,7 @@ jobs:
 
       # 5. Install thick_ptycho with dev dependencies
       - name: Install thick_ptycho (dev dependencies)
-        run: uv pip install --system -e ".[dev]" --no-deps
+        run: uv pip install --system -e ".[dev]"
 
       # 6. Run tests using the system environment
       - name: Run tests
