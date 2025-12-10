@@ -39,14 +39,22 @@ jobs:
           auto-update-conda: true
 
       # 3. Create and activate Conda environment with PETSc
-      - name: Create Conda env with PETSc
+      - name: Install PETSc and core packages
         run: |
-          conda create -n petsc_env -y -c conda-forge \
-            python=3.11 \
+          source $CONDA/etc/profile.d/conda.sh
+          conda activate petsc_env
+          # Install numpy first, then petsc4py and PETSc, in the same transaction
+          conda install -n petsc_env -y -c conda-forge \
+            numpy=1.26 \
             "petsc=*=complex*" \
             "petsc4py=*=complex*" \
             mpi4py \
-            compilers
+            compilers \
+            scipy \
+            matplotlib \
+            scikit-image \
+            astropy \
+            pytest
 
       - name: Install thick_ptycho and dev dependencies
         run: |
