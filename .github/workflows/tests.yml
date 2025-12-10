@@ -1,6 +1,7 @@
 name: Python Tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,42 +18,38 @@ on:
       - 'thick_ptycho/**'
       - 'tests/**'
       - 'pyproject.toml'
-      
+
 jobs:
   test:
-    name: Run Pytest
+    name: Run Pytest (PETSc Complex)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -l {0} 
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Conda (Micromamba)
+        uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: '3.12'
+          miniforge-version: latest
+          activate-environment: petsc_env
+          python-version: '3.11'
+          channels: conda-forge
+          use-mamba: true 
 
-      - name: Cache uv executable
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}/bin/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+      - name: Install PETSc and System Dependencies
+        run: |
+          mamba install -y "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
 
       - name: Install uv
         run: pip install uv
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') || hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
-
-      - name: Install dependencies via uv sync
-        run: uv sync --extra dev
+      - name: Install dependencies and package
+        run: uv pip install --system -e ".[dev]"
 
       - name: Run tests
-        run: |
-          uv run pytest
+        run: pytest
