@@ -51,10 +51,16 @@ jobs:
           
           # Activate the environment
           conda activate petsc_env
+
+          # DEBUG STEP 1: Show the Conda-installed NumPy version and location
+          echo "--- Conda Environment Contents ---"
+          conda list numpy
           
           # Install uv and thick_ptycho dev dependencies
           pip install uv
           uv pip install -e ".[dev]"
+          echo "--- Final Runtime NumPy Check ---"
+          python -c "import numpy; print(f'Runtime NumPy Version: {numpy.__version__}\nLocation: {numpy.__file__}\nExpected PETSc size: 96, Got: 88')"
           
           # Run tests
           pytest
