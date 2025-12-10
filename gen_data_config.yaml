@@ -5,8 +5,8 @@ zlims: [0.0, 40e-6]
 
 # --- Probe configuration ---
 probe_type: "airy_disk"
-probe_diameter: 5e-6  # meters
-probe_focus: -3e-6 # focal length [m]
+probe_diameter: 10e-6  # meters
+probe_focus: -5e-6 # focal length [m]
 wave_length: 6.35e-7 # meters
 probe_tilts: [0.0] # radians
 
@@ -14,7 +14,7 @@ probe_tilts: [0.0] # radians
 # --- Scan Configuration ---
 step_size_px: 10 # pixels
 scan_points: 50 # number of scan points in one direction
-pad_factor: 1.5 # padding factor
+pad_factor: 2.0 # padding factor
 solve_reduced_domain: True
 
 # --- Z discretization ---
