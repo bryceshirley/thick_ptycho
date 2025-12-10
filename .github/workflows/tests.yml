@@ -44,17 +44,18 @@ jobs:
         run: |
           # Source Conda
           source $CONDA/etc/profile.d/conda.sh
-      
-          # Create petsc_env with PETSc and petsc4py
-          conda create -n petsc_env -y -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
-      
+    
+          NUMPY_VERSION="1.26" 
+          
+          conda create -n petsc_env -y -c conda-forge python=3.11 "numpy=$NUMPY_VERSION" "petsc=*=complex*" "petsc4py=*=complex*" compilers
+          
           # Activate the environment
           conda activate petsc_env
-      
+          
           # Install uv and thick_ptycho dev dependencies
           pip install uv
           uv pip install -e ".[dev]"
-      
+          
           # Run tests
           pytest
 
