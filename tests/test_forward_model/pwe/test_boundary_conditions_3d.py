@@ -6,6 +6,7 @@ from thick_ptycho.forward_model import (
     PWEFullLUSolver,
     PWEFullPinTSolver,
     PWEIterativeLUSolver,
+    PWEPetscFullPinTSolver,
 )
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import (
     BoundaryConditionsTest,
@@ -269,10 +270,8 @@ def error_rates(nx_values, nz_values, Solver, bc_type, request, limits):
 )
 @pytest.mark.parametrize(
     "Solver",
-    [
-        PWEIterativeLUSolver,
-    ],
-    ids=["Iterative"],
+    [PWEIterativeLUSolver, PWEPetscFullPinTSolver],
+    ids=["Iterative", "FullPinTPetsc"],
 )
 def test_error_convergence(Solver, bc_type, request, limits_3d):
     """
@@ -293,12 +292,12 @@ def test_error_convergence(Solver, bc_type, request, limits_3d):
     )
 
     # Assertions: monotonic decrease & second-order rate
-    assert all(inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))), (
-        f"Error did not decrease monotonically: {inf_norms}"
-    )
-    assert 1.5 <= observed_rates[-1] <= 2.5, (
-        f"Expected ~2nd order convergence, got {observed_rates[-1]:.2f}"
-    )
+    assert all(
+        inf_norms[i] < inf_norms[i - 1] for i in range(1, len(inf_norms))
+    ), f"Error did not decrease monotonically: {inf_norms}"
+    assert (
+        1.5 <= observed_rates[-1] <= 2.5
+    ), f"Expected ~2nd order convergence, got {observed_rates[-1]:.2f}"
 
     # Verify the other slower solvers match the above solution on coarse mesh.
     nx = 8
@@ -311,10 +310,10 @@ def test_error_convergence(Solver, bc_type, request, limits_3d):
     )
     numerical_FullLU = compute_numerical(nx, nz, PWEFullLUSolver, bc_type, limits_3d)
 
-    assert np.allclose(numerical_iterative, numerical_FullLU, atol=1e-6), (
-        "Convergent Iterative and FullLUSolver solutions do not match for Dirichlet BC"
-    )
+    assert np.allclose(
+        numerical_iterative, numerical_FullLU, atol=1e-6
+    ), "Convergent Iterative and FullLUSolver solutions do not match for Dirichlet BC"
     # Reduce tolerance for FullPinT due to iterative solver inaccuracies
-    assert np.allclose(numerical_iterative, numerical_FullPinT, atol=1e-4), (
-        "Convergent Iterative and FullPinTSolver solutions do not match for Dirichlet BC"
-    )
+    assert np.allclose(
+        numerical_iterative, numerical_FullPinT, atol=1e-4
+    ), "Convergent Iterative and FullPinTSolver solutions do not match for Dirichlet BC"

@@ -69,17 +69,14 @@ class PWEGlobalOperatorShell:
     def mult(self, mat, X, Y):
         # Access raw arrays from PETSc vectors
         # Note: We use read-only for X, write-only for Y
-        x_arr = X.getArrayRead()
-        y_arr = Y.getArray()
+        x_arr = X.array_r
+        y_arr = Y.array
 
         # Call the numpy/scipy logic
         res = _pintobj_matvec_exact(self.A_csr, self.B_csr, self.C, self.L, x_arr)
 
         # Copy result back to PETSc vector
         y_arr[:] = res
-
-        X.restoreArrayRead(x_arr)
-        Y.restoreArray(y_arr)
 
 
 class PiTPreconditionerShell:
@@ -93,61 +90,52 @@ class PiTPreconditionerShell:
         self.B = B
         self.C = C
         self.alpha = alpha
-        self.lus = []  # Store LU factorizations
-        self.gamma = None
         self.Nx = C.shape[0]
         self.L = C.shape[1]
 
-    def setup(self, pc):
-        """Precompute LU factorizations during KSP setup."""
+        # --- Initialization Logic (Moved from setup) ---
         dtype = np.complex128
 
-        # --- Compute spatial mean C_bar over z/time ---
+        # 1. Compute spatial mean C_bar over z/time
         C_avg = np.mean(self.C, axis=1)
         C_bar = sp.diags(C_avg, 0, format="csr")
 
-        # --- Build averaged blocks ---
+        # 2. Build averaged blocks
         A_bar = (self.A - C_bar).tocsr()
         B_bar = (self.B + C_bar).tocsr()
 
         alpha_root = self.alpha ** (1.0 / self.L)
         js = np.arange(self.L)
-        # Roots of unity scaled by alpha
+
+        # 3. Roots of unity scaled by alpha
         omegas = alpha_root * np.exp(2j * np.pi * js / self.L)
 
-        # Pre-factorize blocks (A - omega * B)
-        # Replacing ProcessPoolExecutor with list comprehension for safety within MPI/PETSc
-        self.lus = [spla.splu((A_bar - (z * B_bar)).astype(dtype)) for z in omegas]
+        # 4. Pre-factorize blocks (IMMEDIATELY populates self.lus)
+        self.lus = [
+            spla.splu((A_bar - (z * B_bar)).astype(dtype).tocsc()) for z in omegas
+        ]
+
+        # 5. Calculate Gamma
         self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(dtype)
 
     def apply(self, pc, X, Y):
         """Apply the preconditioner: M^-1 * x"""
-        x_arr = X.getArrayRead()
-        y_arr = Y.getArray()
+        x_arr = X.array_r
+        y_arr = Y.array
 
         dtype = np.complex128
 
-        # 1. Reshape v into L blocks of size Nx (Fortran order to match logic)
-        # Transpose to shape (L, Nx) for FFT along axis 0 or loop over L
+        # 1. Reshape v into L blocks
         V = np.asarray(x_arr, dtype=dtype).reshape(self.Nx, self.L, order="F")
 
-        # 2. Scale by Gamma and FFT
-        # We need shape (L, Nx) for clean FFT over axis 0, or stick to axis 1
-        # Let's align with the original logic:
-        # Original: V is (Nx, L). FFT performed over L (axis 1).
-
-        # Scale
+        # 2. Scale by Gamma and IFFT
         V_scaled = V * self.gamma[None, :]
-
-        # IFFT (Note: Original code used IFFT then FFT for inverse, or vice versa depending on definition)
-        # Using the logic from _make_pit_preconditioner_multi_workers:
-        # V_hat = ifft(gamma * V)
         V_hat = ifft(V_scaled, axis=1, norm="ortho")
 
         # 3. Block Solve
-        # V_hat is (Nx, L). We need to solve column j with LUs[j]
         X_hat = np.zeros_like(V_hat)
         for j in range(self.L):
+            # This will now work because self.lus is populated in __init__
             X_hat[:, j] = self.lus[j].solve(V_hat[:, j])
 
         # 4. FFT and Inverse Scale
@@ -156,9 +144,6 @@ class PiTPreconditionerShell:
 
         # 5. Flatten back
         y_arr[:] = Y_res.reshape((self.Nx * self.L), order="F")
-
-        X.restoreArrayRead(x_arr)
-        Y.restoreArray(y_arr)
 
 
 # ------------------------------------------------------------------
@@ -358,7 +343,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         )
 
         # 8. Retrieve Solution
-        u_flat = x_sol.getArray()
+        u_flat = x_sol.array
 
         # Reshape and concatenate with initial condition (same as original)
         u = u_flat.reshape(self.nz - 1, self.block_size).T
