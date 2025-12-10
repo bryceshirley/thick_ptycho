@@ -37,6 +37,10 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
+          environment-name: petsc_env   # <- setup-miniconda creates this
+          python-version: '3.11'
+          channels: conda-forge
+          use-mamba: false
 
       # 3. Create and activate Conda environment with PETSc
       - name: Install PETSc and core packages
