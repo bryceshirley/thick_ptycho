@@ -1,4 +1,3 @@
-import sys
 import time
 import numpy as np
 import scipy.sparse as sp
@@ -11,7 +10,7 @@ from typing import Optional
 try:
     import petsc4py
 
-    petsc4py.init(sys.argv)
+    petsc4py.init([])
     from petsc4py import PETSc
 except ImportError:
     raise ImportError("This solver requires petsc4py. Please install it.")
