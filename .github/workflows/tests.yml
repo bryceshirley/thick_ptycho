@@ -1,6 +1,7 @@
 name: Python Tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,42 +18,44 @@ on:
       - 'thick_ptycho/**'
       - 'tests/**'
       - 'pyproject.toml'
-      
+
 jobs:
   test:
-    name: Run Pytest
+    name: Run Pytest (PETSc Complex)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -l {0} 
 
     steps:
+      # 1. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      # 1. Install Conda (Micromamba)
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: '3.12'
+          auto-update-conda: true
+          environment-name: petsc_env
+          python-version: '3.11'
 
-      - name: Cache uv executable
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}/bin/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
-
-      - name: Install uv
-        run: pip install uv
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') || hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
-
-      - name: Install dependencies via uv sync
-        run: uv sync --extra dev
-
-      - name: Run tests
+      - name: Setup environment and run tests
         run: |
-          uv run pytest
+          # Source Conda
+          source $CONDA/etc/profile.d/conda.sh
+          
+          # 1. Install all prerequisites (NumPy, PETSc) from Conda
+          conda create -n petsc_env -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
+          
+          # Activate the environment
+          conda activate petsc_env
+          
+          # 4. Install uv and thick_ptycho dev dependencies 
+          pip install uv
+          uv sync --extra dev
+          uv pip install -e ".[dev]"
+          
+          # Run tests
+          pytest
+      
