@@ -33,39 +33,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # 2. Set up Conda environment with PETSc
-      - name: Set up Conda (Micromamba)
-        uses: conda-incubator/setup-miniconda@v3
+      # 2. Install Conda (Micromamba)
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          miniforge-version: latest
-          activate-environment: petsc_env
-          python-version: '3.11'
-          channels: conda-forge
-          use-mamba: true
+          auto-update-conda: true
 
-      # 3. Install PETSc and core scientific packages
-      - name: Install PETSc and core packages
+      # 3. Create and activate Conda environment with PETSc
+      - name: Create Conda env with PETSc
         run: |
-          mamba install -y -c conda-forge \
+          conda create -n petsc_env -y -c conda-forge \
+            python=3.11 \
             "petsc=*=complex*" \
             "petsc4py=*=complex*" \
             mpi4py \
-            numpy=1.26 \
-            scipy \
-            matplotlib \
-            scikit-image \
-            astropy \
-            pytest \
             compilers
 
-      # 4. Install uv
-      - name: Install uv
-        run: pip install uv
+      # 4. Install uv and thick_ptycho inside the Conda env
+      - name: Install thick_ptycho and dev dependencies
+        run: |
+          source /home/runner/miniconda3/etc/profile.d/conda.sh
+          conda activate petsc_env
+          pip install uv
+          uv pip install -e ".[dev]"
 
-      # 5. Install thick_ptycho with dev dependencies
-      - name: Install thick_ptycho (dev dependencies)
-        run: uv pip install --system -e ".[dev]"
-
-      # 6. Run tests using the system environment
+      # 5. Run tests inside the same Conda env
       - name: Run tests
-        run: pytest
+        run: |
+          source /home/runner/miniconda3/etc/profile.d/conda.sh
+          conda activate petsc_env
+          pytest
