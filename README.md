@@ -31,10 +31,10 @@ reconstructions.
    cd thick_ptycho
    ```
 
-2. **Install Petsc and Petsc4py In Conda Env**
+2. **Install Petsc and Petsc4py (Complex-versions) In Conda Env**
 
    ```bash
-   conda create -n petsc_env -c conda-forge python=3.11 petsc petsc4py mpi4py compilers
+   conda create -n petsc_env -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
    conda activate petsc_env
    ```
 
