@@ -48,17 +48,16 @@ jobs:
             mpi4py \
             compilers
 
-      # 4. Install uv and thick_ptycho inside the Conda env
       - name: Install thick_ptycho and dev dependencies
         run: |
-          source /home/runner/miniconda3/etc/profile.d/conda.sh
+          source $CONDA/etc/profile.d/conda.sh
           conda activate petsc_env
           pip install uv
           uv pip install -e ".[dev]"
-
-      # 5. Run tests inside the same Conda env
+      
       - name: Run tests
         run: |
-          source /home/runner/miniconda3/etc/profile.d/conda.sh
+          source $CONDA/etc/profile.d/conda.sh
           conda activate petsc_env
           pytest
+
