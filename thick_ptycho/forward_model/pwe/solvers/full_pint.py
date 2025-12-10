@@ -135,8 +135,13 @@ class PWEFullPinTSolver(BasePWESolver):
             n=n, scan_index=scan_idx
         ).reshape(-1, self.nz - 1)
 
+        time_start = time.time()
         # M_prec = self._make_pit_preconditioner(A_step, B_step, C)
         M_prec = self._make_pit_preconditioner_multi_workers(A_step, B_step, C)
+        time_end = time.time()
+        self._log(
+            f"PiT preconditioner retrieval and setup time: {time_end - time_start:.2f} seconds.\n"
+        )
 
         # Adjoint modes (if you compare those): conjugate-transpose blocks + reverse z + conjugate C
         if mode in {"adjoint", "adjoint_rotated"}:
@@ -213,7 +218,7 @@ class PWEFullPinTSolver(BasePWESolver):
 
         # Solve the global system
         self._log("Retrieving PiT preconditioner and setting up system...")
-        time_start = time.time()
+
         # Build RHS
         if rhs_block is not None:
             b = rhs_block
@@ -225,11 +230,6 @@ class PWEFullPinTSolver(BasePWESolver):
 
         ARop = self.projection_cache[proj_idx].modes[mode].ARop
         M_prec = self.projection_cache[proj_idx].modes[mode].M_prec
-
-        time_end = time.time()
-        self._log(
-            f"PiT preconditioner retrieval and setup time: {time_end - time_start:.2f} seconds.\n"
-        )
 
         self._log("Solving with PiT-preconditioned GMRES...", flush=True)
 
