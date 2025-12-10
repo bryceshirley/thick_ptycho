@@ -33,22 +33,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # 2. Install Conda (Micromamba)
+      # 1. Install Conda (Micromamba)
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
-          environment-name: petsc_env   # <- setup-miniconda creates this
-          python-version: '3.11'
-          channels: conda-forge
-          use-mamba: false
 
-      # 3. Create and activate Conda environment with PETSc
-      - name: Install PETSc and core packages
+      - name: Setup environment and run tests
         run: |
+          # Source Conda
           source $CONDA/etc/profile.d/conda.sh
-          conda activate petsc_env
-          # Install numpy first, then petsc4py and PETSc, in the same transaction
-          conda install -n petsc_env -y -c conda-forge \
+      
+          # Create petsc_env with PETSc, numpy, and other core packages
+          conda create -n petsc_env -y -c conda-forge \
+            python=3.11 \
             numpy=1.26 \
             "petsc=*=complex*" \
             "petsc4py=*=complex*" \
@@ -59,17 +56,14 @@ jobs:
             scikit-image \
             astropy \
             pytest
-
-      - name: Install thick_ptycho and dev dependencies
-        run: |
-          source $CONDA/etc/profile.d/conda.sh
+      
+          # Activate the environment
           conda activate petsc_env
+      
+          # Install uv and thick_ptycho dev dependencies
           pip install uv
           uv pip install -e ".[dev]"
       
-      - name: Run tests
-        run: |
-          source $CONDA/etc/profile.d/conda.sh
-          conda activate petsc_env
+          # Run tests
           pytest
 
