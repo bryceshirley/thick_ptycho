@@ -45,26 +45,15 @@ jobs:
           # Source Conda
           source $CONDA/etc/profile.d/conda.sh
           
-          # 1. Install all prerequisites (NumPy, PETSc, MPI) from Conda
-          # We install the complex version of PETSc (the C library) but NOT petsc4py yet.
-          conda create -n petsc_env -y -c conda-forge python=3.11 "numpy" "petsc=*=complex*" mpi4py compilers
+          # 1. Install all prerequisites (NumPy, PETSc) from Conda
+          conda create -n petsc_env -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
           
           # Activate the environment
           conda activate petsc_env
           
-          # 2. Reinstall/Rebuild petsc4py from pip/source
-          # This ensures petsc4py is built against the Conda-installed NumPy 1.26.4
-          pip install petsc4py --no-binary petsc4py
-          
-          # 3. CRITICAL: Create an EXCLUSION constraint file
-          # This prevents 'uv' from upgrading NumPy to the 2.x range.
-          # We constrain it to be less than 2.0.
-          echo "numpy<2.0" > numpy_lock.txt
-          
-          # 4. Install uv and thick_ptycho dev dependencies using the lock
+          # 4. Install uv and thick_ptycho dev dependencies 
           pip install uv
-          # Use the --constraint flag to force numpy<2.0
-          uv pip install -e ".[dev]" --constraint numpy_lock.txt
+          uv pip install -e ".[dev]"
           
           # Run tests
           pytest
