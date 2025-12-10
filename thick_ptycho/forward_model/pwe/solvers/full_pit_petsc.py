@@ -84,13 +84,15 @@ class PiTPreconditionerShell:
     Implements the alpha-Block circulant PiT preconditioner.
     """
 
-    def __init__(self, A, B, C, alpha):
+    def __init__(self, A, B, C, alpha, _log=None):
         self.A = A
         self.B = B
         self.C = C
         self.alpha = alpha
         self.Nx = C.shape[0]
         self.L = C.shape[1]
+
+        self._log = _log if _log is not None else print
 
         # --- Initialization Logic (Moved from setup) ---
         dtype = np.complex128
@@ -110,9 +112,12 @@ class PiTPreconditionerShell:
         omegas = alpha_root * np.exp(2j * np.pi * js / self.L)
 
         # 4. Pre-factorize blocks (IMMEDIATELY populates self.lus)
+        time_start = time.time()
         self.lus = [
             spla.splu((A_bar - (z * B_bar)).astype(dtype).tocsc()) for z in omegas
         ]
+        time_end = time.time()
+        self._log(f"PiT Preconditioner setup time: {time_end - time_start:.2f} s")
 
         # 5. Calculate Gamma
         self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(dtype)
@@ -236,7 +241,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         A_ctx = PWEGlobalOperatorShell(A_csr, B_csr, C, L)
 
         # Create the Preconditioner Shell Context
-        M_ctx = PiTPreconditionerShell(A_step, B_step, C, self.alpha)
+        M_ctx = PiTPreconditionerShell(A_step, B_step, C, self.alpha, _log=self._log)
 
         # Store in cache
         cache = self.projection_cache[proj_idx].modes[mode]
@@ -259,7 +264,6 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         rhs_block: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         self._log("Setting up PETSc system...")
-        time_start = time.time()
 
         cache = self.projection_cache[proj_idx].modes[mode]
 
@@ -315,9 +319,6 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         # Allow command line overrides (e.g., -ksp_monitor)
         ksp.setFromOptions()
 
-        time_end = time.time()
-        self._log(f"Setup time: {time_end - time_start:.2f} s")
-
         # 7. Solve
         self._log("Solving with PETSc GMRES...", flush=True)
 
@@ -330,6 +331,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         t0 = time.perf_counter()
         ksp.solve(b_vec, x_sol)
         t1 = time.perf_counter()
+        self._log(f"PETSc GMRES solve time: {t1 - t0:.2f} s")
 
         # Check convergence
         iters = ksp.getIterationNumber()
