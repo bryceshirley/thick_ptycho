@@ -43,7 +43,7 @@ jobs:
 
       - name: Install PETSc and System Dependencies
         run: |
-          mamba install -y "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
+          mamba install -y "petsc=*=complex*" "petsc4py=*=complex*" "numpy<2.0" mpi4py compilers
 
       - name: Install uv
         run: pip install uv
