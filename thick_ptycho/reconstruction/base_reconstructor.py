@@ -68,6 +68,14 @@ class ReconstructorBase:
         self.block_size = self.simulation_space.block_size
         self.nz = self.simulation_space.nz
 
+        # Precompute triplets for all projections, angles, and scans
+        self.triplets = [
+            (p, a, s)
+            for p in range(self.num_projections)
+            for a in range(self.num_angles)
+            for s in range(self.num_probes)
+        ]
+
     # -------------------------------------------------------------------------
     # Utility methods
     # -------------------------------------------------------------------------
@@ -214,3 +222,16 @@ class ReconstructorBase:
         raise NotImplementedError(
             "Subclasses must implement the 'reconstruct()' or 'solve()' method."
         )
+
+    def rotate_back(self, field):
+        """
+        Rotate the field back by 90 degrees counter-clockwise.
+        When the object rotation is used we have nx x nz object
+        with nx = nz.
+
+        This takes in a flattened field of shape (nx * (nz - 1),)
+        and returns the rotated flattened field of the same shape.
+        """
+        full_space = np.zeros((self.nz, self.nx), dtype=float)
+        full_space[:, 1:] = field.reshape((self.nz - 1, self.nx)).T
+        return np.rot90(full_space, k=-1)[:, 1:].T.ravel()

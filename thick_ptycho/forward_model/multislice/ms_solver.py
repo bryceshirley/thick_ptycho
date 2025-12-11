@@ -31,6 +31,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             )
 
         self.k = self.simulation_space.k  # Wave number
+        self.n_eff = self.simulation_space.effective_nx  # Effective refractive index
         self.dx = self.simulation_space.dx  # Pixel size in x
         self.nx = self.simulation_space.nx  # Number of pixels in x
         self.nz = self.simulation_space.nz  # Number of slices in z
@@ -46,19 +47,15 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         self._kernel_cache = {}
 
     def _get_propagation_kernels(
-        self, dz: float, nx_eff: Optional[int] = None, remove_global_phase=True
+        self, dz: float, remove_global_phase=True
     ) -> np.ndarray:
         """Precompute the forward angular spectrum kernel (H_forward)."""
-        nx = self.nx if nx_eff is None else nx_eff
         dz = self.dz if dz is None else dz
-        key = (dz, nx_eff)
+        key = (dz, self.nx_eff)
         if key in self._kernel_cache:
             return self._kernel_cache[key]
 
-        fx = np.fft.fftfreq(nx, d=self.dx)
-        kx = 2 * np.pi * fx  # Spatial frequency in x
-
-        fx = np.fft.fftfreq(nx, d=self.dx)
+        fx = np.fft.fftfreq(self.nx_eff, d=self.dx)
         kx = 2 * np.pi * fx  # Spatial frequency in x
         inside = self.k**2 - kx**2
         kz = np.sqrt(np.clip(inside, 0.0, None))
@@ -66,6 +63,8 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         H = np.exp(1j * kz * dz)
 
         # Remove global phase factor for stability if requested
+        # kz = sqrt(k^2 - kx^2) = k sqrt(1 - (kx/k)^2) ~ k - (kx^2)/(2k) for small kx/k, so
+        # exp(1j * kz * dz) ~ exp(1j * k * dz) * exp(-1j * (kx^2)/(2k) * dz)
         if remove_global_phase:
             H *= np.exp(-1j * self.k * dz)
 
@@ -78,9 +77,6 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         Psi *= self._get_propagation_kernels(dz, psi.size)
         return np.fft.ifft(Psi)
 
-    # def _backpropagate(self, psi, dz):
-    #     """Inverse propagation (negative dz)."""
-    #     return self._propagate(psi, -dz)
     def _backpropagate(self, psi, dz):
         Psi = np.fft.fft(psi)
         H = self._get_propagation_kernels(dz, psi.size)
@@ -93,9 +89,8 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
     def _solve_single_probe(
         self,
-        scan_idx: int = 0,
+        probe_idx: int,
         n: Optional[np.ndarray] = None,
-        obj: Optional[np.ndarray] = None,
         mode="forward",
         probe: Optional[np.ndarray] = None,
         **kwargs,
@@ -126,12 +121,10 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         assert mode in {
             "forward",
             "backward",
-            "forward_rotated",
-            "reverse_rotated",
         }, f"Invalid mode: {mode}"
 
         if mode in {"forward_rotated", "reverse_rotated"}:
-            n = self.rotate_n(n)
+            n = self.get_projected_obj(n, mode=mode, proj_idx=probe_idx)
 
         # Object refractive index distribution
         if n is None:
@@ -154,10 +147,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             #   "Phase retrieval framework for direct reconstruction of the projected refractive index
             #   applied to ptychography and holography," *Optica*, vol. 9, no. 3, pp. 288–297, 2022.
             #   DOI: https://doi.org/10.1364/OPTICA.447021
-            if obj is None:
-                obj_slice = self._object_transmission_function(n_slice=n[:, z])
-            else:
-                obj_slice = obj[:, z]
+            obj_slice = self._object_transmission_function(n_slice=n[:, z])
 
             # Compute exit wave and propagate to next slice
             psi_exit = psi_incident * obj_slice

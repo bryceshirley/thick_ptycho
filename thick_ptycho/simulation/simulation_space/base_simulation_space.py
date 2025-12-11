@@ -341,9 +341,9 @@ class BaseSimulationSpace(ABC):
 
         # Compute coefficient
         if grad:
-            coefficient = (self.k / 1j) * n
+            coefficient = (self.k / 1j) * np.ones_like(n)  # (self.k / 1j) * n
         else:
-            coefficient = (self.k / 2j) * (n**2 - 1)
+            coefficient = (self.k / 1j) * (n - 1)  # (self.k / 2j) * (n**2 - 1)
 
         # Compute all half time-step slices along the z-axis
         object_steps = (

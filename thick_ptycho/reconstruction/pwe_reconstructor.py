@@ -78,13 +78,11 @@ class ReconstructorPWE(ReconstructorBase):
                 n=self.nk, modes=("forward", "adjoint")
             )
 
-        grad_Ak = -self.forward_model.get_gradient(n=self.nk)
-
         uk = self.convert_to_vector_form(
             self.forward_model.solve(n=self.nk, probes=probes)
         )
 
-        return uk, grad_Ak
+        return uk
 
     def compute_grad_least_squares(self, exit_wave_error, uk, grad_A):
         """Compute the gradient of least squares problem."""
@@ -96,43 +94,35 @@ class ReconstructorPWE(ReconstructorBase):
         grad_imag = np.zeros(projection_size, dtype=float)
 
         idx = 0
-        for proj_idx in range(self.num_projections):
-            for angle_idx in range(self.num_angles):
-                for scan_idx in range(self.num_probes):
-                    # 1) Solve adjoint model
-                    backprop = self.forward_model._solve_single_probe(
-                        scan_idx=scan_idx,
-                        proj_idx=proj_idx,
-                        probe=None,
-                        rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx],
-                        mode="adjoint",
-                        n=self.nk,
-                    )
+        for idx, (proj_idx, angle_idx, scan_idx) in enumerate(self.triplets):
+            # 1) Solve adjoint model
+            backprop = self.forward_model._solve_single_probe(
+                scan_idx=scan_idx,
+                proj_idx=proj_idx,
+                probe=None,
+                rhs_block=exit_wave_error[proj_idx, angle_idx, scan_idx],
+                mode="adjoint",
+                n=self.nk,
+            )
 
-                    # 2) Flatten the spatial field block
-                    backprop = backprop[:, :-1].T.ravel()
+            # 2) Flatten the spatial field block
+            backprop = backprop[:, :-1].T.ravel()
 
-                    # 3) Compute contribution of current frame
-                    g_base = grad_A @ uk[idx]
+            # 3) Compute contribution of current frame
+            g_base = grad_A @ uk[idx]
 
-                    # 4) Accumulate gradient (real and imaginary parts separately)
-                    grad_update_re = (g_base.conj() * backprop).real
-                    grad_update_im = ((1j * g_base).conj() * backprop).real
+            # 4) Accumulate gradient (real and imaginary parts separately)
+            grad_update_re = (g_base.conj() * backprop).real
+            grad_update_im = ((1j * g_base).conj() * backprop).real
 
-                    # 5) Inverse-rotate the gradient update if proj_idx > 0
-                    if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
-                        grad_update_re = self.rotate_back(grad_update_re)
-                        grad_update_im = self.rotate_back(grad_update_im)
+            # 5) Inverse-rotate the gradient update if proj_idx > 0
+            if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
+                grad_update_re = self.rotate_back(grad_update_re)
+                grad_update_im = self.rotate_back(grad_update_im)
 
-                    # 6) Accumulate gradient
-                    grad_real = self.accumulate_gradient(
-                        grad_update_re, scan_idx, grad_real
-                    )
-                    grad_imag = self.accumulate_gradient(
-                        grad_update_im, scan_idx, grad_imag
-                    )
-
-                    idx += 1
+            # 6) Accumulate gradient
+            grad_real = self.accumulate_gradient(grad_update_re, scan_idx, grad_real)
+            grad_imag = self.accumulate_gradient(grad_update_im, scan_idx, grad_imag)
 
         return grad_real, grad_imag
 
@@ -145,7 +135,6 @@ class ReconstructorPWE(ReconstructorBase):
         scan_idx (int): Index of the current scan position.
         grad_total (ndarray): The total gradient array to accumulate into.
         """
-
         if self.simulation_space.solve_reduced_domain:
             x_min, x_max = self.simulation_space._scan_frame_info[
                 scan_idx
@@ -158,19 +147,6 @@ class ReconstructorPWE(ReconstructorBase):
         else:
             grad_total -= grad_update
         return grad_total
-
-    def rotate_back(self, field):
-        """
-        Rotate the field back by 90 degrees counter-clockwise.
-        When the object rotation is used we have nx x nz object
-        with nx = nz.
-
-        This takes in a flattened field of shape (nx * (nz - 1),)
-        and returns the rotated flattened field of the same shape.
-        """
-        full_space = np.zeros((self.nz, self.nx), dtype=float)
-        full_space[:, 1:] = field.reshape((self.nz - 1, self.nx)).T
-        return np.rot90(full_space, k=-1)[:, 1:].T.ravel()
 
     def compute_alphak(self, u, grad_A, grad_E, d):
         """
@@ -186,43 +162,39 @@ class ReconstructorPWE(ReconstructorBase):
         float: The computed denominator value.
         """
         denominator = 0.0
-        idx = 0
-        for proj_idx in range(self.num_projections):
-            for angle_idx in range(self.num_angles):
-                for scan_idx in range(self.num_probes):
-                    # 1) Perturbation term: (grad_A @ u[idx])
-                    perturb = grad_A @ u[idx]
 
-                    # 2) Retrieve probe field once per loop
-                    probe = self.ptycho_probes[angle_idx, scan_idx]
+        for idx, (proj_idx, angle_idx, scan_idx) in enumerate(self.triplets):
+            # 1) Perturbation term: (grad_A @ u[idx])
+            perturb = grad_A @ u[idx]
 
-                    # 3) Solve forward model for delta_u
-                    delta_u = self.forward_model._solve_single_probe(
-                        scan_idx=scan_idx,
-                        proj_idx=proj_idx,
-                        probe=probe,
-                        rhs_block=perturb.reshape(
-                            self.nz - 1, self.simulation_space.effective_nx
-                        ).T,
-                        mode="forward",
-                        n=self.nk,
-                    )
+            # 2) Retrieve probe field once per loop
+            probe = self.ptycho_probes[angle_idx, scan_idx]
 
-                    # (nz, nx) field → drop the first z-plane → flatten
-                    if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
-                        # Rotate back if proj_idx > 0
-                        delta_u = np.rot90(delta_u, k=-1)
+            # 3) Solve forward model for delta_u
+            delta_u = self.forward_model._solve_single_probe(
+                scan_idx=scan_idx,
+                proj_idx=proj_idx,
+                probe=probe,
+                rhs_block=perturb.reshape(
+                    self.nz - 1, self.simulation_space.effective_nx
+                ).T,
+                mode="forward",
+                n=self.nk,
+            )
 
-                    # (nz, nx) field → drop the first z-plane → flatten
-                    delta_u = delta_u[:, 1:].T.ravel()
+            # (nz, nx) field → drop the first z-plane → flatten
+            if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
+                # Rotate back if proj_idx > 0
+                delta_u = np.rot90(delta_u, k=-1)
 
-                    # 4) Only use last block_size elements
-                    delta_p_i = -delta_u[-self.block_size :] @ d[-self.block_size :]
+            # (nz, nx) field → drop the first z-plane → flatten
+            delta_u = delta_u[:, 1:].T.ravel()
 
-                    # 5) accumulate squared contribution
-                    denominator += np.linalg.norm(delta_p_i) ** 2
+            # 4) Only use last block_size elements
+            delta_p_i = -delta_u[-self.block_size :] @ d[-self.block_size :]
 
-                    idx += 1
+            # 5) accumulate squared contribution
+            denominator += np.linalg.norm(delta_p_i) ** 2
 
         # Compute the numerator
         numerator = np.vdot(d, grad_E)
@@ -246,7 +218,6 @@ class ReconstructorPWE(ReconstructorBase):
         tol=1e-8,
         n_initial=None,
         fixed_step_size=None,
-        solve_probe=False,
         tv_lambda_amp=0.0,
         low_pass_sigma_phase=0.0,
     ):
@@ -295,18 +266,21 @@ class ReconstructorPWE(ReconstructorBase):
         gradient_update = np.zeros((self.nx, self.nz), dtype=complex)
 
         # Define probe
-        if solve_probe:
-            probesk = self.forward_model.probes  # Initial Simulated Probes
-            probesk_old = probesk.copy()
+        probes = self.forward_model.probes  # Initial Simulated Probes
 
-        else:
-            probesk = None
+        # Precompute gradient operator
+        update_grad = False  # False if using approx n^2 -1 = 2(n -1)
+        grad_Ak = -self.forward_model.get_gradient(n=self.nk)
 
         for i in range(max_iters):
             time_start = time.time()
             self._log(f"Iteration {i + 1}/{max_iters}")
             # Compute the Forward Model
-            uk, grad_Ak = self.compute_forward_model(probes=probesk)
+            uk = self.compute_forward_model(probes=probes)
+
+            if update_grad:
+                # Update gradient operator if nk has changed
+                grad_Ak = -self.forward_model.get_gradient(n=self.nk)
 
             exit_wave_error = self.get_error_in_exit_wave(uk)
             rel_rmse = np.sqrt(np.mean(np.abs(exit_wave_error[..., -1]) ** 2))
@@ -372,49 +346,12 @@ class ReconstructorPWE(ReconstructorBase):
                     self.nk, tv_lambda_amp, low_pass_sigma_phase
                 )
 
-            # Compute source by solving the reverse problem
-            if solve_probe:
-                gamma = 0.5
-                probesk = (1 - gamma) * probesk_old + gamma * self.solve_for_probes()
-                probesk_old = probesk.copy()
-
             time_end = time.time()
             self._log(
                 f"    Iteration {i + 1} took {time_end - time_start:.2f} seconds."
             )
 
         return self.nk, self.convert_to_tensor_form(uk), residual
-
-    def solve_for_probes(self, plot_reverse: Optional[bool] = False):
-        """
-        Solve the forward model for the probes in reversed time.
-        """
-        if not self.phase_retrieval:
-            raise NotImplementedError(
-                "Probe solving only implemented for phase retrieval mode."
-            )
-        self.forward_model.prepare_solver(n=self.nk, mode="reverse")
-
-        uk_reverse = self.forward_model.solve(
-            n=self.nk, mode="reverse", probes=self.data
-        )
-
-        if plot_reverse:
-            self._log("    Reverse Solution for Reconstructed Object")
-            self.simulation_space.viewer.plot_two_panels(
-                uk_reverse[int(self.num_angles / 2)], view="phase_amp"
-            )
-
-        # Convert to block form
-        uk_reverse = self.convert_to_vector_form(uk_reverse)
-
-        # Select probes
-        return uk_reverse[:, -self.block_size :]
-
-    def gradients(self, u):
-        dx = np.roll(u, -1, axis=1) - u
-        dy = np.roll(u, -1, axis=0) - u
-        return dx, dy
 
     def tv_denoise_amp(self, u, lam=0.01, n_iter=30, eps=1e-8):
         """

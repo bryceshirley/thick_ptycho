@@ -127,19 +127,6 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
             for mode in modes:
                 self._construct_solve_cache(n=n, proj_idx=proj_idx, mode=mode)
 
-    def get_projected_obj(
-        self, n: np.ndarray, mode: str = "forward", proj_idx: int = 0
-    ) -> Optional[np.ndarray]:
-        """Get cached projection matrix for given projection index.
-        Also handles rotation of n for different projections."""
-        # Rotate n if needed
-        if self.simulation_space.num_projections == 1 or proj_idx == 0:
-            return n
-        elif proj_idx == 1:
-            return np.rot90(n, k=1)
-        else:
-            raise ValueError(f"Invalid projection index: {proj_idx}")
-
     def reset_cache(self):
         """Reset all cached variables (e.g., LU factors)."""
         for i in range(self.num_projections):
