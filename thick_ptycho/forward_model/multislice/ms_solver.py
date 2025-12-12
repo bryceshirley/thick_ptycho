@@ -132,11 +132,11 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
         # Select initial probe condition
         if probe is None:
-            probe = np.zeros((self.nx,), dtype=complex)
+            probe = np.zeros((self.nx_eff,), dtype=complex)
 
         # Initial probe field at the entrance plane
         psi_incident = probe.copy()
-        u = np.empty((self.nx, self.nz), dtype=complex)
+        u = np.empty((self.nx_eff, self.nz), dtype=complex)
         u[:, 0] = psi_incident.copy()
 
         # Forward propagation through slices
