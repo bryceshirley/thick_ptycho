@@ -40,11 +40,13 @@ class ReconstructorPWE(ReconstructorBase):
         phase_retrieval=True,
         solver_type="iterative",
         bc_type="impedance",
+        verbose: bool = None,
     ):
         super().__init__(
             simulation_space=simulation_space,
             data=data,
             phase_retrieval=phase_retrieval,
+            verbose=verbose,
         )
         # Store number of tomographic projections
         if solver_type not in {"full", "iterative"}:

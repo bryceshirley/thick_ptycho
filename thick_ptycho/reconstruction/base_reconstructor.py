@@ -40,6 +40,7 @@ class ReconstructorBase:
         simulation_space,
         data,
         phase_retrieval: bool = False,
+        verbose: bool = None,
         **kwargs,
     ):
         self.simulation_space = simulation_space
@@ -47,7 +48,10 @@ class ReconstructorBase:
         self.data = np.asarray(data)
         # assert len(self.data.shape) == 4, "Data must be a 4D array (projections, angles, probes, pixels)."
         self.phase_retrieval = phase_retrieval
-        self.verbose = simulation_space.verbose
+        if verbose is not None:
+            self.verbose = verbose
+        else:
+            self.verbose = simulation_space.verbose
         self._results_dir = simulation_space.results_dir
 
         self.num_angles = self.simulation_space.num_angles
@@ -108,17 +112,6 @@ class ReconstructorBase:
             exit_wave_error[..., :, -1] = (exit_waves - emodel).reshape(
                 self.num_projections, self.num_angles, self.num_probes, self.block_size
             )
-
-            if getattr(self, "_results_dir", None):
-                # Optional visualization of pre/post phase retrieval
-                self.simulation_space.viewer.plot_two_panels(
-                    exit_waves,
-                    view="phase_amp",
-                    filename="exit_phase_amp_old.png",
-                    title="Old Exit Wave",
-                    xlabel="x",
-                    ylabel="Image #",
-                )
 
         else:  # Known Phase
             exit_wave_error[..., :, -1] = (exit_waves - self.data).reshape(

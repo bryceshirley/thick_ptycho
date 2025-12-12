@@ -31,7 +31,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
             )
 
         self.k = self.simulation_space.k  # Wave number
-        self.n_eff = self.simulation_space.effective_nx  # Effective refractive index
+        self.nx_eff = self.simulation_space.effective_nx  # Effective refractive index
         self.dx = self.simulation_space.dx  # Pixel size in x
         self.nx = self.simulation_space.nx  # Number of pixels in x
         self.nz = self.simulation_space.nz  # Number of slices in z
