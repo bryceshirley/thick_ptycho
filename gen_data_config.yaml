@@ -12,8 +12,8 @@ probe_tilts: [0.0] # radians
 
 
 # --- Scan Configuration ---
-step_size_px: 10 # pixels
-scan_points: 50 # number of scan points in one direction
+step_size_px: 20 # pixels
+scan_points: 60 # number of scan points in one direction
 pad_factor: 2.0 # padding factor
 solve_reduced_domain: True
 
@@ -22,19 +22,17 @@ solve_reduced_domain: True
 points_per_wavelength: 8
 # nz: 50 # Overrides points_per_wavelength if specified
 
+# --- Material configuration ---
+n_medium: 1.0 # Surrounding medium refractive index 1.0 (free space)
+
 
 # --- Simulated Objects ---
-n_medium: 1.0 # Surrounding medium refractive index 1.0 (free space)
 gaussian_blur: 3
-beta: 0.01
+random_circles: True
 delta: 0.01
-sample_space_objects:
-  - { type: "circle", centre_factor: [0.3, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
-  #- { type: "circle", centre_factor: [0.5, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
-  - { type: "circle", centre_factor: [0.7, 0.65], side_length_factor: 0.05, depth_factor: 0.05 }
-  # - { type: "circle", centre_factor: [0.4, 0.5],  side_length_factor: 0.05, depth_factor: 0.05 }
-  #- { type: "circle", centre_factor: [0.6, 0.3],  side_length_factor: 0.05, depth_factor: 0.05 }
-  - { type: "circle", centre_factor: [0.3, 0.7],  side_length_factor: 0.05, depth_factor: 0.05 }
+beta: 0.001
+
+
 
 # Solver configuration
 solver:

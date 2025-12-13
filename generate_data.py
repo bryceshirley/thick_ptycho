@@ -2,14 +2,13 @@ import argparse
 import os
 import shutil
 import time
-
 import matplotlib.pyplot as plt
 import numpy as np
-
 from thick_ptycho.forward_model import (
     MSForwardModelSolver,
     PWEFullPinTSolver,
     PWEIterativeLUSolver,
+    PWEPetscFullPinTSolver,
 )
 from thick_ptycho.simulation.config import ProbeConfig, ProbeType, SimulationConfig
 from thick_ptycho.simulation.ptycho_object import create_ptycho_object
@@ -22,11 +21,9 @@ from thick_ptycho.utils.io import get_git_commit_hash, load_config, results_dir_
 def main(cfg_path):
     cfg = load_config(cfg_path)
     results_dir = results_dir_name("sim")
-
     shutil.copy(cfg_path, os.path.join(results_dir, os.path.basename(cfg_path)))
     with open(os.path.join(results_dir, "git_commit.txt"), "w") as f:
         f.write(get_git_commit_hash() + "\n")
-
     probe_config = ProbeConfig(
         type=ProbeType(cfg["probe_type"]),
         wave_length=float(cfg["wave_length"]),  # meters (0.635 μm). Visible light
@@ -34,7 +31,6 @@ def main(cfg_path):
         focus=float(cfg["probe_focus"]),  # focal length [m]
         tilts=[float(x) for x in cfg["probe_tilts"]],  # tilts in degrees
     )
-
     # if cfg does not have ylims
     # if cfg["ylims"] is None:
     limits = Limits(
@@ -44,7 +40,6 @@ def main(cfg_path):
     )
     # else:
     # limits = Limits(x=cfg["xlims"], y=cfg["ylims"], z=cfg["zlims"], units="m")
-
     sim_config = SimulationConfig(
         probe_config=probe_config,
         # Spatial discretization
@@ -61,25 +56,45 @@ def main(cfg_path):
         results_dir=results_dir,
         use_logging=True,
     )
-
     simulation_space = create_simulation_space(sim_config)
     simulation_space.summarize()
     ptycho_object = create_ptycho_object(simulation_space)
-
     delta = float(cfg["delta"])
     beta = float(cfg["beta"])
-    refractive_index_perturbation = complex(-delta, -beta)
-
-    for obj_cfg in cfg["sample_space_objects"]:
-        ptycho_object.add_object(
-            obj_cfg["type"],
-            refractive_index_perturbation,
-            side_length_factor=obj_cfg["side_length_factor"],
-            centre_factor=obj_cfg["centre_factor"],
-            depth_factor=obj_cfg["depth_factor"],
-            gaussian_blur=cfg["gaussian_blur"],
-        )
-
+    if "random_circles" in cfg and cfg["random_circles"]:
+        np.random.seed(5)  # For reproducibility
+        num_circles = 10
+        x_centers = np.random.uniform(0.25, 0.75, size=num_circles)
+        z_centers = np.random.uniform(0.1, 0.9, size=num_circles)
+        delta_var = 0.2  # 20% variation
+        beta_var = 0.2  # 20% variation
+        common_side_length = 0.05
+        common_depth = 0.05
+        gaussian_blur = cfg["gaussian_blur"]
+        for cx, cz in zip(x_centers, z_centers):
+            # Randomize refractive index perturbation per circle
+            delta_rand = delta * (1 + delta_var * (np.random.rand() - 0.5) * 2)
+            beta_rand = beta * (1 + beta_var * (np.random.rand() - 0.5) * 2)
+            refractive_index_perturbation = complex(-delta_rand, -beta_rand)
+            ptycho_object.add_object(
+                "circle",
+                refractive_index_perturbation,
+                side_length_factor=common_side_length,
+                centre_factor=(cx, cz),
+                depth_factor=common_depth,
+                gaussian_blur=gaussian_blur,
+            )
+    else:
+        refractive_index_perturbation = complex(-delta, -beta)
+        for obj_cfg in cfg["sample_space_objects"]:
+            ptycho_object.add_object(
+                obj_cfg["type"],
+                refractive_index_perturbation,
+                side_length_factor=obj_cfg["side_length_factor"],
+                centre_factor=obj_cfg["centre_factor"],
+                depth_factor=obj_cfg["depth_factor"],
+                gaussian_blur=cfg["gaussian_blur"],
+            )
     ptycho_object.build_field()
     simulation_space.viewer.plot_two_panels(
         ptycho_object.refractive_index,
@@ -89,9 +104,7 @@ def main(cfg_path):
         view="phase_amp",
         filename="true_object.png",
     )
-
     ptycho_probes = create_ptycho_probes(simulation_space)
-
     solver_type = cfg["solver"]["solver_type"]
     if solver_type == "iterativePWE":
         forward = PWEIterativeLUSolver(
@@ -101,11 +114,14 @@ def main(cfg_path):
         forward = PWEFullPinTSolver(
             simulation_space, ptycho_probes, bc_type=cfg["solver"]["bc_type"]
         )
+    elif solver_type == "FullPintPWEPetsc":
+        forward = PWEPetscFullPinTSolver(
+            simulation_space, ptycho_probes, bc_type=cfg["solver"]["bc_type"]
+        )
     elif solver_type == "MS":
         forward = MSForwardModelSolver(simulation_space, ptycho_probes)
     else:
         raise ValueError(f"Unknown solver type: {solver_type}")
-
     simulation_space._log("Starting forward simulation...")
     time_start = time.time()
     u = forward.solve(n=ptycho_object.refractive_index)
@@ -113,7 +129,6 @@ def main(cfg_path):
     simulation_space._log(
         f"Forward simulation took {time.time() - time_start:.2f} seconds."
     )
-
     # Plot wavefield solution in the center of the volume
     simulation_space.viewer.plot_two_panels(
         u[0, 0, simulation_space.scan_points // 2, ...],
@@ -123,7 +138,6 @@ def main(cfg_path):
         ylabel="x (m)",
         filename="wavefield_solution.png",
     )
-
     # Save Data Images
     simulation_space.viewer.plot_two_panels(
         exit_waves.T,
@@ -143,7 +157,6 @@ def main(cfg_path):
         ylabel="x (px)",
         filename="farfield_intensities.png",
     )
-
     plt.figure(figsize=(8, 4))
     plot_num_probes = 10  # simulation_space.num_probes
     probe_indices = np.linspace(
@@ -162,7 +175,6 @@ def main(cfg_path):
     # Save probe amplitudes plot
     plt.savefig(os.path.join(results_dir, "probe_amplitudes.png"))
     plt.close()
-
     plt.figure(figsize=(8, 4))
     for p in probe_indices:
         plt.plot(
@@ -177,7 +189,6 @@ def main(cfg_path):
     # Save exitwave amplitudes plot
     plt.savefig(os.path.join(results_dir, "exitwave_amplitudes.png"))
     plt.close()
-
     # Save data
     np.savez_compressed(
         os.path.join(results_dir, "simulated_data.npz"),
@@ -193,5 +204,4 @@ if __name__ == "__main__":
     )
     parser.add_argument("config_file", type=str, help="Path to the configuration file.")
     args = parser.parse_args()
-
     main(args.config_file)

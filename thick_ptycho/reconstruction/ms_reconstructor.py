@@ -1,5 +1,5 @@
 import numpy as np
-
+import time
 from thick_ptycho.forward_model.multislice.ms_solver import MSForwardModelSolver
 from thick_ptycho.reconstruction.base_reconstructor import ReconstructorBase
 
@@ -17,17 +17,18 @@ class ReconstructorMS(ReconstructorBase):
         simulation_space,
         data,
         phase_retrieval=True,
+        verbose: bool = None,
     ):
         super().__init__(
             simulation_space=simulation_space,
             data=data,
             phase_retrieval=phase_retrieval,
+            verbose=verbose,
         )
         # Create ptychographic object and probes
         self.ms = MSForwardModelSolver(self.simulation_space, self.ptycho_probes)
         self.k = self.simulation_space.k
         self.nz = self.simulation_space.nz
-        self.num_probes = self.simulation_space.num_probes
         self.dz = self.simulation_space.dz
         self.n_medium = self.simulation_space.n_medium
         self._log("Initialized Multislice 3PIE Reconstructor.")
@@ -40,103 +41,119 @@ class ReconstructorMS(ReconstructorBase):
         self,
         max_iters: int = 10,
         alpha_obj: float = 1.0,
-        simulate_refractive_index: bool = True,
+        refractive_index: np.ndarray = None,
     ):
         """
         Run multislice 3PIE reconstruction over multiple epochs.
+        """
+        if refractive_index is None:
+            n_est = self.n_medium * np.ones(
+                (self.simulation_space.nx, self.nz), dtype=complex
+            )
+
+        loss_history = []
+        probes = self.ptycho_probes  # shape (num_probes, nx)
+
+        for it in range(max_iters):
+            exit_wave_error = np.zeros(
+                (self.total_scans, self.ms.nx_eff), dtype=complex
+            )
+
+            start_time = time.time()
+            for idx, (p_idx, a_idx, s_idx) in enumerate(self.triplets):
+                if self.simulation_space.solve_reduced_domain:
+                    x_min, x_max = self.simulation_space._scan_frame_info[
+                        s_idx
+                    ].reduced_limits_discrete.x
+                else:
+                    x_min, x_max = 0, self.simulation_space.nx
+
+                # ---- Forward pass ----
+                psi_slices = self.ms._solve_single_probe(
+                    probe_idx=p_idx,
+                    n=n_est[x_min:x_max, :],
+                    probe=probes[a_idx, s_idx, :],
+                )
+
+                # ---- Modulus constraint ----
+                psi_corr = self._apply_modulus_constraint(
+                    psi_slices[:, -1], self.data[idx, :]
+                )
+
+                # Detector intensity & loss
+                exit_wave_error[idx, :] = psi_corr - psi_slices[:, -1]
+
+                # ---- Backpropagation & update (delegated!) ----
+                self._apply_backprop_updates(
+                    psi_slices,
+                    psi_corr,
+                    n_est,
+                    alpha_obj,
+                    it,
+                    x_min=x_min,
+                    x_max=x_max,
+                )
+            end_time = time.time()
+
+            # Epoch loss
+            mean_loss = np.sqrt(np.mean(np.abs(exit_wave_error) ** 2))
+            loss_history.append(mean_loss)
+
+            if self.verbose:
+                self._log(
+                    f"[Iter {it + 1:03d}] Mean Loss = {mean_loss:.6f}, Time = {end_time - start_time:.2f} seconds"
+                )
+
+        return n_est, loss_history
+
+    def _apply_backprop_updates(
+        self,
+        psi_slices: np.ndarray,
+        psi_corr: np.ndarray,
+        n_est: np.ndarray,
+        alpha_obj: float,
+        iter_idx: int,
+        x_min: int,
+        x_max: int,
+    ):
+        """
+        Backpropagate detector-plane correction psi_corr through all slices
+        and update the refractive index estimate n_est in place.
 
         Parameters
         ----------
-        max_iters : int, default=10
-            Number of full reconstruction iterations.
-        alpha_obj : float, default=1.0
-            Step size for object (refractive index) updates.
-
-        Returns
-        -------
-        n_est : np.ndarray
-            Reconstructed refractive index distribution.
-        loss_history : list[float]
-            Mean loss value per epoch.
+        psi_slices : array, shape (nx, nz)
+            Forward propagated probe at every slice.
+        psi_corr : array, shape (nx,)
+            Corrected field at detector plane (after modulus constraint).
+        n_est : array, shape (nx, nz)
+            Current refractive index estimate updated in place.
+        alpha_obj : float
+            Step size for slice updates.
+        iter_idx : int
+            Current iteration index (0-based).
         """
-        n_est = self.n_medium * np.ones(
-            (self.simulation_space.nx, self.nz), dtype=complex
-        )
-        obj_est = np.ones((self.simulation_space.nx, self.nz), dtype=complex)
-        loss_history = []
+        psi_back = psi_corr
 
-        probes = self.ptycho_probes[0, :]  # shape (num_probes, nx)
+        # Loop through slices from bottom (detector-side) → top (entrance)
+        for z in reversed(range(self.nz)):
+            # Backpropagate one slice
+            psi_back = self.ms._backpropagate(psi_back, self.dz)
 
-        for it in range(max_iters):
-            loss_total = 0.0
+            # Slice transmission
+            obj_slice = self.ms._object_transmission_function(n_est[x_min:x_max, z])
+            psi_back *= np.conj(obj_slice)
 
-            for p in range(self.num_probes):
-                # Forward propagate probe p through current object estimate
-                if simulate_refractive_index:
-                    psi_slices = self.ms._solve_single_probe(
-                        n=n_est, scan_idx=p, probe=probes[p]
-                    )  # shape (nx, nz)
-                else:
-                    psi_slices = self.ms._solve_single_probe(
-                        obj=obj_est, scan_idx=p, probe=probes[p]
-                    )  # shape (nx, nz)
-                # Compute loss at detector plane
-                Psi_det = np.fft.fft(psi_slices[:, -1])
-                target_amp = np.sqrt(self.data[p, :])
-                loss_total += np.sum((np.abs(Psi_det) - np.abs(target_amp)) ** 2) / (
-                    np.sum(np.abs(target_amp) ** 2) + 1e-12
-                )
+            # Compute slice residual
+            dpsi_z = psi_back - psi_slices[:, z]
 
-                # Inverse FFT → corrected field at detector plane
-                psi_corr = self._apply_modulus_constraint(
-                    psi_slices[:, -1], self.data[p, :]
-                )
-
-                # Backpropagate corrections slice-by-slice
-                psi_back = psi_corr
-                for z in reversed(range(self.nz)):
-                    # Propagate one slice backward
-                    psi_back = self.ms._backpropagate(psi_back, self.dz)
-
-                    # Compute current slice transmission
-                    if simulate_refractive_index:
-                        obj_slice = self.ms._object_transmission_function(n_est[:, z])
-                    else:
-                        obj_slice = obj_est[:, z]
-                    psi_back *= np.conj(obj_slice)
-
-                    # Residual at slice plane
-                    dpsi_z = psi_back - psi_slices[:, z]
-
-                    # Update object (small step; do NOT decay too fast)
-                    if simulate_refractive_index:
-                        n_est[:, z] = self._update_object_n(
-                            n_est[:, z], psi_slices[:, z], dpsi_z, alpha_obj / (it + 1)
-                        )
-                    else:
-                        obj_est[:, z] = self._update_object_obj(
-                            obj_est[:, z],
-                            psi_slices[:, z],
-                            dpsi_z,
-                            alpha_obj / (it + 1),
-                        )
-
-            loss_history.append(loss_total / self.num_probes)
-            if self.verbose:
-                self._log(
-                    f"[Iter {it + 1:03d}] Mean Loss = {loss_total / self.num_probes:}"
-                )
-        if simulate_refractive_index:
-            return n_est, loss_history
-        else:
-            return obj_est, loss_history
-
-    def low_pass(self, x, sigma=1.0):
-        X = np.fft.fft(x, axis=0)
-        nx = x.shape[0]
-        freqs = np.fft.fftfreq(nx)
-        H = np.exp(-(freqs**2) / (2 * sigma**2))
-        return np.fft.ifft(X * H[:, None], axis=0)
+            # Update object slice
+            n_est[x_min:x_max, z] = self._update_object_n(
+                n_est[x_min:x_max, z],
+                psi_slices[:, z],
+                dpsi_z,
+                alpha_obj / (iter_idx + 1),
+            )
 
     # -------------------------------------------------------------------------
     # Internal numerical routines
@@ -149,32 +166,9 @@ class ReconstructorMS(ReconstructorBase):
             phase = fmodel / (np.abs(fmodel) + 1e-12)
             f_updated = np.sqrt(detector_data) * phase
             return np.fft.ifft(f_updated)
-
-            # # Forward FFT
-
-            # fmodel = np.fft.fft(Psi, axis=-1)
-            # # Avoid division by zero
-            # magnitude = np.abs(fmodel)
-            # magnitude[magnitude == 0] = 1.0
-            # phase = fmodel / magnitude
-
-            # # Select measured amplitude data
-            # target_amplitude = np.sqrt(detector_data)
-
-            # # Replace amplitude while keeping phase (vectorized)
-            # fmodel_updated = target_amplitude * phase
-
-            # # Inverse FFT to get updated exit waves
-            # emodel = np.fft.ifft(fmodel_updated, axis=-1)
-
-            # return emodel
         else:
             return detector_data
 
-    # def _update_object(f, g, dpsi, alpha, eps=1e-12):
-    #     # Standard 3PIE object update: normalized by |Sz|^2 locally
-    #     denom = np.maximum(np.max(np.abs(g) ** 2), eps)
-    #     return f + alpha * (np.conj(g) * dpsi) / denom
     def _update_object_n(self, n_slice, psi_i, dpsi, alpha_obj, eps=1e-12):
         """
         Update refractive index slice directly (3PIE update in n-space).
@@ -194,22 +188,3 @@ class ReconstructorMS(ReconstructorBase):
         n_slice = n_slice + dobj_slice / (1j * self.k * self.dz)
 
         return n_slice
-
-    def _update_object_obj(self, obj_slice, psi_i, dpsi, alpha_obj, eps=1e-12):
-        """
-        Update object slice directly (3PIE update in object space).
-        Based on O = exp(i k (n - n_med) dz) and U-update rule in O-space.
-        """
-
-        # Gradient term (Maiden 2012 Eq. 3 numerators)
-        grad = np.conj(psi_i) * dpsi  # same structure as O-update
-
-        # Global normalization (stability recommended in paper)
-        scale = np.max(np.abs(psi_i) ** 2) + eps
-
-        # Refractive index update derived from: dO = i k dz O * dn
-        dobj_slice = (alpha_obj) * (grad / scale)
-
-        # Apply update
-        obj_slice = obj_slice + dobj_slice
-        return obj_slice

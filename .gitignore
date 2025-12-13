@@ -2,6 +2,7 @@
 ## Use this list to detail files you wish git to ignore ##
 ##########################################################
 results/*
+notebooks/2D_examples/results/*
 */*.npy
 */*.npz
 thick_ptycho.egg-info/

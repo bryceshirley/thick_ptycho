@@ -13,7 +13,7 @@ try:
     petsc4py.init([])
     from petsc4py import PETSc
 except ImportError:
-    raise ImportError("This solver requires petsc4py. Please install it.")
+    print("PETSc4Py is not installed. PWEPetscFullPinTSolver will not work without it.")
 
 from thick_ptycho.forward_model.pwe.operators import BoundaryType
 from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condition_test import (

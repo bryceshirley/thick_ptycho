@@ -29,4 +29,5 @@ def create_simulation_space(config: SimulationConfig):
         results_dir=config.results_dir,
         use_logging=config.use_logging,
         verbose=config.verbose,
+        exact_ref_coeff=config.exact_ref_coeff,
     )

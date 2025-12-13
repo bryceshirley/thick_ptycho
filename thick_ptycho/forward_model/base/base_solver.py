@@ -64,6 +64,19 @@ class BaseForwardModelSolver(ABC):
         """Reset any cached variables in the solver."""
         pass
 
+    def get_projected_obj(
+        self, n: np.ndarray, mode: str = "forward", proj_idx: int = 0
+    ) -> Optional[np.ndarray]:
+        """Get cached projection matrix for given projection index.
+        Also handles rotation of n for different projections."""
+        # Rotate n if needed
+        if self.simulation_space.num_projections == 1 or proj_idx == 0:
+            return n
+        elif proj_idx == 1:
+            return np.rot90(n, k=1)
+        else:
+            raise ValueError(f"Invalid projection index: {proj_idx}")
+
     # ------------------------------------------------------------------
     # Common solving interface
     # ------------------------------------------------------------------
@@ -107,30 +120,37 @@ class BaseForwardModelSolver(ABC):
         if probes is None:
             probes = self.probes
 
-        # Loop over angles and probes
-        for proj_idx in range(self.num_projections):
-            for angle_idx, angle in enumerate(self.probe_angles):
-                for scan_idx in range(self.num_probes):
-                    if self.verbose:
-                        start = time.time()
-                    # Solve for single probe
-                    u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
-                        scan_idx=scan_idx,
-                        proj_idx=proj_idx,
-                        n=n,
-                        mode=mode,
-                        rhs_block=rhs_block,
-                        probe=probes[angle_idx, scan_idx, :],
-                    ).reshape(*self.effective_shape)
+        # Precompute triplets for better parallelization
+        triplets = [
+            (p, a, s)
+            for p in range(self.num_projections)
+            for a in range(self.num_angles)
+            for s in range(self.num_probes)
+        ]
 
-                    if self.solve_reduced_domain:
-                        self.reset_cache()
-                    # Log time taken for each probe if verbose is True
-                    if self.verbose:
-                        self._log(
-                            f"[{self.solver_type}] solved probe {scan_idx + 1}/{self.num_probes} "
-                            f"at angle {angle} in {time.time() - start:.2f}s"
-                        )
+        # Loop over angles and probes
+        for proj_idx, angle_idx, scan_idx in triplets:
+            if self.verbose:
+                start = time.time()
+            # Solve for single probe
+            u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
+                scan_idx=scan_idx,
+                proj_idx=proj_idx,
+                n=n,
+                mode=mode,
+                rhs_block=rhs_block,
+                probe=probes[angle_idx, scan_idx, :],
+            ).reshape(*self.effective_shape)
+
+            if self.solve_reduced_domain:
+                self.reset_cache()
+
+            # Log time taken for each probe if verbose is True
+            if self.verbose:
+                self._log(
+                    f"[{self.solver_type}] solved probe {scan_idx + 1}/{self.num_probes} "
+                    f"at angle _idx {angle_idx} in {time.time() - start:.2f}s"
+                )
         return u
 
     # ------------------------------------------------------------------
