@@ -111,6 +111,7 @@ class BaseSimulationSpace(ABC):
         scan_path: Optional[ScanPath] = None,
         use_logging: bool = True,
         verbose: bool = False,
+        exact_ref_coeff: bool = False,
     ) -> None:
         """
         Initialize the base simulation space.
@@ -154,6 +155,7 @@ class BaseSimulationSpace(ABC):
         self.dimension = None  # To be set in subclass
         self.wave_length = wave_length
         self.spatial_limits = spatial_limits
+        self.exact_ref_coeff = exact_ref_coeff
 
         # Scan setup
         self.scan_points = scan_points
@@ -308,7 +310,7 @@ class BaseSimulationSpace(ABC):
         """Retrieve the reduced object for propagation."""
         pass
 
-    def create_object_contribution(self, n=None, grad=False, scan_index=0):
+    def create_object_contribution(self, n=None, grad=False, scan_index=0) -> np.ndarray:
         """
         Create the field of object slices in free space.
 
@@ -341,9 +343,9 @@ class BaseSimulationSpace(ABC):
 
         # Compute coefficient
         if grad:
-            coefficient = (self.k / 1j) * np.ones_like(n)  # (self.k / 1j) * n
+            coefficient = (self.k / 1j) * np.ones_like(n) if not self.exact_ref_coeff else (self.k / 1j) * n
         else:
-            coefficient = (self.k / 1j) * (n - 1)  # (self.k / 2j) * (n**2 - 1)
+            coefficient = (self.k / 1j) * (n - 1)  if not self.exact_ref_coeff else (self.k / 2j) * (n**2 - 1)
 
         # Compute all half time-step slices along the z-axis
         object_steps = (

@@ -222,6 +222,7 @@ class ReconstructorPWE(ReconstructorBase):
         fixed_step_size=None,
         tv_lambda_amp=0.0,
         low_pass_sigma_phase=0.0,
+        update_gradient = False
     ):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization.
         Parameters
@@ -271,7 +272,6 @@ class ReconstructorPWE(ReconstructorBase):
         probes = self.forward_model.probes  # Initial Simulated Probes
 
         # Precompute gradient operator
-        update_grad = False  # False if using approx n^2 -1 = 2(n -1)
         grad_Ak = -self.forward_model.get_gradient(n=self.nk)
 
         for i in range(max_iters):
@@ -280,7 +280,7 @@ class ReconstructorPWE(ReconstructorBase):
             # Compute the Forward Model
             uk = self.compute_forward_model(probes=probes)
 
-            if update_grad:
+            if self.simulation_space.exact_ref_coeff:
                 # Update gradient operator if nk has changed
                 grad_Ak = -self.forward_model.get_gradient(n=self.nk)
 
