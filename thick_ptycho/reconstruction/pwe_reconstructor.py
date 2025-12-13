@@ -222,7 +222,7 @@ class ReconstructorPWE(ReconstructorBase):
         fixed_step_size=None,
         tv_lambda_amp=0.0,
         low_pass_sigma_phase=0.0,
-        update_gradient = False
+        update_gradient=False,
     ):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization.
         Parameters
