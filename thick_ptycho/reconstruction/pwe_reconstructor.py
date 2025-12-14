@@ -70,7 +70,7 @@ class ReconstructorPWE(ReconstructorBase):
                 bc_type=bc_type,
                 results_dir=simulation_space.results_dir,
                 use_logging=False,
-                verbose=True,
+                verbose=False,
                 alpha=alpha,
                 atol=atol,
             )
