@@ -142,8 +142,8 @@ class BaseForwardModelSolver(ABC):
                 probe=probes[angle_idx, scan_idx, :],
             ).reshape(*self.effective_shape)
 
-            if self.solve_reduced_domain:
-                self.reset_cache()
+            # if self.solve_reduced_domain:
+            #     self.reset_cache()
 
             # Log time taken for each probe if verbose is True
             if self.verbose:

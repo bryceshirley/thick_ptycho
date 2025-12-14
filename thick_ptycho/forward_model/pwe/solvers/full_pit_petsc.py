@@ -1,8 +1,5 @@
 import time
 import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
-from scipy.fft import fft, ifft
 from dataclasses import dataclass, fields
 from typing import Optional
 
@@ -21,31 +18,10 @@ from thick_ptycho.forward_model.pwe.operators.finite_differences.boundary_condit
 )
 from thick_ptycho.forward_model.pwe.solvers.base_solver import BasePWESolver
 
-# ------------------------------------------------------------------
-#  Math Helpers (Reused from your code)
-# ------------------------------------------------------------------
-
-
-def _pintobj_matvec_exact(A_csr, B_csr, C, L, v):
-    """
-    Computes (A_hat @ v) with blocks.
-    Preserved exactly from original scipy implementation logic.
-    """
-    Nx = A_csr.shape[0]
-
-    # IMPORTANT: columns are z-slices => Fortran order
-    # Note: v coming from PETSc will be a flat buffer.
-    V = np.reshape(v, (Nx, L), order="F")
-
-    # Diagonal blocks: Ai[j] V[:, j] = (A - diag(C[:,j])) V[:,j]
-    U = (A_csr @ V) - (C * V)
-
-    # Subdiagonal blocks: j>=1, add -Bi[j] V[:, j-1] = -(B + diag(C[:,j])) V[:, j-1]
-    U[:, 1:] += -(B_csr @ V[:, :-1] + C[:, 1:] * V[:, :-1])
-
-    # Flatten back in the SAME ordering
-    return np.reshape(U, (Nx * L,), order="F")
-
+from thick_ptycho.forward_model.pwe.solvers.utils._pint_utils import (
+    _pintobj_matvec_exact,
+    AbstractPiTPreconditioner,
+)
 
 # ------------------------------------------------------------------
 #  PETSc Shell Contexts
@@ -78,76 +54,28 @@ class PWEGlobalOperatorShell:
         y_arr[:] = res
 
 
-class PiTPreconditionerShell:
+class PiTPreconditionerShell(AbstractPiTPreconditioner):
     """
     Context for the PETSc PCShell.
     Implements the alpha-Block circulant PiT preconditioner.
     """
 
-    def __init__(self, A, B, C, alpha, _log=None):
-        self.A = A
-        self.B = B
-        self.C = C
-        self.alpha = alpha
-        self.Nx = C.shape[0]
-        self.L = C.shape[1]
+    def __init__(self, A, B, N, L, alpha, _log=None):
+        super().__init__(A, B, N, L, alpha, _log=_log)
 
-        self._log = _log if _log is not None else print
-
-        # --- Initialization Logic (Moved from setup) ---
-        dtype = np.complex128
-
-        # 1. Compute spatial mean C_bar over z/time
-        C_avg = np.mean(self.C, axis=1)
-        C_bar = sp.diags(C_avg, 0, format="csr")
-
-        # 2. Build averaged blocks
-        A_bar = (self.A - C_bar).tocsr()
-        B_bar = (self.B + C_bar).tocsr()
-
-        alpha_root = self.alpha ** (1.0 / self.L)
-        js = np.arange(self.L)
-
-        # 3. Roots of unity scaled by alpha
-        omegas = alpha_root * np.exp(2j * np.pi * js / self.L)
-
-        # 4. Pre-factorize blocks (IMMEDIATELY populates self.lus)
-        time_start = time.time()
-        self.lus = [
-            spla.splu((A_bar - (z * B_bar)).astype(dtype).tocsc()) for z in omegas
-        ]
-        time_end = time.time()
-        self._log(f"PiT Preconditioner setup time: {time_end - time_start:.2f} s")
-
-        # 5. Calculate Gamma
-        self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(dtype)
-
+    # In PiTPreconditionerShell.apply:
     def apply(self, pc, X, Y):
-        """Apply the preconditioner: M^-1 * x"""
         x_arr = X.array_r
         y_arr = Y.array
 
-        dtype = np.complex128
+        # Convert x_arr to c++ array
+        v_c_order = np.asarray(x_arr, dtype=self.dtype).copy(order="C")
 
-        # 1. Reshape v into L blocks
-        V = np.asarray(x_arr, dtype=dtype).reshape(self.Nx, self.L, order="F")
+        # 2. Apply preconditioner using the C-ordered data
+        Y_res = self._apply_prec(v_c_order)
 
-        # 2. Scale by Gamma and IFFT
-        V_scaled = V * self.gamma[None, :]
-        V_hat = ifft(V_scaled, axis=1, norm="ortho")
-
-        # 3. Block Solve
-        X_hat = np.zeros_like(V_hat)
-        for j in range(self.L):
-            # This will now work because self.lus is populated in __init__
-            X_hat[:, j] = self.lus[j].solve(V_hat[:, j])
-
-        # 4. FFT and Inverse Scale
-        Y_res = fft(X_hat, axis=1, norm="ortho")
-        Y_res = Y_res / self.gamma[None, :]
-
-        # 5. Flatten back
-        y_arr[:] = Y_res.reshape((self.Nx * self.L), order="F")
+        # 3. Flatten back (Y_res is (L, N) C-order -> F-order vector)
+        y_arr[:] = Y_res.T.reshape(self.L * self.N, order="F")
 
 
 # ------------------------------------------------------------------
@@ -164,7 +92,7 @@ class PWEFullPinTSolverCache:
     cached_n: Optional[np.ndarray] = None
     # Store PETSc Mat and PC contexts/shells
     A_shell_ctx: Optional[PWEGlobalOperatorShell] = None
-    M_shell_ctx: Optional[PiTPreconditionerShell] = None
+    u0_cache: Optional[np.ndarray] = None
     b: Optional[np.ndarray] = None
 
     def reset(self, n: Optional[np.ndarray] = None):
@@ -212,6 +140,22 @@ class PWEPetscFullPinTSolver(BasePWESolver):
                 "WARNING: PETSc is not configured with complex scalars. This solver requires complex numbers."
             )
 
+        (
+            self.A_step,
+            self.B_step,
+            _,
+        ) = self.pwe_finite_differences._get_or_generate_step_matrices()
+
+        self.preconditioner = PiTPreconditionerShell(
+            A=self.A_step,
+            B=self.B_step,
+            N=self.block_size,
+            L=self.nz - 1,
+            alpha=alpha,
+            _log=self._log,
+        )
+        self.preconditioner.factorize_blocks()
+
     def _construct_solve_cache(
         self,
         n: Optional[np.ndarray] = None,
@@ -222,10 +166,10 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         """
         Prepare the PETSc Shell Contexts.
         """
-        A_step, B_step, _ = self.pwe_finite_differences._get_or_generate_step_matrices()
+
         L = self.nz - 1
-        A_csr = A_step.tocsr()
-        B_csr = B_step.tocsr()
+        A_csr = self.A_step.tocsr()
+        B_csr = self.B_step.tocsr()
 
         C = self.simulation_space.create_object_contribution(
             n=n, scan_index=scan_idx
@@ -241,19 +185,23 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         A_ctx = PWEGlobalOperatorShell(A_csr, B_csr, C, L)
 
         # Create the Preconditioner Shell Context
-        M_ctx = PiTPreconditionerShell(A_step, B_step, C, self.alpha, _log=self._log)
+        # self.preconditioner.update(C)
 
         # Store in cache
-        cache = self.projection_cache[proj_idx].modes[mode]
-        cache.A_shell_ctx = A_ctx
-        cache.M_shell_ctx = M_ctx
-        cache.cached_n = n
+        self.projection_cache[proj_idx].modes[mode].A_shell_ctx = A_ctx
 
         # Construct RHS (numpy)
-        if cache.b is None and self.test_bcs is None:
-            cache.b = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
+        if (
+            self.projection_cache[proj_idx].modes[mode].b is None
+            and self.test_bcs is None
+        ):
+            self.projection_cache[proj_idx].modes[
+                mode
+            ].b = self.pwe_finite_differences.setup_homogeneous_forward_model_rhs()
         elif self.test_bcs is not None:
-            cache.b = self.test_bcs.test_exact_impedance_forward_model_rhs()
+            self.projection_cache[proj_idx].modes[
+                mode
+            ].b = self.test_bcs.test_exact_impedance_forward_model_rhs()
 
     def _solve_single_probe_impl(
         self,
@@ -264,7 +212,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         rhs_block: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         self._log("Setting up PETSc system...")
-
+        time_start_setup = time.perf_counter()
         cache = self.projection_cache[proj_idx].modes[mode]
 
         # 1. Prepare RHS
@@ -282,14 +230,17 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         N_total = Nx * L
 
         # 3. Create PETSc Vectors
-        # Assuming sequential run or simple MPI distribution.
-        # For advanced MPI usage, one might need `comm=PETSc.COMM_WORLD`
         x_sol = PETSc.Vec().createSeq(N_total, comm=PETSc.COMM_SELF)
         b_vec = PETSc.Vec().createSeq(N_total, comm=PETSc.COMM_SELF)
-
-        # Fill RHS vector
-        # Ensure complex128 and alignment
         b_vec.setArray(b_numpy.astype(np.complex128, copy=False))
+
+        # --- INITIAL GUESS ---
+        if cache.u0_cache is not None:
+            x_sol.setArray(cache.u0_cache.astype(np.complex128, copy=False))
+            x0_is_nonzero = True
+        else:
+            x_sol.set(0)
+            x0_is_nonzero = False
 
         # 4. Create PETSc Matrix (Shell)
         A_mat = PETSc.Mat().createPython(
@@ -301,32 +252,36 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         ksp = PETSc.KSP().create(comm=PETSc.COMM_SELF)
         ksp.setOperators(A_mat)
         ksp.setType(PETSc.KSP.Type.GMRES)
-
-        # Configure GMRES (Restart, etc)
-        # ksp.setGMRESRestart(30) # Default is usually 30
+        ksp.setInitialGuessNonzero(x0_is_nonzero)
 
         # 6. Create PC (Preconditioner)
         pc = ksp.getPC()
         pc.setType(PETSc.PC.Type.PYTHON)
-        pc.setPythonContext(cache.M_shell_ctx)
+        # ksp.setType(PETSc.KSP.Type.GMRES)
+        pc.setPythonContext(self.preconditioner)
+        pc.setReusePreconditioner(True)
 
-        # Set Right Preconditioning as in your original code
         ksp.setPCSide(PETSc.PC.Side.RIGHT)
+        ksp.setNormType(PETSc.KSP.NormType.UNPRECONDITIONED)
 
         # Set Tolerances
-        ksp.setTolerances(atol=self.atol, rtol=1e-30, max_it=1000)
-
-        # Allow command line overrides (e.g., -ksp_monitor)
+        ksp.setConvergenceHistory(True)
+        ksp.setTolerances(atol=self.atol, rtol=1e-30, max_it=20)
         ksp.setFromOptions()
+        time_end_setup = time.perf_counter()
+        self._log(
+            f"PETSc system setup time: {time_end_setup - time_start_setup:.2f} seconds."
+        )
 
         # 7. Solve
         self._log("Solving with PETSc GMRES...", flush=True)
 
         # Optional: Custom Monitor for logging
-        def monitor(ksp, it, rnorm):
-            self._log(f"  Iter {it:3d} | Residual: {rnorm:.3e}")
+        def monitor_standard(ksp, it, rnorm):
+            # rnorm is the *currently tracked norm* (NORM_NONE, Unpreconditioned)
+            self._log(f"  Iter {it:3d} | Residual: {rnorm:.3e}")
 
-        ksp.setMonitor(monitor)
+        ksp.setMonitor(monitor_standard)
 
         t0 = time.perf_counter()
         ksp.solve(b_vec, x_sol)
@@ -340,10 +295,13 @@ class PWEPetscFullPinTSolver(BasePWESolver):
             f"Time: {t1 - t0:.2f} s. Iters: {iters}. Reason: {reason}", flush=True
         )
 
-        # 8. Retrieve Solution
-        u_flat = x_sol.array
+        # 9. Retrieve Solution
+        u_flat = x_sol.array  # Auxiliary solution y
 
-        # Reshape and concatenate with initial condition (same as original)
+        # Cache u_flat_y (the auxiliary solution y) for the next KSP solve as x0
+        self.projection_cache[proj_idx].modes[mode].u0_cache = u_flat
+
+        # Reshape and concatenate with initial condition
         u = u_flat.reshape(self.nz - 1, self.block_size).T
         initial = probe.reshape(self.block_size, 1)
 
