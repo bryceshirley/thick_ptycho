@@ -112,6 +112,7 @@ class BaseSimulationSpace(ABC):
         use_logging: bool = True,
         verbose: bool = False,
         exact_ref_coeff: bool = False,
+        empty_space_px: int = 0,
     ) -> None:
         """
         Initialize the base simulation space.
@@ -186,6 +187,7 @@ class BaseSimulationSpace(ABC):
             use_logging=use_logging,
             verbose=verbose,
         )
+        self.empty_space_px = empty_space_px
 
     def _configure_z_axis(self, points_per_wavelength: int, nz: Optional[int]) -> None:
         """Set up the propagation axis."""
@@ -355,6 +357,22 @@ class BaseSimulationSpace(ABC):
                 (self.k / 1j) * (n - 1)
                 if not self.exact_ref_coeff
                 else (self.k / 2j) * (n**2 - 1)
+            )
+
+        # Add Zeros Padding
+        if self.empty_space_px > 0:
+            # for the transverse dimension (axis 0).
+            coefficient = np.pad(
+                coefficient,
+                (
+                    (
+                        self.empty_space_px,
+                        self.empty_space_px,
+                    ),  # Padding on transverse axis (axis 0)
+                    (0, 0),  # No padding on z-axis (axis 1)
+                ),
+                mode="constant",
+                constant_values=0.0,  # FIXED: Use a scalar (float 0.0) for zero padding.
             )
 
         # Compute all half time-step slices along the z-axis

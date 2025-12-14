@@ -94,10 +94,23 @@ class PtychoProbes:
         probes = self.create_empty_probe_stack()
         for a_idx, tilt in enumerate(self.probe_tilts):
             for s_idx in range(self.num_probes):
-                probes[a_idx, s_idx, ...] = self.make_single_probe(
+                probe = self.make_single_probe(
                     scan=s_idx,
                     probe_tilt=tilt,
                 )
+                # The probe is 1D, so the pad_width must only contain one pair of (left, right) values.
+                if self.simulation_space.empty_space_px > 0:
+                    probes[a_idx, s_idx, ...] = np.pad(
+                        probe,
+                        (
+                            self.simulation_space.empty_space_px,
+                            self.simulation_space.empty_space_px,
+                        ),
+                        mode="constant",
+                        constant_values=0.0,
+                    )
+                else:
+                    probes[a_idx, s_idx, ...] = probe
         return probes
 
     def create_empty_probe_stack(self):

@@ -1,4 +1,3 @@
-import numpy as np
 import scipy.sparse as sp
 
 
@@ -16,15 +15,15 @@ class BoundaryConditions:
         self.a = 1j / (2 * self.k)
 
         if self.simulation_space.dimension == 2:
-            self.nx = simulation_space.effective_nx
+            self.nx = simulation_space.effective_shape[0]
         else:
             self.dy = simulation_space.dy
             self.nx, self.ny = (
-                simulation_space.effective_nx,
-                simulation_space.effective_ny,
+                simulation_space.effective_shape[0],
+                simulation_space.effective_shape[1],
             )
-
         self.block_size = self.simulation_space.block_size
+
         self.dx = simulation_space.dx
 
         r_x = 0.5 * simulation_space.dz / self.dx**2
@@ -128,31 +127,4 @@ class BoundaryConditions:
         Axy[-self.nx :, -self.nx :] -= self.beta_y * Ix
         Bxy[: self.nx, : self.nx] += self.beta_y * Ix
         Bxy[-self.nx :, -self.nx :] += self.beta_y * Ix
-        return Axy.tocsr(), Bxy.tocsr()
-
-    def _apply_2D_impedance2(self, Axy, Bxy):
-        # start from first-order Robin on all boundaries
-        Axy, Bxy = self._apply_2D_impedance(Axy, Bxy)
-
-        Axy = Axy.tolil()
-
-        # Tangential Laplacians
-        Lx = sp.diags([1, -2, 1], [-1, 0, 1], shape=(self.nx, self.nx)) / (self.dx**2)
-        Ly = sp.diags([1, -2, 1], [-1, 0, 1], shape=(self.ny, self.ny)) / (self.dy**2)
-
-        # Selectors for boundaries
-        Sy = sp.diags(
-            ([1] + [0] * (self.ny - 2) + [1]), 0, shape=(self.ny, self.ny)
-        )  # y=0, y=ny-1
-        sel_x = np.zeros(self.nx)
-        sel_x[0] = 1
-        sel_x[-1] = 1
-        Sx = sp.diags(sel_x, 0, shape=(self.nx, self.nx))  # x=0, x=nx-1
-
-        # y-boundaries → tangential is x: add gamma * (Sy ⊗ Lx)
-        Axy += self.gamma * sp.kron(Sy, Lx)
-
-        # x-boundaries → tangential is y: add gamma * (Ly ⊗ Sx)
-        Axy += self.gamma * sp.kron(Ly, Sx)
-
         return Axy.tocsr(), Bxy.tocsr()

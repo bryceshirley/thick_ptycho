@@ -30,10 +30,9 @@ def plot_data(
         rng = np.random.default_rng(seed=42)
         data_noisy = data.copy() + rng.poisson(np.abs(data))
 
-        simulation_space.viewer.plot_two_panels(
-            exitwaves.T,
-            view="phase_amp",
-            title="Exit Waves PWE",
+        simulation_space.viewer.plot_single_panel(
+            exitwaves.T,  # Use ifftshift to move zero frequency to the corner
+            title="Update Exit Waves PWE",
             xlabel="Scan Number #",
             ylabel="x (px)",
         )
@@ -60,7 +59,7 @@ def plot_data(
         )
         for p in probe_indices:
             plt.plot(
-                range(simulation_space.effective_nx),
+                range(simulation_space.effective_shape[0]),
                 np.abs(probes[0, p, :]),
                 label=f"probe {p}",
             )
@@ -72,7 +71,7 @@ def plot_data(
 
         for p in probe_indices:
             plt.plot(
-                range(simulation_space.effective_nx),
+                range(simulation_space.effective_shape[0]),
                 np.abs(exitwaves[p, :]),
                 label=f"probe {p}",
             )
@@ -85,7 +84,7 @@ def plot_data(
         plt.figure(figsize=(8, 4))
 
         plt.plot(
-            range(simulation_space.effective_nx),
+            range(simulation_space.effective_shape[0]),
             np.abs(probes[0, simulation_space.num_probes // 2, :]),
             label=f"probe {simulation_space.num_probes // 2}",
         )
@@ -96,7 +95,7 @@ def plot_data(
         plt.show()
 
         plt.plot(
-            range(simulation_space.effective_nx),
+            range(simulation_space.effective_shape[0]),
             np.abs(exitwaves[simulation_space.num_probes // 2, :]),
             label=f"probe {simulation_space.num_probes // 2}",
         )
@@ -163,7 +162,7 @@ def plot_probes(simulation_space, ptycho_probes):
     )
     for p in probe_indices:
         plt.plot(
-            range(simulation_space.effective_nx),
+            range(simulation_space.effective_shape[0]),
             np.abs(ptycho_probes[0, p, :]),
             label=f"probe {p}",
         )

@@ -27,20 +27,15 @@ class PWEForwardModel:
         self.solve_reduced_domain = simulation_space.solve_reduced_domain
         self.signal_strength = 1.0  # reserved for future scaling
 
-        if self.simulation_space.dimension == 2:
-            self.nx = simulation_space.effective_nx
-        else:
-            self.nx, self.ny = (
-                simulation_space.effective_nx,
-                simulation_space.effective_ny,
-            )
-
-        self.block_size = self.simulation_space.block_size
-
         # Boundary conditions operator
         self.differiential_operator_matrices = OperatorMatrices(
             self.simulation_space, bc_type=bc_type
         )
+        self.nx = self.differiential_operator_matrices.nx
+        self.block_size = self.differiential_operator_matrices.block_size
+
+        if self.simulation_space.dimension == 3:
+            self.ny = self.differiential_operator_matrices.ny
 
         # Caching control
         self.enable_caching = not self.solve_reduced_domain

@@ -162,6 +162,7 @@ class SimulationConfig:
     use_logging: bool = True
     verbose: bool = False
     exact_ref_coeff: bool = False
+    empty_space_px: bool = False
 
     def __post_init__(self):
         """Validate configuration parameters after initialization."""

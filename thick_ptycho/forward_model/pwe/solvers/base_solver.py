@@ -58,7 +58,6 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
 
         self.bc_type = bc_type
         self.pwe_finite_differences = PWEForwardModel(simulation_space, bc_type=bc_type)
-        self.block_size = self.pwe_finite_differences.block_size
 
         # Projection handling (for tomographic cases)
         self.create_projection_cache()

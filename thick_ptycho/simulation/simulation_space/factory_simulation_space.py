@@ -30,4 +30,5 @@ def create_simulation_space(config: SimulationConfig):
         use_logging=config.use_logging,
         verbose=config.verbose,
         exact_ref_coeff=config.exact_ref_coeff,
+        empty_space_px=config.empty_space_px,
     )
