@@ -34,12 +34,13 @@ class PWEGlobalOperatorShell:
     Wraps the matrix-vector multiplication of the full space-time system.
     """
 
-    def __init__(self, A_csr, B_csr, C, L):
+    def __init__(self, A_csr, B_csr, C, L, mode="forward"):
         self.A_csr = A_csr
         self.B_csr = B_csr
         self.C = C
         self.L = L
         self.Nx = A_csr.shape[0]
+        self.mode = mode
 
     def mult(self, mat, X, Y):
         # Access raw arrays from PETSc vectors
@@ -48,7 +49,9 @@ class PWEGlobalOperatorShell:
         y_arr = Y.array
 
         # Call the numpy/scipy logic
-        res = _pintobj_matvec_exact(self.A_csr, self.B_csr, self.C, self.L, x_arr)
+        res = _pintobj_matvec_exact(
+            self.A_csr, self.B_csr, self.C, self.L, x_arr, mode=self.mode
+        )
 
         # Copy result back to PETSc vector
         y_arr[:] = res
@@ -60,8 +63,8 @@ class PiTPreconditionerShell(AbstractPiTPreconditioner):
     Implements the alpha-Block circulant PiT preconditioner.
     """
 
-    def __init__(self, A, B, N, L, alpha, _log=None):
-        super().__init__(A, B, N, L, alpha, _log=_log)
+    def __init__(self, A, B, N, L, alpha, _log=None, mode="forward"):
+        super().__init__(A, B, N, L, alpha, _log=_log, mode=mode)
 
     # In PiTPreconditionerShell.apply:
     def apply(self, pc, X, Y):
@@ -156,12 +159,13 @@ class PWEPetscFullPinTSolver(BasePWESolver):
             _log=self._log,
         )
         self.preconditioner["adjoint"] = PiTPreconditionerShell(
-            A=self.A_step.conj().T,
-            B=self.B_step.conj().T,
+            A=self.A_step,
+            B=self.B_step,
             N=self.block_size,
             L=self.nz - 1,
             alpha=alpha,
             _log=self._log,
+            mode="adjoint",
         )
 
     def _construct_solve_cache(
@@ -183,14 +187,8 @@ class PWEPetscFullPinTSolver(BasePWESolver):
             n=n, scan_index=scan_idx
         ).reshape(-1, self.nz - 1)
 
-        # Adjoint logic
-        if mode in {"adjoint", "adjoint_rotated"}:
-            A_csr = A_csr.conj().T
-            B_csr = B_csr.conj().T
-            C = np.flip(C.conj(), axis=1)
-
         # Create the Operator Shell Context
-        A_ctx = PWEGlobalOperatorShell(A_csr, B_csr, C, L)
+        A_ctx = PWEGlobalOperatorShell(A_csr, B_csr, C, L, mode=mode)
 
         # Store in cache
         self.projection_cache[proj_idx].modes[mode].A_shell_ctx = A_ctx
@@ -225,11 +223,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
 
         # 1. Prepare RHS
         if rhs_block is not None:
-            if mode == "adjoint":
-                b_numpy = np.flip(rhs_block, axis=1)
-            else:
-                # If not adjoint, use the block as is.
-                b_numpy = rhs_block
+            b_numpy = rhs_block
         else:
             probe_contribution = self.pwe_finite_differences.probe_contribution(
                 scan_index=scan_idx, probe=probe
@@ -247,7 +241,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         b_vec.setArray(b_numpy.astype(np.complex128, copy=False))
 
         # --- INITIAL GUESS ---
-        if cache.u0_cache is not None:
+        if cache.u0_cache is not None and mode != "adjoint":
             x_sol.setArray(cache.u0_cache.astype(np.complex128, copy=False))
             x0_is_nonzero = True
         else:
@@ -279,6 +273,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
 
         # Set Tolerances
         ksp.setConvergenceHistory(True)
+        # Allow restarts
         ksp.setTolerances(atol=self.atol, rtol=1e-30, max_it=20)
         ksp.setFromOptions()
         time_end_setup = time.perf_counter()
@@ -324,9 +319,9 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         x_sol.destroy()
         b_vec.destroy()
 
-        u = np.concatenate([initial, u], axis=1)
+        u = np.concatenate([initial, u], axis=1)  # Array for z=0 to z=nz-1
 
-        if mode == "adjoint":
-            u = np.flip(u, axis=1)
+        # Ensure C-contiguous output
+        u = np.ascontiguousarray(u)
 
         return u

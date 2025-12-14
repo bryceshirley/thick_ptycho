@@ -63,6 +63,17 @@ class ReconstructorPWE(ReconstructorBase):
                 use_logging=simulation_space.use_logging,
                 verbose=simulation_space.verbose,
             )
+            self.forward_model_pint = PWEPetscFullPinTSolver(
+                simulation_space,
+                self.ptycho_probes,
+                bc_type=bc_type,
+                results_dir=simulation_space.results_dir,
+                use_logging=False,
+                verbose=False,
+                alpha=alpha,
+                atol=atol,
+            )
+            self.forward_model_pint.preconditioner["forward"].factorize_blocks()
         if solver_type == "full":
             self.forward_model = PWEPetscFullPinTSolver(
                 simulation_space,
@@ -92,7 +103,7 @@ class ReconstructorPWE(ReconstructorBase):
                 n=self.nk, modes=("forward", "adjoint")
             )
         uk = self.convert_to_vector_form(
-            self.forward_model.solve(n=self.nk, probes=probes)
+            self.forward_model_pint.solve(n=self.nk, probes=probes)
         )
 
         return uk
@@ -120,6 +131,8 @@ class ReconstructorPWE(ReconstructorBase):
 
             # 2) Flatten the spatial field block
             backprop = backprop[:, :-1].T.ravel()
+            # import matplotlib.pyplot as plt
+            # plt.imshow(np.abs(backprop).reshape((self.nz-1, self.simulation_space.effective_nx)).T);plt.colorbar;plt.title("adjoint solution"); plt.savefig("adjoint_amplitude.png")
 
             # 3) Compute contribution of current frame
             g_base = grad_A @ uk[idx]
@@ -132,7 +145,7 @@ class ReconstructorPWE(ReconstructorBase):
             if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
                 grad_update_re = self.rotate_back(grad_update_re)
                 grad_update_im = self.rotate_back(grad_update_im)
-
+            # plt.imshow(np.abs(grad_update_re).reshape((self.nz-1, self.simulation_space.effective_nx)).T);plt.colorbar();plt.title("gradient update"); plt.savefig("grad_amplitude.png"); plt.close()
             # 6) Accumulate gradient
             grad_real = self.accumulate_gradient(grad_update_re, scan_idx, grad_real)
             grad_imag = self.accumulate_gradient(grad_update_im, scan_idx, grad_imag)
@@ -184,7 +197,7 @@ class ReconstructorPWE(ReconstructorBase):
             probe = self.ptycho_probes[angle_idx, scan_idx]
 
             # 3) Solve forward model for delta_u
-            delta_u = self.forward_model._solve_single_probe(
+            delta_u = self.forward_model_pint._solve_single_probe(
                 scan_idx=scan_idx,
                 proj_idx=proj_idx,
                 probe=probe,

@@ -24,29 +24,55 @@ def _solve_block(j_vhatj):
     return spla.spsolve(A_j, v_hat_j)
 
 
-def _pintobj_matvec_exact(A_csr, B_csr, C, L, v):
-    """
-    Computes (A_hat @ v) with blocks:
-      Ai[j] = A - diag(C[:, j])
-      Bi[j] = B + diag(C[:, j])
-    and subdiagonal is -Bi[j] at block-row j (j>=1).
-    Shapes:
-      A_csr, B_csr: (Nx, Nx)
-      C: (Nx, L)
-      v: (Nx*L,)
-    """
-    Nx = A_csr.shape[0]
+# def _pintobj_matvec_exact(A_csr, B_csr, C, L, v):
+#     """
+#     Computes (A_hat @ v) with blocks:
+#       Ai[j] = A - diag(C[:, j])
+#       Bi[j] = B + diag(C[:, j])
+#     and subdiagonal is -Bi[j] at block-row j (j>=1).
+#     Shapes:
+#       A_csr, B_csr: (Nx, Nx)
+#       C: (Nx, L)
+#       v: (Nx*L,)
+#     """
+#     Nx = A_csr.shape[0]
 
-    # IMPORTANT: columns are z-slices ⇒ Fortran order
+#     # IMPORTANT: columns are z-slices ⇒ Fortran order
+#     V = np.reshape(v, (Nx, L), order="F")
+
+#     # Diagonal blocks: Ai[j] V[:, j] = (A - diag(C[:,j])) V[:,j]
+#     U = (A_csr @ V) - (C * V)
+
+#     # Subdiagonal blocks: j>=1, add -Bi[j] V[:, j-1] = -(B + diag(C[:,j])) V[:, j-1]
+#     U[:, 1:] += -(B_csr @ V[:, :-1] + C[:, 1:] * V[:, :-1])
+
+#     # Flatten back in the SAME ordering
+#     return np.reshape(U, (Nx * L,), order="F")
+
+
+def _pintobj_matvec_exact(A, B, C, L, v, mode="forward"):
+    Nx = A.shape[0]
     V = np.reshape(v, (Nx, L), order="F")
+    U = np.zeros_like(V)
 
-    # Diagonal blocks: Ai[j] V[:, j] = (A - diag(C[:,j])) V[:,j]
-    U = (A_csr @ V) - (C * V)
+    if mode == "forward":
+        # Diagonal
+        U[:, :] += (A @ V) - (C * V)
+        # Subdiagonal
+        U[:, 1:] += -(B @ V[:, :-1] + C[:, 1:] * V[:, :-1])
 
-    # Subdiagonal blocks: j>=1, add -Bi[j] V[:, j-1] = -(B + diag(C[:,j])) V[:, j-1]
-    U[:, 1:] += -(B_csr @ V[:, :-1] + C[:, 1:] * V[:, :-1])
+    elif mode == "adjoint":
+        A_H = A.conj().T
+        B_H = B.conj().T
+        Cc = C.conj()
 
-    # Flatten back in the SAME ordering
+        # Diagonal
+        U[:, :] += (A_H @ V) - (Cc * V)
+        # Superdiagonal: contribution from next slice
+        U[:, :-1] += -(B_H @ V[:, 1:] + Cc[:, 1:] * V[:, 1:])
+    else:
+        raise ValueError("mode must be 'forward' or 'adjoint'")
+
     return np.reshape(U, (Nx * L,), order="F")
 
 
@@ -55,7 +81,7 @@ class AbstractPiTPreconditioner(ABC):
     Implements the alpha-Block circulant PiT preconditioner.
     """
 
-    def __init__(self, A, B, N, L, alpha, _log=None):
+    def __init__(self, A, B, N, L, alpha, _log=None, mode="forward"):
         self.A = A
         self.B = B
         self.A_bar = A.tocsr()
@@ -63,9 +89,13 @@ class AbstractPiTPreconditioner(ABC):
         self.alpha = alpha
         self.N, self.L = N, L
         self.dtype = np.complex128
-
+        self.lus = None  # will hold the factorized blocks
         self._log = _log if _log is not None else print
+        self.mode = mode
 
+        if self.mode == "adjoint":
+            self.A_bar = self.A_bar.conj().T.tocsr()
+            self.B_bar = self.B_bar.conj().T.tocsr()
         self.setup()
 
     def _apply_prec(self, v):
@@ -84,7 +114,7 @@ class AbstractPiTPreconditioner(ABC):
 
     def _factorized_solve(self, X_hat):
         if self.lus is None:
-            raise RuntimeError("PiT Preconditioner blocks have not been factorized.")
+            self.factorize_blocks()
         for j in range(self.L):
             X_hat[j, :] = self.lus[j].solve(X_hat[j, :])
         return X_hat
@@ -95,6 +125,9 @@ class AbstractPiTPreconditioner(ABC):
 
         js = np.arange(self.L)
         self.omegas = np.exp(2j * np.pi * js / self.L) * alpha_root
+
+        if self.mode == "adjoint":
+            self.omegas = np.conj(self.omegas)
 
         # Rescale Matrix gamma
         self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(self.dtype)
@@ -108,6 +141,10 @@ class AbstractPiTPreconditioner(ABC):
         # --- Build averaged blocks ---
         self.A_bar = (self.A - C_bar).tocsr()
         self.B_bar = (self.B + C_bar).tocsr()
+
+        if self.mode == "adjoint":
+            self.A_bar = self.A_bar.conj().T.tocsr()
+            self.B_bar = self.B_bar.conj().T.tocsr()
 
         # Pre-factorize blocks
         self.factorize_blocks()
