@@ -63,17 +63,6 @@ class ReconstructorPWE(ReconstructorBase):
                 use_logging=simulation_space.use_logging,
                 verbose=simulation_space.verbose,
             )
-            self.forward_model_pint = PWEPetscFullPinTSolver(
-                simulation_space,
-                self.ptycho_probes,
-                bc_type=bc_type,
-                results_dir=simulation_space.results_dir,
-                use_logging=False,
-                verbose=False,
-                alpha=alpha,
-                atol=atol,
-            )
-            self.forward_model_pint.preconditioner["forward"].factorize_blocks()
         if solver_type == "full":
             self.forward_model = PWEPetscFullPinTSolver(
                 simulation_space,
@@ -103,7 +92,7 @@ class ReconstructorPWE(ReconstructorBase):
                 n=self.nk, modes=("forward", "adjoint")
             )
         uk = self.convert_to_vector_form(
-            self.forward_model_pint.solve(n=self.nk, probes=probes)
+            self.forward_model.solve(n=self.nk, probes=probes)
         )
 
         return uk
@@ -197,7 +186,7 @@ class ReconstructorPWE(ReconstructorBase):
             probe = self.ptycho_probes[angle_idx, scan_idx]
 
             # 3) Solve forward model for delta_u
-            delta_u = self.forward_model_pint._solve_single_probe(
+            delta_u = self.forward_model._solve_single_probe(
                 scan_idx=scan_idx,
                 proj_idx=proj_idx,
                 probe=probe,

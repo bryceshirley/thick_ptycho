@@ -22,8 +22,8 @@ class PiTPreconditioner(AbstractPiTPreconditioner):
     Implements the alpha-Block circulant PiT preconditioner.
     """
 
-    def __init__(self, A, B, N, L, alpha, _log=None):
-        super().__init__(A, B, N, L, alpha, _log=_log)
+    def __init__(self, A, B, N, L, alpha, _log=None, mode="forward"):
+        super().__init__(A, B, N, L, alpha, _log=_log, mode=mode)
 
     def apply(self, v):
         def apply_prec(v):

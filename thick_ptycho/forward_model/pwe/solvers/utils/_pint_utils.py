@@ -76,83 +76,196 @@ def _pintobj_matvec_exact(A, B, C, L, v, mode="forward"):
     return np.reshape(U, (Nx * L,), order="F")
 
 
+# class AbstractPiTPreconditioner(ABC):
+#     """
+#     Implements the alpha-Block circulant PiT preconditioner.
+#     """
+
+#     def __init__(self, A, B, N, L, alpha, _log=None, mode="forward"):
+#         self.A = A
+#         self.B = B
+#         self.A_bar = A.tocsr()
+#         self.B_bar = B.tocsr()
+#         self.alpha = alpha
+#         self.N, self.L = N, L
+#         self.dtype = np.complex128
+#         self.lus = None  # will hold the factorized blocks
+#         self._log = _log if _log is not None else print
+#         self.mode = mode
+
+#         if self.mode == "adjoint":
+#             self.A_bar = self.A_bar.conj().T.tocsr()
+#             self.B_bar = self.B_bar.conj().T.tocsr()
+#         self.setup()
+
+#     def _apply_prec(self, v):
+#         X = np.asarray(v, dtype=self.dtype).reshape(self.L, self.N)
+
+#         # Apply gamma scaling depending on mode
+#         if self.mode == "forward":
+#             X = self.gamma[:, None] * X
+#         else:
+#             X = np.conj(self.gamma[:, None]) * X
+
+#         X_hat = ifft(X, axis=0, norm="ortho")
+#         X_hat = self._factorized_solve(X_hat)
+#         Y = fft(X_hat, axis=0, norm="ortho")
+
+#         if self.mode == "forward":
+#             Y = Y / self.gamma[:, None]
+#         else:
+#             Y = Y / np.conj(self.gamma[:, None])
+
+#         return Y
+
+
+#     def _factorized_solve(self, X_hat):
+#         if self.lus is None:
+#             self.factorize_blocks()
+#         for j in range(self.L):
+#             X_hat[j, :] = self.lus[j].solve(X_hat[j, :])
+#         return X_hat
+
+#     def setup(self):
+#         """Setup method required by PETSc PCShell interface. No-op since we do setup in __init__."""
+#         alpha_root = self.alpha ** (1.0 / self.L)
+
+#         js = np.arange(self.L)
+#         self.omegas = np.exp(2j * np.pi * js / self.L) * alpha_root
+
+#         if self.mode == "adjoint":
+#             self.omegas = np.conj(self.omegas)
+
+#         # Rescale Matrix gamma
+#         self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(self.dtype)
+
+#     def update(self, C):
+#         """Setup the PiT preconditioner with given C matrix."""
+#         # --- Compute spatial mean C_bar over z/time (Nx-vector) ---
+#         C_avg = np.mean(C, axis=1)
+#         C_bar = sp.diags(C_avg, 0, format="csr")  # diag(C_bar)
+
+#         # --- Build averaged blocks ---
+#         self.A_bar = (self.A - C_bar).tocsr()
+#         self.B_bar = (self.B + C_bar).tocsr()
+
+#         if self.mode == "adjoint":
+#             self.A_bar = self.A_bar.conj().T.tocsr()
+#             self.B_bar = self.B_bar.conj().T.tocsr()
+
+#         # Pre-factorize blocks
+#         self.factorize_blocks()
+
+#     def factorize_blocks(self):
+#         """Pre-factorize the blocks of the PiT preconditioner."""
+#         self._log("Pre-factorizing PiT preconditioner blocks...")
+#         time_start = time.perf_counter()
+#         self.lus = [
+#             spla.splu((self.A_bar - (z * self.B_bar)).astype(self.dtype))
+#             for z in self.omegas
+#         ]
+#         time_end = time.perf_counter()
+#         self._log(
+#             f"PiT preconditioner block factorization time: {time_end - time_start:.2f} seconds.\n"
+#         )
+
+#     @abstractmethod
+#     def apply(self, *args, **kwargs):
+#         pass
+
+
+# --- Fixed AbstractPiTPreconditioner (Forward-Only Logic) ---
+
+
 class AbstractPiTPreconditioner(ABC):
     """
-    Implements the alpha-Block circulant PiT preconditioner.
+    Implements the alpha-Block circulant PiT preconditioner (Forward Pass Only).
     """
 
     def __init__(self, A, B, N, L, alpha, _log=None, mode="forward"):
+        # Note: 'mode' is kept for inheritance but only 'forward' logic is implemented
+        # and required in the base/Jax class.
         self.A = A
         self.B = B
         self.A_bar = A.tocsr()
         self.B_bar = B.tocsr()
         self.alpha = alpha
         self.N, self.L = N, L
-        self.dtype = np.complex128
-        self.lus = None  # will hold the factorized blocks
+        self.dtype = np.complex128  # JAX will cast this to jnp.complex128
+        self.lus = None
         self._log = _log if _log is not None else print
-        self.mode = mode
+        self.mode = "forward"  # Enforce forward mode
 
-        if self.mode == "adjoint":
-            self.A_bar = self.A_bar.conj().T.tocsr()
-            self.B_bar = self.B_bar.conj().T.tocsr()
         self.setup()
 
     def _apply_prec(self, v):
-        # reshape (L,N)
-        X = np.asarray(v, dtype=self.dtype).reshape(self.L, self.N)
+        """
+        Implements the forward action of P_alpha^-1.
+        v_out = (Gamma_alpha^-1 F) * M_inv * (F* Gamma_alpha) * v_in
+        This method must be overridden in the JAX class to use jax.numpy.
+        """
 
-        X = self.gamma[:, None] * X
-        X_hat = ifft(X, axis=0, norm="ortho")
+        # 1. Reshape to N x L (Spatial x Time), C-order
+        X = np.asarray(v, dtype=self.dtype).reshape(self.N, self.L, order="C")
 
-        # Solve each block
-        X_hat = self._factorized_solve(X_hat)
+        # --- Inner Factor: F* Gamma_alpha ---
+        X = self.gamma[None, :] * X  # Apply Gamma_alpha on time axis (axis 1)
+        X_hat = ifft(X, axis=1, norm="ortho")  # Apply F* on time axis (axis 1)
 
-        Y = fft(X_hat, axis=0, norm="ortho")
-        Y = Y / self.gamma[:, None]
-        return Y
-
-    def _factorized_solve(self, X_hat):
+        # --- Central Inverse Solve: M^-1 ---
+        # Block solve over the L dimension (axis 1)
         if self.lus is None:
             self.factorize_blocks()
+
+        # FIX: Indexing needs to be X_hat[:, j] to solve N-sized spatial block
         for j in range(self.L):
-            X_hat[j, :] = self.lus[j].solve(X_hat[j, :])
+            X_hat[:, j] = self.lus[j].solve(X_hat[:, j])
+
+        # --- Outer Factor: Gamma_alpha^-1 F ---
+        Y = fft(X_hat, axis=1, norm="ortho")  # Apply F
+        Y = Y / self.gamma[None, :]  # Apply Gamma_alpha^-1
+
+        return Y.ravel()
+
+    # FIX: Corrected _factorized_solve to iterate over time axis correctly
+    def _factorized_solve(self, X_hat):
+        # This method is for NumPy/SciPy/PETSc implementations only.
+        # JAX implementation must handle this inside its jitted function.
+        if self.lus is None:
+            self.factorize_blocks()
+
+        # Iterate over the L dimension (axis 1 in the N x L matrix X_hat)
+        for j in range(self.L):
+            # Solve the N x N system for the j-th time slice (X_hat[:, j])
+            X_hat[:, j] = self.lus[j].solve(X_hat[:, j])
         return X_hat
 
+    # ... (setup, update, factorize_blocks remain largely the same, but mode logic is removed)
+
     def setup(self):
-        """Setup method required by PETSc PCShell interface. No-op since we do setup in __init__."""
+        """Sets up gamma and omegas for the forward pass."""
         alpha_root = self.alpha ** (1.0 / self.L)
-
         js = np.arange(self.L)
+        # Forward eigenvalues (no conjugation)
         self.omegas = np.exp(2j * np.pi * js / self.L) * alpha_root
-
-        if self.mode == "adjoint":
-            self.omegas = np.conj(self.omegas)
-
-        # Rescale Matrix gamma
+        # Forward scaling matrix (no conjugation)
         self.gamma = (self.alpha ** (np.arange(self.L) / self.L)).astype(self.dtype)
 
     def update(self, C):
-        """Setup the PiT preconditioner with given C matrix."""
-        # --- Compute spatial mean C_bar over z/time (Nx-vector) ---
+        """Setup the PiT preconditioner with given C matrix (averaging)."""
         C_avg = np.mean(C, axis=1)
-        C_bar = sp.diags(C_avg, 0, format="csr")  # diag(C_bar)
-
-        # --- Build averaged blocks ---
+        C_bar = sp.diags(C_avg, 0, format="csr")
         self.A_bar = (self.A - C_bar).tocsr()
         self.B_bar = (self.B + C_bar).tocsr()
 
-        if self.mode == "adjoint":
-            self.A_bar = self.A_bar.conj().T.tocsr()
-            self.B_bar = self.B_bar.conj().T.tocsr()
-
-        # Pre-factorize blocks
+        # Pre-factorize blocks (A_bar - omega_j * B_bar)
         self.factorize_blocks()
 
     def factorize_blocks(self):
         """Pre-factorize the blocks of the PiT preconditioner."""
         self._log("Pre-factorizing PiT preconditioner blocks...")
         time_start = time.perf_counter()
+        # Factorize the L independent blocks: (A_bar - omega_j * B_bar)
         self.lus = [
             spla.splu((self.A_bar - (z * self.B_bar)).astype(self.dtype))
             for z in self.omegas
