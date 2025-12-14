@@ -32,21 +32,21 @@ def plot_data(
 
         simulation_space.viewer.plot_single_panel(
             exitwaves.T,  # Use ifftshift to move zero frequency to the corner
-            title="Update Exit Waves PWE",
+            title="Exit Waves",
             xlabel="Scan Number #",
             ylabel="x (px)",
         )
 
         simulation_space.viewer.plot_single_panel(
             np.fft.fftshift(data).T,
-            title="Far-field Intensities PWE",
+            title="Far-field Intensities",
             xlabel="Scan Number #",
             ylabel="x (px)",
         )
 
         simulation_space.viewer.plot_single_panel(
             np.fft.fftshift(data_noisy).T,
-            title="Far-field Intensities PWE (Noisy)",
+            title="Far-field Intensities (Noisy)",
             xlabel="z (m)",
             ylabel="x (m)",
         )

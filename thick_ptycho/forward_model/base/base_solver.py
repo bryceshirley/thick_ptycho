@@ -161,7 +161,7 @@ class BaseForwardModelSolver(ABC):
     def _solve_single_probe(
         self,
         angle_idx: int,
-        probe_idx: int,
+        proj_idx: int,
         n=None,
         mode: str = "forward",
         initial: np.ndarray = None,
