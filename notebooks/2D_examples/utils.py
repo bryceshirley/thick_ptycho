@@ -71,7 +71,7 @@ def plot_data(
 
         for p in probe_indices:
             plt.plot(
-                range(simulation_space.effective_shape[0]),
+                range(exitwaves.shape[1]),
                 np.abs(exitwaves[p, :]),
                 label=f"probe {p}",
             )
