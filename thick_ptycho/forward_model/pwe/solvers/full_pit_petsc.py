@@ -146,7 +146,8 @@ class PWEPetscFullPinTSolver(BasePWESolver):
             _,
         ) = self.pwe_finite_differences._get_or_generate_step_matrices()
 
-        self.preconditioner = PiTPreconditionerShell(
+        self.preconditioner = {"forward": None, "adjoint": None}
+        self.preconditioner["forward"] = PiTPreconditionerShell(
             A=self.A_step,
             B=self.B_step,
             N=self.block_size,
@@ -154,7 +155,14 @@ class PWEPetscFullPinTSolver(BasePWESolver):
             alpha=alpha,
             _log=self._log,
         )
-        self.preconditioner.factorize_blocks()
+        self.preconditioner["adjoint"] = PiTPreconditionerShell(
+            A=self.A_step.conj().T,
+            B=self.B_step.conj().T,
+            N=self.block_size,
+            L=self.nz - 1,
+            alpha=alpha,
+            _log=self._log,
+        )
 
     def _construct_solve_cache(
         self,
@@ -184,9 +192,6 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         # Create the Operator Shell Context
         A_ctx = PWEGlobalOperatorShell(A_csr, B_csr, C, L)
 
-        # Create the Preconditioner Shell Context
-        # self.preconditioner.update(C)
-
         # Store in cache
         self.projection_cache[proj_idx].modes[mode].A_shell_ctx = A_ctx
 
@@ -215,9 +220,16 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         time_start_setup = time.perf_counter()
         cache = self.projection_cache[proj_idx].modes[mode]
 
+        if probe is None:
+            probe = np.zeros((self.block_size,), dtype=complex)
+
         # 1. Prepare RHS
         if rhs_block is not None:
-            b_numpy = rhs_block
+            if mode == "adjoint":
+                b_numpy = np.flip(rhs_block, axis=1)
+            else:
+                # If not adjoint, use the block as is.
+                b_numpy = rhs_block
         else:
             probe_contribution = self.pwe_finite_differences.probe_contribution(
                 scan_index=scan_idx, probe=probe
@@ -258,7 +270,8 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         pc = ksp.getPC()
         pc.setType(PETSc.PC.Type.PYTHON)
         # ksp.setType(PETSc.KSP.Type.GMRES)
-        pc.setPythonContext(self.preconditioner)
+
+        pc.setPythonContext(self.preconditioner[mode])
         pc.setReusePreconditioner(True)
 
         ksp.setPCSide(PETSc.PC.Side.RIGHT)
@@ -311,4 +324,9 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         x_sol.destroy()
         b_vec.destroy()
 
-        return np.concatenate([initial, u], axis=1)
+        u = np.concatenate([initial, u], axis=1)
+
+        if mode == "adjoint":
+            u = np.flip(u, axis=1)
+
+        return u
