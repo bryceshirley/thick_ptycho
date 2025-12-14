@@ -241,7 +241,7 @@ class PWEPetscFullPinTSolver(BasePWESolver):
         b_vec.setArray(b_numpy.astype(np.complex128, copy=False))
 
         # --- INITIAL GUESS ---
-        if cache.u0_cache is not None:
+        if cache.u0_cache is not None and mode != "adjoint":
             x_sol.setArray(cache.u0_cache.astype(np.complex128, copy=False))
             x0_is_nonzero = True
         else:
