@@ -7,6 +7,7 @@ reconstructions.
 
 
 ---
+[![Documentation](https://img.shields.io/badge/Docs-GitHub%20Pages-blue)](https://stfc.github.io/thick_ptycho/) ![Test Status](https://github.com/bryceshirley/thick_ptycho/actions/workflows/tests.yml/badge.svg) ![Linting Status](https://github.com/bryceshirley/thick_ptycho/actions/workflows/linter.yml/badge.svg)
 
 ## Notebooks Tutorials
 
