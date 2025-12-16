@@ -1,0 +1,38 @@
+name: Build and Deploy Docs
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: write
+jobs:
+    deploy:
+        name: Build and Deploy MkDocs Site
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Python
+              uses: actions/setup-python@v6
+              with:
+                python-version: '3.12'
+
+            - name: Cache pip dependencies
+              uses: actions/cache@v4
+              with:
+                key: ${{ github.ref }}
+                path: .cache
+
+            - name: Install dependencies
+              run: |
+                pip install --upgrade pip
+                pip install mkdocs mkdocs-material pymdown-extensions
+
+            - name: Deploy MkDocs site
+              run: mkdocs gh-deploy --force
