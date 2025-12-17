@@ -1,0 +1,55 @@
+site_name: Thick_Ptycho
+
+theme:
+  name: 'material'
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+    - navigation.trail
+    - navigation.expand
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  language: en
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+      primary: teal
+      accent: purple
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+      primary: teal
+      accent: lime
+
+plugins:
+  - search
+  - bibtex:
+      bib_file: docs/references.bib
+
+
+markdown_extensions:
+  - markdown.extensions.extra
+  - markdown.extensions.codehilite
+  - markdown.extensions.toc:
+      permalink: True
+  - pymdownx.superfences
+  - pymdownx.arithmatex 
+
+nav:
+  - Index: index.md
+  - Overview: overview.md
+  - Theory: theory.md
+  - Installation: installation.md
+  - Ptychography Simulation Setup: ptycho_sim_setup.md
+  - Running Simulations: running_simulations.md
+  - Running Reconstructions: running_reconstructions.md
+  - Class Structure: class_structure.md

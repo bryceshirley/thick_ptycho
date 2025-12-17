@@ -1,76 +1,15 @@
-# thick_ptycho: Thick Sample Ptychography Simulations
+# thick_ptycho: Thick Sample Ptychography Simulations and Reconstructions
 
 **thick_ptycho** is a Python project for simulating and reconstructing thick-sample 
 ptychography. It supports various forward models including multislice and Paraxial
 approximations, and provides tools for generating synthetic data and performing
 reconstructions.
 
----
-
-## Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/bryceshirley/thick_ptycho.git
-   cd thick_ptycho
-   ```
-
-2. **Install dependencies (requires [uv to be installed](https://docs.astral.sh/uv/getting-started/installation/))**:
-
-   ```bash
-   uv sync --extra dev
-   ```
-
-## Installation with Petsc
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/bryceshirley/thick_ptycho.git
-   cd thick_ptycho
-   ```
-
-2. **Install Petsc and Petsc4py (Complex-versions) In Conda Env**
-
-   ```bash
-   conda create -n petsc_env -c conda-forge python=3.11 "petsc=*=complex*" "petsc4py=*=complex*" mpi4py compilers
-   conda activate petsc_env
-   ```
-
-3. **Install thick_ptycho dependencies (requires [uv to be installed](https://docs.astral.sh/uv/getting-started/installation/))**:
-
-   ```bash
-   uv pip install -e ".[dev]"
-   ```
 
 ---
+[![Documentation](https://img.shields.io/badge/Docs-GitHub%20Pages-blue)](https://bryceshirley.github.io/thick_ptycho/) ![Test Status](https://github.com/bryceshirley/thick_ptycho/actions/workflows/tests.yml/badge.svg) ![Linting Status](https://github.com/bryceshirley/thick_ptycho/actions/workflows/linter.yml/badge.svg)
 
-## Generating Simulation Data
-
-Use the `generate_data.py` script to create simulation data based on a configuration file.
-
-```bash
-uv run python generate_data.py gen_data_config.yaml
-```
-
-This will generate simulated ptychographic data and save it to `./results/sim/{timestamp}/`.
-
----
-
-## Running Reconstructions
-
-Use the `run_reconstruction.py` script to perform reconstructions using a configuration file.
-
-```bash
-uv run python run_reconstruction.py recon_config.yaml
-```
-
-This will perform the reconstruction and save results to `./results/recon/{timestamp}/`.
-
----
-
-## Notebooks
+## Notebooks Tutorials
 
 Several Jupyter notebooks are provided in the `notebooks/` directory to demonstrate
 various features and use cases of the package, including 2D and 3D simulations
