@@ -16,29 +16,31 @@
 
 ![Thin Sample Approximation](images/object_transmission_function.png)
 
-## Multislice Method
+## Multislice Method for Thick Samples
 
-![Multislice Method](images/multislice.png)
-
-### Angular Spectrum Method
+#### Angular Spectrum Method
 
 ![Angular Spectrum Method](images/angular_spectrum_method.png)
 
 ![Small Angle Approximation](images/small_angle_approximation.png)
 
-## Wave Propagation Models: Paraxial Wave Equation
+![Multislice Method](images/multislice.png)
+
+## Wave Propagation Models for Thick Samples (PWE)
 
 ![Thick Sample Model](images/thick_sample.png)
 
 ![Forward Model](images/forward_model.png)
 
-### Inverse Problem: Paraxial Wave Equation
+### Inverse Problem for the Paraxial Wave Equation
 
 ![Least Squares](images/least_squares.png)
 
-### Preconditioners: Paraxial Wave Equation
+### Preconditioners for Paraxial Wave Equation Solve
 
 ![Parallel in Time Preconditioner](images/pint_preconditioner.png)
+
+![Parallization of PinT Preconditioner](images/pint_parallelized.png)
 
 
 ## Future Work and References

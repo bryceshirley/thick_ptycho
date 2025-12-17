@@ -89,7 +89,8 @@ class MSForwardModelSolver(BaseForwardModelSolver):
 
     def _solve_single_probe(
         self,
-        probe_idx: int,
+        scan_idx: int = 0,
+        proj_idx: int = 0,
         n: Optional[np.ndarray] = None,
         mode="forward",
         probe: Optional[np.ndarray] = None,
@@ -124,7 +125,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         }, f"Invalid mode: {mode}"
 
         if mode in {"forward_rotated", "reverse_rotated"}:
-            n = self.get_projected_obj(n, mode=mode, proj_idx=probe_idx)
+            n = self.get_projected_obj(n, mode=mode, proj_idx=proj_idx)
 
         # Object refractive index distribution
         if n is None:

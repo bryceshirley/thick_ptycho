@@ -5,10 +5,9 @@ import numpy as np
 from numpy.fft import fft2, fftshift, ifft2
 
 from thick_ptycho.forward_model.pwe.solvers import (
-    PWEFullPinTSolver,
     PWEIterativeLUSolver,
+    PWEPetscFullPinTSolver,
 )
-
 from .base_reconstructor import ReconstructorBase
 
 
@@ -41,6 +40,8 @@ class ReconstructorPWE(ReconstructorBase):
         solver_type="iterative",
         bc_type="impedance",
         verbose: bool = None,
+        alpha: float = 1e-8,
+        atol: float = 5e-3,
     ):
         super().__init__(
             simulation_space=simulation_space,
@@ -53,17 +54,28 @@ class ReconstructorPWE(ReconstructorBase):
             raise ValueError(f"Invalid solver_type: {solver_type!r}")
 
         # Forward model selection
-        SolverClass = (
-            PWEFullPinTSolver if solver_type == "full" else PWEIterativeLUSolver
-        )
-        self.forward_model = SolverClass(
-            simulation_space,
-            self.ptycho_probes,
-            bc_type=bc_type,
-            results_dir=simulation_space.results_dir,
-            use_logging=simulation_space.use_logging,
-            verbose=simulation_space.verbose,
-        )
+        if solver_type == "iterative":
+            self.forward_model = PWEIterativeLUSolver(
+                simulation_space,
+                self.ptycho_probes,
+                bc_type=bc_type,
+                results_dir=simulation_space.results_dir,
+                use_logging=simulation_space.use_logging,
+                verbose=simulation_space.verbose,
+            )
+        if solver_type == "full":
+            self.forward_model = PWEPetscFullPinTSolver(
+                simulation_space,
+                self.ptycho_probes,
+                bc_type=bc_type,
+                results_dir=simulation_space.results_dir,
+                use_logging=False,
+                verbose=False,
+                alpha=alpha,
+                atol=atol,
+            )
+            self.forward_model.preconditioner["forward"].factorize_blocks()
+            self.forward_model.preconditioner["adjoint"].factorize_blocks()
         self._log("Initializing Least Squares Solver...")
 
         if self.num_projections > 1 and simulation_space.solve_reduced_domain:
@@ -79,7 +91,6 @@ class ReconstructorPWE(ReconstructorBase):
             self.forward_model.prepare_solver_caches(
                 n=self.nk, modes=("forward", "adjoint")
             )
-
         uk = self.convert_to_vector_form(
             self.forward_model.solve(n=self.nk, probes=probes)
         )
@@ -109,6 +120,8 @@ class ReconstructorPWE(ReconstructorBase):
 
             # 2) Flatten the spatial field block
             backprop = backprop[:, :-1].T.ravel()
+            # import matplotlib.pyplot as plt
+            # plt.imshow(np.abs(backprop).reshape((self.nz-1, self.simulation_space.effective_nx)).T);plt.colorbar;plt.title("adjoint solution"); plt.savefig("adjoint_amplitude.png")
 
             # 3) Compute contribution of current frame
             g_base = grad_A @ uk[idx]
@@ -121,7 +134,7 @@ class ReconstructorPWE(ReconstructorBase):
             if proj_idx == 1 and not self.simulation_space.solve_reduced_domain:
                 grad_update_re = self.rotate_back(grad_update_re)
                 grad_update_im = self.rotate_back(grad_update_im)
-
+            # plt.imshow(np.abs(grad_update_re).reshape((self.nz-1, self.simulation_space.effective_nx)).T);plt.colorbar();plt.title("gradient update"); plt.savefig("grad_amplitude.png"); plt.close()
             # 6) Accumulate gradient
             grad_real = self.accumulate_gradient(grad_update_re, scan_idx, grad_real)
             grad_imag = self.accumulate_gradient(grad_update_im, scan_idx, grad_imag)
@@ -222,7 +235,6 @@ class ReconstructorPWE(ReconstructorBase):
         fixed_step_size=None,
         tv_lambda_amp=0.0,
         low_pass_sigma_phase=0.0,
-        update_gradient=False,
     ):
         """Solve the least squares problem using conjugate gradient method with optional L1/L2/TV regularization.
         Parameters

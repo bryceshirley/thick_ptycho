@@ -169,3 +169,41 @@ def test_single_scan_point_full_window(nondefault_config_2d):
     )
     xmin, xmax = sim._scan_frame_info[0].reduced_limits_discrete.x
     assert (xmin, xmax) == (0, sim.nx - 1)
+
+
+@pytest.mark.parametrize("solve_reduced_domain", [True, False])
+def test_empty_space_padding(nondefault_config_2d, solve_reduced_domain):
+    """
+    Test padding logic when 'empty_space=True' is used, which creates a large
+    zero-padded object contribution for an effective domain.
+    """
+    scan_points = 4
+    step_size = 5
+    pad = 1.5
+
+    sim = SimulationSpace2D(
+        **nondefault_config_2d,
+        scan_points=scan_points,
+        step_size_px=step_size,
+        pad_factor=pad,
+        solve_reduced_domain=solve_reduced_domain,
+        empty_space_px=10,  # Add 10 pixels of empty space padding on each side
+    )
+    ptycho_object = create_ptycho_object(sim)
+    ptycho_object.add_object("circle", 1.5 + 0.1j, 0.2, (0.5, 0.5), 0.1)
+
+    # Calculate object contribution with empty_space=True
+    object_steps = sim.create_object_contribution(
+        n=ptycho_object.refractive_index,
+        scan_index=0,
+    )
+
+    assert object_steps.shape[0] == sim.effective_nx + 2 * sim.empty_space_px
+    assert object_steps.shape[1] == sim.nz - 1
+
+    # 2. Check if the original data is centered correctly
+    #    The data is placed in the center of the large zero array.
+
+    # Check for zeros in the padding region
+    # Left padding width is effective_nx // 2
+    assert np.all(object_steps[: sim.effective_nx // 2, :] == 0)

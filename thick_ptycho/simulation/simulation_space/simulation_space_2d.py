@@ -24,8 +24,15 @@ class SimulationSpace2D(BaseSimulationSpace):
         self.refractive_index_empty = np.ones(self.shape, dtype=complex) * self.n_medium
 
         # Effective width
-        self.block_size = self.effective_nx
-        self.effective_shape = (self.effective_nx, self.nz)
+        if self.empty_space_px > 0:
+            self.effective_shape = (
+                self.effective_nx + 2 * self.empty_space_px,
+                self.nz,
+            )
+            self.block_size = self.effective_nx + 2 * self.empty_space_px
+        else:
+            self.effective_shape = (self.effective_nx, self.nz)
+            self.block_size = self.effective_nx
 
         # ------------------------------------------------------------------
         # 3. Scan setup

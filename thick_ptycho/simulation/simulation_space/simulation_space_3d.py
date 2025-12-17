@@ -29,6 +29,15 @@ class SimulationSpace3D(BaseSimulationSpace):
         self.effective_ny = self.effective_nx
         self.effective_shape = (self.effective_nx, self.effective_ny, self.nz)
         self.block_size = self.effective_nx * self.effective_ny
+        if self.empty_space_px > 0:
+            self.effective_shape = (
+                self.effective_nx + 2 * self.empty_space_px,
+                self.effective_ny + 2 * self.empty_space_px,
+                self.nz,
+            )
+            self.block_size = (self.effective_nx + 2 * self.empty_space_px) * (
+                self.effective_ny + 2 * self.empty_space_px
+            )
 
         # ------------------------------------------------------------------
         # 2. Spatial grid setup
