@@ -1,4 +1,5 @@
 site_name: Thick_Ptycho
+
 theme:
   name: 'material'
   features:
@@ -31,6 +32,9 @@ theme:
 
 plugins:
   - search
+  - citations:
+      bib_file: docs/references.bib
+      cite_style: apa        
 
 markdown_extensions:
   - markdown.extensions.extra
@@ -38,6 +42,8 @@ markdown_extensions:
   - markdown.extensions.toc:
       permalink: True
   - pymdownx.superfences
+  - pymdownx.cite        
+  - pymdownx.arithmatex  
 
 nav:
   - Index: index.md
@@ -48,4 +54,3 @@ nav:
   - Running Simulations: running_simulations.md
   - Running Reconstructions: running_reconstructions.md
   - Class Structure: class_structure.md
-  - References: references.md
