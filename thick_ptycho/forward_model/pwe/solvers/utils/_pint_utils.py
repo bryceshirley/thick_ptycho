@@ -168,7 +168,7 @@ class AbstractPiTPreconditioner(ABC):
         if self.mode == "forward":
             # Blocks are A_bar - omega_j * B_bar
             self.lus = [
-                spla.splu((self.A_bar - (z * self.B_bar)).astype(self.dtype))
+                spla.splu((self.A_bar - (z * self.B_bar)).astype(self.dtype).tocsc())
                 for z in self.omegas
             ]
 
@@ -181,7 +181,7 @@ class AbstractPiTPreconditioner(ABC):
             B_bar_H = self.B_bar.conj().T.tocsr()
 
             self.lus = [
-                spla.splu((A_bar_H - (z_conj * B_bar_H)).astype(self.dtype))
+                spla.splu(((A_bar_H - (z_conj * B_bar_H)).astype(self.dtype)).tocsc())
                 for z_conj in omegas_conj
             ]
 

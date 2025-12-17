@@ -28,7 +28,7 @@ An overview of the main classes and their relationships within the Thick_Ptycho 
 
  8 **[References](references.bib)**
 
-A list of references and further reading materials related to ptychography and thick sample modeling.
+To download bib file of references and further reading materials related to ptychography and thick sample modeling.
 
 
 

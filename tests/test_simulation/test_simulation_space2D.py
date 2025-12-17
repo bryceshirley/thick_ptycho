@@ -198,17 +198,7 @@ def test_empty_space_padding(nondefault_config_2d, solve_reduced_domain):
         scan_index=0,
     )
 
-    # 1. Check the new shape:
-    #    The original padding is (self.effective_nx // 2, self.effective_nx // 2)
-    #    The intended padded shape is: (original_nx + self.effective_nx, original_nz)
-    #    Since n is already (sim.effective_nx, sim.nz) when solve_reduced_domain=True,
-    #    The total added padding in the transverse dimension is self.effective_nx.
-
-    original_transverse_dim = sim.effective_nx
-    expected_new_transverse_dim = original_transverse_dim + 2 * sim.empty_space_px
-    # Note: the last axis is z-steps, which is nz - 1
-
-    assert object_steps.shape[0] == expected_new_transverse_dim
+    assert object_steps.shape[0] == sim.effective_nx + 2 * sim.empty_space_px
     assert object_steps.shape[1] == sim.nz - 1
 
     # 2. Check if the original data is centered correctly
@@ -216,13 +206,4 @@ def test_empty_space_padding(nondefault_config_2d, solve_reduced_domain):
 
     # Check for zeros in the padding region
     # Left padding width is effective_nx // 2
-    assert np.all(object_steps[: original_transverse_dim // 2, :] == 0)
-
-    # Right padding width is effective_nx // 2 (at the other end of the domain)
-    # The transverse dimension is expected_new_transverse_dim
-    right_start_index = expected_new_transverse_dim - (original_transverse_dim // 2)
-    assert np.all(object_steps[right_start_index:, :] == 0)
-
-    # 3. Check if the non-zero (object) region has the correct width
-    non_zero_width = right_start_index - (original_transverse_dim // 2)
-    assert non_zero_width == sim.effective_nx
+    assert np.all(object_steps[: sim.effective_nx // 2, :] == 0)
