@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
 
       - name: Cache uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # Caches the uv executable itself, which is installed by pip
           path: ${{ env.pythonLocation }}/bin/uv
@@ -33,7 +33,7 @@ jobs:
         run: pip install uv
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # Caches the entire .venv directory
           path: .venv
