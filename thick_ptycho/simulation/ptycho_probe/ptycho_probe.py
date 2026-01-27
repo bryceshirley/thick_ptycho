@@ -250,7 +250,7 @@ class PtychoProbes:
         center : float or (float, float)
             Probe center in continuous coordinates.
         k : float
-            Wavenumber (2π/λ).
+            Wavenumber
         focal_length : float
             Focal length f. Positive for focusing (convention as used here).
 
@@ -377,7 +377,7 @@ class PtychoProbes:
         ).astype(complex)
 
     def _airy_disk(self, coord, center, radius):
-        # Amp only (intensity version commonly uses [2 J1(ξ)/ξ]^2; here amplitude)
+        # Amp only (intensity version commonly amplitude)
         if self.simulation_space.dimension == 2:
             (x,) = coord
             r = np.abs(x - center)

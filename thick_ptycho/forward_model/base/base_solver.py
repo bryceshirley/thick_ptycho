@@ -129,18 +129,25 @@ class BaseForwardModelSolver(ABC):
         ]
 
         # Loop over angles and probes
-        for proj_idx, angle_idx, scan_idx in triplets:
+        idx = 0
+        u_exit = np.zeros(
+            (self.simulation_space.total_scans, self.effective_shape[0]), dtype=complex
+        )
+
+        for idx, (proj_idx, angle_idx, scan_idx) in enumerate(triplets):
             if self.verbose:
                 start = time.time()
             # Solve for single probe
-            u[proj_idx, angle_idx, scan_idx, ...] = self._solve_single_probe(
+            u_full, u_final = self._solve_single_probe(
                 scan_idx=scan_idx,
                 proj_idx=proj_idx,
                 n=n,
                 mode=mode,
                 rhs_block=rhs_block,
                 probe=probes[angle_idx, scan_idx, :],
-            ).reshape(*self.effective_shape)
+            )
+            u[proj_idx, angle_idx, scan_idx, ...] = u_full.reshape(*self.effective_shape)
+            u_exit[idx,:] = u_final.flatten()
 
             # if self.solve_reduced_domain:
             #     self.reset_cache()
@@ -151,7 +158,7 @@ class BaseForwardModelSolver(ABC):
                     f"[{self.solver_type}] solved probe {scan_idx + 1}/{self.num_probes} "
                     f"at angle _idx {angle_idx} in {time.time() - start:.2f}s"
                 )
-        return u
+        return u, u_exit
 
     # ------------------------------------------------------------------
     #  Single probe solving (to be implemented by subclasses)
@@ -233,9 +240,13 @@ class BaseForwardModelSolver(ABC):
         """
         exit_waves = self.get_exit_waves(u=u) if exit_waves is None else exit_waves
 
+        exit_waves = exit_waves.reshape(
+            (self.simulation_space.total_scans, self.simulation_space.block_size)
+        )
+
         # Compute FFTs for all probes and angles
         if self.simulation_space.dimension == 2:
-            fft_waves = np.fft.fft(exit_waves)
+            fft_waves = np.fft.fftshift(np.fft.fft(exit_waves, axis=-1), axes=-1)
         else:
             fft_waves = np.fft.fft2(exit_waves, axes=(-2, -1))
 
@@ -243,7 +254,8 @@ class BaseForwardModelSolver(ABC):
 
         # Add noise
         if poisson_noise:
-            intensities = np.random.poisson(intensities)
+            rng = np.random.default_rng(seed=42)
+            intensities =rng.poisson(intensities).astype(float)
         return intensities.reshape(
             (self.simulation_space.total_scans, self.simulation_space.block_size)
         )

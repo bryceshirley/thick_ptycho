@@ -199,7 +199,10 @@ class BaseSimulationSpace(ABC):
             self.nz = nz
 
         self.z = np.linspace(*self.spatial_limits.z, self.nz)
-        self.dz = self.z[1] - self.z[0]
+        if self.nz > 1:
+            self.dz = self.z[1] - self.z[0]
+        else:
+            self.dz = self.spatial_limits.z[1] - self.spatial_limits.z[0]
 
     def _configure_domain(self) -> None:
         """Compute domain width, apply padding, enforce symmetry, set coordinates."""
@@ -313,7 +316,7 @@ class BaseSimulationSpace(ABC):
         pass
 
     def create_object_contribution(
-        self, n=None, grad=False, scan_index=0
+        self, n=None,mid_n=False, grad=False, scan_index=0
     ) -> np.ndarray:
         """
         Create the field of object slices in free space.
@@ -327,6 +330,8 @@ class BaseSimulationSpace(ABC):
         grad : bool, optional
             If True, compute gradient coefficient (linear in n).
             If False, compute propagation coefficient (quadratic in n).
+        mid_n : bool, optional
+            If True, use mid-slice refractive index values for coefficients.
         scan_index : int, optional
             Index for sub-sampling info in scan_frame_info.
 
@@ -347,17 +352,22 @@ class BaseSimulationSpace(ABC):
 
         # Compute coefficient
         if grad:
-            coefficient = (
+            coefficient = (self.dz / 2) *(
                 (self.k / 1j) * np.ones_like(n)
                 if not self.exact_ref_coeff
                 else (self.k / 1j) * n
             )
+            constant_value = 1.0
+        if mid_n:
+            coefficient = n # Use mid-slice n values directly
+            constant_value = 1.0
         else:
-            coefficient = (
+            coefficient = (self.dz / 2) *(
                 (self.k / 1j) * (n - 1)
                 if not self.exact_ref_coeff
                 else (self.k / 2j) * (n**2 - 1)
             )
+            constant_value = 0.0
 
         # Add Zeros Padding
         if self.empty_space_px > 0:
@@ -372,12 +382,12 @@ class BaseSimulationSpace(ABC):
                     (0, 0),  # No padding on z-axis (axis 1)
                 ),
                 mode="constant",
-                constant_values=0.0,  # FIXED: Use a scalar (float 0.0) for zero padding.
+                constant_values=constant_value, 
             )
 
         # Compute all half time-step slices along the z-axis
         object_steps = (
-            (self.dz / 2) * (coefficient[..., :-1] + coefficient[..., 1:]) / 2
+             (coefficient[..., :-1] + coefficient[..., 1:]) / 2
         )
 
         return object_steps

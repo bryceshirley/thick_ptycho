@@ -168,15 +168,16 @@ class BasePWESolver(BaseForwardModelSolver, ABC):
         self._get_or_construct_cache(
             n=n, mode=mode, scan_idx=scan_idx, proj_idx=proj_idx
         )
-
-        # Actual solving logic to be implemented in subclasses
-        return self._solve_single_probe_impl(
+        u =  self._solve_single_probe_impl(
             scan_idx=scan_idx,
             proj_idx=proj_idx,
             probe=probe,
             mode=mode,
             rhs_block=rhs_block,
         )
+
+        # Actual solving logic to be implemented in subclasses
+        return u, u[:,-1]
 
     @abstractmethod
     def _solve_single_probe_impl(
