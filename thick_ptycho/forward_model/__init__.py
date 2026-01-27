@@ -12,6 +12,10 @@ from .pwe.solvers.iterative_lu import PWEIterativeLUSolver
 
 from .pwe.solvers.full_pit_petsc import PWEPetscFullPinTSolver
 
+from .pwe.solvers.spectral_pwe import SpectralCNForwardModelSolver
+
+from .pwe.solvers.sssp_pade import SpectralSplitStepPadeSolver
+
 __all__ = [
     "BasePWESolver",
     "MSForwardModelSolver",
@@ -21,4 +25,6 @@ __all__ = [
     "PWEForwardModel",
     "MSForwardModelSolver",
     "PWEPetscFullPinTSolver",
+    "SpectralCNForwardModelSolver",
+    "SpectralSplitStepPadeSolver",
 ]
