@@ -3,7 +3,6 @@ import typing
 
 from typing import Optional
 import numpy as np
-# WE NEED DST IMPORTS
 from scipy.fft import dct, idct, dst, idst 
 from thick_ptycho.forward_model.base.base_solver import BaseForwardModelSolver
 
@@ -114,7 +113,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         H = np.exp(Lambda * dz)
         
 
-        # --- 3. APPLY PRUNING (NEW) ---
+        # --- 3. APPLY PRUNING---
         if self.pruning_fraction > 0.0:
             # Determine max physical frequency (Nyquist limit)
             k_max = np.pi / self.dx
@@ -137,9 +136,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
     
     def transform_absorbing_boundary(self, psi, dz, inverse=False):
         """
-        Robust Batched 4-Processor Solver.
-        Executes DCT and DST in parallel stacks using standard library calls.
-        Eliminates phase artifacts by avoiding manual Makhoul packing.
+        Absorbing Boundary Batched 4-Processor Solver.
         """
         
         # 1. BATCH: Stack Real and Imag parts
@@ -147,9 +144,6 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         psi_stack = np.stack([psi.real, psi.imag], axis=0)
         
         # 2. FORWARD TRANSFORMS (Standard Library, Batched)
-        # We compute DCT and DST separately. 
-        # Scipy handles the batching over axis=-1 efficiently.
-        
         # DCT coefficients for [Real, Imag]
         C_stack = dct(psi_stack, type=2, norm='ortho', axis=-1)
         
@@ -157,8 +151,6 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         S_stack = dst(psi_stack, type=2, norm='ortho', axis=-1)
         
         # 3. GET KERNELS
-        # Note: We go back to strict definitions. 
-        # DCT uses DCT kernel, DST uses DST kernel.
         H_dct = self._get_propagation_kernels(dz, "DCT")
         H_dst = self._get_propagation_kernels(dz, "DST")
         
@@ -188,10 +180,7 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         u_dst_stack = idst(S_next_stack, type=2, norm='ortho', axis=-1)
         
         # 6. AVERAGE
-        # 0.5 * (Mirror_Solution + Zero_Solution)
-        alpha = 0.52
-        beta = 1 - alpha
-        u_final_stack = alpha * u_dct_stack + beta * u_dst_stack
+        u_final_stack = 0.5 *(u_dct_stack + u_dst_stack)
         
         return u_final_stack[0] + 1j * u_final_stack[1]
 
@@ -322,32 +311,12 @@ class MSForwardModelSolver(BaseForwardModelSolver):
         if obj is None:
             if n is None:
                 n = self.simulation_space.refractive_index_empty
-            obj = n
-            # n_proj = self.get_projected_obj(n, mode=mode, proj_idx=proj_idx)
 
-            # n_proj = self.simulation_space.create_object_contribution(n=n_proj,mid_n=True, scan_index=scan_idx)
-            # # if self.nz > 1:
-            # #     n = n.reshape(-1, self.nz - 1)  # Shape (nx, nz-1)
-            # n = n_proj.reshape(n.shape[0],)  # Shape (nx, nz-1)
-            # obj = np.array([self._object_transmission_function(n_slice=n[:, z]) for z in range(self.nz-1)]).T
+            n_proj = self.get_projected_obj(n, mode=mode, proj_idx=proj_idx)
 
-        # Print norm of obj for debugging
-        # print(f"Obj norm (scan {scan_idx}, proj {proj_idx}): {obj.mean():.4f} + {1j*obj.std():.4f}j")
-
-        # Pad obj
-        # obj = np.pad(
-        #         obj,
-        #         (
-        #             (
-        #                 self.simulation_space.empty_space_px,
-        #                 self.simulation_space.empty_space_px,
-        #             ),  # Padding on transverse axis (axis 0)
-        #             (0, 0),  # No padding on z-axis (axis 1)
-        #         ),
-        #         mode="constant",
-        #         constant_values=1.0,  # Free space transmission
-        #     )
-
+            n_proj = self.simulation_space.create_object_contribution(n=n_proj,mid_n=True, scan_index=scan_idx)
+            n = n_proj.reshape(n.shape[0],)  # Shape (nx, nz-1)
+            obj = np.array([self._object_transmission_function(n_slice=n[:, z]) for z in range(self.nz-1)]).T
 
         # Select initial probe condition
         if probe is None:
