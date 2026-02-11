@@ -116,8 +116,6 @@ class SpectralCNForwardModelSolver(BaseForwardModelSolver):
         # Applying P v = M v - 0.5 * delta_C_dz * v
         def apply_P(v):
             V = np.fft.fft(v)
-            # M_hat = 1 / M_inv_hat
-            # M v = IFFT( V / M_inv_hat ) ... wait, M_hat is just 1/M_inv_hat
             Mv = np.fft.ifft(V / M_inv_hat)
             return Mv - 0.5 * (delta_C_dz * v)
 
